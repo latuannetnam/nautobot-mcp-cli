@@ -130,67 +130,67 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | — | Pending |
-| CORE-02 | — | Pending |
-| CORE-03 | — | Pending |
-| CORE-04 | — | Pending |
-| DEV-01 | — | Pending |
-| DEV-02 | — | Pending |
-| DEV-03 | — | Pending |
-| DEV-04 | — | Pending |
-| DEV-05 | — | Pending |
-| INTF-01 | — | Pending |
-| INTF-02 | — | Pending |
-| INTF-03 | — | Pending |
-| INTF-04 | — | Pending |
-| INTF-05 | — | Pending |
-| IPAM-01 | — | Pending |
-| IPAM-02 | — | Pending |
-| IPAM-03 | — | Pending |
-| IPAM-04 | — | Pending |
-| IPAM-05 | — | Pending |
-| IPAM-06 | — | Pending |
-| ORG-01 | — | Pending |
-| ORG-02 | — | Pending |
-| ORG-03 | — | Pending |
-| ORG-04 | — | Pending |
-| CIR-01 | — | Pending |
-| CIR-02 | — | Pending |
-| CIR-03 | — | Pending |
-| GC-01 | — | Pending |
-| GC-02 | — | Pending |
-| GC-03 | — | Pending |
-| GC-04 | — | Pending |
-| GC-05 | — | Pending |
-| GC-06 | — | Pending |
-| MCP-01 | — | Pending |
-| MCP-02 | — | Pending |
-| MCP-03 | — | Pending |
-| MCP-04 | — | Pending |
-| CLI-01 | — | Pending |
-| CLI-02 | — | Pending |
-| CLI-03 | — | Pending |
-| CLI-04 | — | Pending |
-| PARSE-01 | — | Pending |
-| PARSE-02 | — | Pending |
-| PARSE-03 | — | Pending |
-| PARSE-04 | — | Pending |
-| ONBOARD-01 | — | Pending |
-| ONBOARD-02 | — | Pending |
-| ONBOARD-03 | — | Pending |
-| ONBOARD-04 | — | Pending |
-| VERIFY-01 | — | Pending |
-| VERIFY-02 | — | Pending |
-| VERIFY-03 | — | Pending |
-| VERIFY-04 | — | Pending |
-| SKILL-01 | — | Pending |
-| SKILL-02 | — | Pending |
-| SKILL-03 | — | Pending |
+| CORE-01 | Phase 1 | Pending |
+| CORE-02 | Phase 1 | Pending |
+| CORE-03 | Phase 1 | Pending |
+| CORE-04 | Phase 1 | Pending |
+| DEV-01 | Phase 1 | Pending |
+| DEV-02 | Phase 1 | Pending |
+| DEV-03 | Phase 1 | Pending |
+| DEV-04 | Phase 1 | Pending |
+| DEV-05 | Phase 1 | Pending |
+| INTF-01 | Phase 1 | Pending |
+| INTF-02 | Phase 1 | Pending |
+| INTF-03 | Phase 1 | Pending |
+| INTF-04 | Phase 1 | Pending |
+| INTF-05 | Phase 1 | Pending |
+| IPAM-01 | Phase 1 | Pending |
+| IPAM-02 | Phase 1 | Pending |
+| IPAM-03 | Phase 1 | Pending |
+| IPAM-04 | Phase 1 | Pending |
+| IPAM-05 | Phase 1 | Pending |
+| IPAM-06 | Phase 1 | Pending |
+| ORG-01 | Phase 1 | Pending |
+| ORG-02 | Phase 1 | Pending |
+| ORG-03 | Phase 1 | Pending |
+| ORG-04 | Phase 1 | Pending |
+| CIR-01 | Phase 1 | Pending |
+| CIR-02 | Phase 1 | Pending |
+| CIR-03 | Phase 1 | Pending |
+| MCP-01 | Phase 2 | Pending |
+| MCP-02 | Phase 2 | Pending |
+| MCP-03 | Phase 2 | Pending |
+| MCP-04 | Phase 2 | Pending |
+| CLI-01 | Phase 2 | Pending |
+| CLI-02 | Phase 2 | Pending |
+| CLI-03 | Phase 2 | Pending |
+| CLI-04 | Phase 2 | Pending |
+| GC-01 | Phase 3 | Pending |
+| GC-02 | Phase 3 | Pending |
+| GC-03 | Phase 3 | Pending |
+| GC-04 | Phase 3 | Pending |
+| GC-05 | Phase 3 | Pending |
+| GC-06 | Phase 3 | Pending |
+| PARSE-01 | Phase 3 | Pending |
+| PARSE-02 | Phase 3 | Pending |
+| PARSE-03 | Phase 3 | Pending |
+| PARSE-04 | Phase 3 | Pending |
+| ONBOARD-01 | Phase 4 | Pending |
+| ONBOARD-02 | Phase 4 | Pending |
+| ONBOARD-03 | Phase 4 | Pending |
+| ONBOARD-04 | Phase 4 | Pending |
+| VERIFY-01 | Phase 4 | Pending |
+| VERIFY-02 | Phase 4 | Pending |
+| VERIFY-03 | Phase 4 | Pending |
+| VERIFY-04 | Phase 4 | Pending |
+| SKILL-01 | Phase 4 | Pending |
+| SKILL-02 | Phase 4 | Pending |
+| SKILL-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 53 total
-- Mapped to phases: 0
-- Unmapped: 53 ⚠️
+- Mapped to phases: 53
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-17*
