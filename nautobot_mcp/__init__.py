@@ -65,6 +65,9 @@ from nautobot_mcp.golden_config import (
     quick_diff_config,
 )
 
+# Onboarding
+from nautobot_mcp.onboarding import onboard_config
+
 __all__ = [
     # Version
     "__version__",
@@ -124,5 +127,7 @@ __all__ = [
     "delete_compliance_rule",
     "get_compliance_results",
     "quick_diff_config",
+    # Onboarding
+    "onboard_config",
 ]
 
