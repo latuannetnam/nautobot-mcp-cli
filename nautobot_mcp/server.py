@@ -1,0 +1,834 @@
+"""FastMCP server exposing Nautobot operations as MCP tools.
+
+Each core function is wrapped as an individual @mcp.tool with nautobot_ prefix,
+rich descriptions, and structured error handling via ToolError.
+"""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+
+from nautobot_mcp.client import NautobotClient
+from nautobot_mcp.config import NautobotSettings
+from nautobot_mcp.exceptions import NautobotMCPError
+
+# Domain imports
+from nautobot_mcp import circuits, devices, interfaces, ipam, organization
+
+mcp = FastMCP("Nautobot MCP Server")
+
+# ---------------------------------------------------------------------------
+# Client factory
+# ---------------------------------------------------------------------------
+
+_client: NautobotClient | None = None
+
+
+def get_client() -> NautobotClient:
+    """Return a lazily-initialized NautobotClient singleton."""
+    global _client
+    if _client is None:
+        settings = NautobotSettings()
+        _client = NautobotClient(settings=settings)
+    return _client
+
+
+# ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+
+
+def handle_error(e: Exception) -> None:
+    """Translate NautobotMCPError hierarchy to ToolError for MCP responses."""
+    if isinstance(e, NautobotMCPError):
+        msg = e.message
+        if hasattr(e, "hint") and e.hint:
+            msg += f". Hint: {e.hint}"
+        raise ToolError(msg)
+    raise ToolError(f"Unexpected error: {e}")
+
+
+# ===========================================================================
+# DEVICE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_list_devices")
+def nautobot_list_devices(
+    location: Optional[str] = None,
+    tenant: Optional[str] = None,
+    role: Optional[str] = None,
+    platform: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List devices from Nautobot with optional filtering.
+
+    Args:
+        location: Filter by location name.
+        tenant: Filter by tenant name.
+        role: Filter by device role name.
+        platform: Filter by platform name.
+        q: Full-text search query.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' (total) and 'results' (list of device dicts).
+    """
+    try:
+        client = get_client()
+        result = devices.list_devices(
+            client, location=location, tenant=tenant, role=role,
+            platform=platform, q=q, limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_get_device")
+def nautobot_get_device(
+    name: Optional[str] = None,
+    id: Optional[str] = None,
+) -> dict:
+    """Get a single device by name or UUID.
+
+    Args:
+        name: Device hostname.
+        id: Device UUID.
+
+    Returns:
+        Device dict with name, status, location, role, device_type, platform, etc.
+    """
+    try:
+        client = get_client()
+        result = devices.get_device(client, name=name, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_device")
+def nautobot_create_device(
+    name: str,
+    device_type: str,
+    location: str,
+    role: str,
+    status: str = "Active",
+) -> dict:
+    """Create a new device in Nautobot.
+
+    Args:
+        name: Device hostname.
+        device_type: Device type name (must exist in Nautobot).
+        location: Location name (must exist in Nautobot).
+        role: Device role name (must exist in Nautobot).
+        status: Device status (default: Active).
+
+    Returns:
+        Created device dict.
+    """
+    try:
+        client = get_client()
+        result = devices.create_device(
+            client, name=name, device_type=device_type,
+            location=location, role=role, status=status,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_update_device")
+def nautobot_update_device(
+    id: str,
+    name: Optional[str] = None,
+    status: Optional[str] = None,
+    role: Optional[str] = None,
+) -> dict:
+    """Update an existing device.
+
+    Args:
+        id: Device UUID.
+        name: New hostname (optional).
+        status: New status (optional).
+        role: New role (optional).
+
+    Returns:
+        Updated device dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if status is not None:
+            updates["status"] = status
+        if role is not None:
+            updates["role"] = role
+        result = devices.update_device(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_delete_device")
+def nautobot_delete_device(id: str) -> dict:
+    """Delete a device from Nautobot.
+
+    Args:
+        id: Device UUID to delete.
+
+    Returns:
+        Dict with success status and message.
+    """
+    try:
+        client = get_client()
+        devices.delete_device(client, id=id)
+        return {"success": True, "message": "Device deleted"}
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# INTERFACE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_list_interfaces")
+def nautobot_list_interfaces(
+    device: Optional[str] = None,
+    device_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List interfaces with optional device filtering.
+
+    Args:
+        device: Filter by parent device name.
+        device_id: Filter by parent device UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of interface dicts).
+    """
+    try:
+        client = get_client()
+        result = interfaces.list_interfaces(
+            client, device_name=device, device_id=device_id, limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_get_interface")
+def nautobot_get_interface(
+    id: Optional[str] = None,
+    device_name: Optional[str] = None,
+    name: Optional[str] = None,
+) -> dict:
+    """Get a single interface by ID or device_name+name.
+
+    Args:
+        id: Interface UUID.
+        device_name: Parent device name (used with name).
+        name: Interface name (used with device_name).
+
+    Returns:
+        Interface dict with name, type, enabled, description, etc.
+    """
+    try:
+        client = get_client()
+        result = interfaces.get_interface(
+            client, id=id, device_name=device_name, name=name,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_interface")
+def nautobot_create_interface(
+    device: str,
+    name: str,
+    type: str = "1000base-t",
+) -> dict:
+    """Create a new interface on a device.
+
+    Args:
+        device: Parent device name.
+        name: Interface name (e.g., GigabitEthernet0/1).
+        type: Interface type (default: 1000base-t).
+
+    Returns:
+        Created interface dict.
+    """
+    try:
+        client = get_client()
+        result = interfaces.create_interface(
+            client, device=device, name=name, type=type,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_update_interface")
+def nautobot_update_interface(
+    id: str,
+    name: Optional[str] = None,
+    enabled: Optional[bool] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update an existing interface.
+
+    Args:
+        id: Interface UUID.
+        name: New name (optional).
+        enabled: Enable/disable (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated interface dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if enabled is not None:
+            updates["enabled"] = enabled
+        if description is not None:
+            updates["description"] = description
+        result = interfaces.update_interface(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_assign_ip_to_interface")
+def nautobot_assign_ip_to_interface(
+    interface_id: str,
+    ip_address_id: str,
+) -> dict:
+    """Assign an IP address to an interface.
+
+    Uses Nautobot v2 IPAddressToInterface M2M association.
+
+    Args:
+        interface_id: UUID of the interface.
+        ip_address_id: UUID of the IP address.
+
+    Returns:
+        Dict with assignment details (id, interface, ip_address, status).
+    """
+    try:
+        client = get_client()
+        return interfaces.assign_ip_to_interface(
+            client, interface_id=interface_id, ip_address_id=ip_address_id,
+        )
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# IPAM TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_list_prefixes")
+def nautobot_list_prefixes(
+    namespace: Optional[str] = None,
+    location: Optional[str] = None,
+    tenant: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List IP prefixes with optional filtering.
+
+    Args:
+        namespace: Filter by namespace name.
+        location: Filter by location name.
+        tenant: Filter by tenant name.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of prefix dicts).
+    """
+    try:
+        client = get_client()
+        result = ipam.list_prefixes(
+            client, namespace=namespace, location=location, tenant=tenant,
+            limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_prefix")
+def nautobot_create_prefix(
+    prefix: str,
+    namespace: str = "Global",
+    status: str = "Active",
+) -> dict:
+    """Create a new IP prefix. Nautobot v2 requires Namespace for uniqueness.
+
+    Args:
+        prefix: Network prefix in CIDR notation (e.g., 10.0.0.0/24).
+        namespace: Namespace name (default: Global).
+        status: Prefix status (default: Active).
+
+    Returns:
+        Created prefix dict.
+    """
+    try:
+        client = get_client()
+        result = ipam.create_prefix(
+            client, prefix=prefix, namespace=namespace, status=status,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_list_ip_addresses")
+def nautobot_list_ip_addresses(
+    device: Optional[str] = None,
+    interface: Optional[str] = None,
+    prefix: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List IP addresses with optional filtering.
+
+    Args:
+        device: Filter by device name.
+        interface: Filter by interface name.
+        prefix: Filter by parent prefix.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of IP address dicts).
+    """
+    try:
+        client = get_client()
+        result = ipam.list_ip_addresses(
+            client, device=device, interface=interface, prefix=prefix,
+            limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_ip_address")
+def nautobot_create_ip_address(
+    address: str,
+    namespace: str = "Global",
+    status: str = "Active",
+) -> dict:
+    """Create a new IP address. Nautobot v2 requires Namespace.
+
+    Args:
+        address: IP address with mask (e.g., 10.0.0.1/24).
+        namespace: Namespace name (default: Global).
+        status: Address status (default: Active).
+
+    Returns:
+        Created IP address dict.
+    """
+    try:
+        client = get_client()
+        result = ipam.create_ip_address(
+            client, address=address, namespace=namespace, status=status,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_list_vlans")
+def nautobot_list_vlans(
+    location: Optional[str] = None,
+    tenant: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List VLANs with optional filtering.
+
+    Args:
+        location: Filter by location name.
+        tenant: Filter by tenant name.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of VLAN dicts).
+    """
+    try:
+        client = get_client()
+        result = ipam.list_vlans(
+            client, location=location, tenant=tenant, limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_vlan")
+def nautobot_create_vlan(
+    vid: int,
+    name: str,
+    status: str = "Active",
+) -> dict:
+    """Create a new VLAN.
+
+    Args:
+        vid: VLAN ID (1-4094).
+        name: VLAN name.
+        status: VLAN status (default: Active).
+
+    Returns:
+        Created VLAN dict.
+    """
+    try:
+        client = get_client()
+        result = ipam.create_vlan(
+            client, vid=vid, name=name, status=status,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# ORGANIZATION TOOLS — Tenants
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_list_tenants")
+def nautobot_list_tenants(
+    q: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List tenants with optional search.
+
+    Args:
+        q: Full-text search query.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of tenant dicts).
+    """
+    try:
+        client = get_client()
+        result = organization.list_tenants(client, q=q, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_get_tenant")
+def nautobot_get_tenant(
+    name: Optional[str] = None,
+    id: Optional[str] = None,
+) -> dict:
+    """Get a single tenant by name or UUID.
+
+    Args:
+        name: Tenant name.
+        id: Tenant UUID.
+
+    Returns:
+        Tenant dict with name, description, etc.
+    """
+    try:
+        client = get_client()
+        result = organization.get_tenant(client, name=name, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_tenant")
+def nautobot_create_tenant(name: str) -> dict:
+    """Create a new tenant.
+
+    Args:
+        name: Tenant name.
+
+    Returns:
+        Created tenant dict.
+    """
+    try:
+        client = get_client()
+        result = organization.create_tenant(client, name=name)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_update_tenant")
+def nautobot_update_tenant(
+    id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update an existing tenant.
+
+    Args:
+        id: Tenant UUID.
+        name: New name (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated tenant dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if description is not None:
+            updates["description"] = description
+        result = organization.update_tenant(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# ORGANIZATION TOOLS — Locations
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_list_locations")
+def nautobot_list_locations(
+    location_type: Optional[str] = None,
+    parent: Optional[str] = None,
+    tenant: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List locations with optional filtering.
+
+    Args:
+        location_type: Filter by location type name.
+        parent: Filter by parent location name.
+        tenant: Filter by tenant name.
+        q: Full-text search query.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of location dicts).
+    """
+    try:
+        client = get_client()
+        result = organization.list_locations(
+            client, location_type=location_type, parent=parent,
+            tenant=tenant, q=q, limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_get_location")
+def nautobot_get_location(
+    name: Optional[str] = None,
+    id: Optional[str] = None,
+) -> dict:
+    """Get a single location by name or UUID.
+
+    Args:
+        name: Location name.
+        id: Location UUID.
+
+    Returns:
+        Location dict with name, location_type, parent, etc.
+    """
+    try:
+        client = get_client()
+        result = organization.get_location(client, name=name, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_location")
+def nautobot_create_location(
+    name: str,
+    location_type: str,
+    status: str = "Active",
+) -> dict:
+    """Create a new location.
+
+    Args:
+        name: Location name.
+        location_type: Location type name (must exist in Nautobot).
+        status: Location status (default: Active).
+
+    Returns:
+        Created location dict.
+    """
+    try:
+        client = get_client()
+        result = organization.create_location(
+            client, name=name, location_type=location_type, status=status,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_update_location")
+def nautobot_update_location(
+    id: str,
+    name: Optional[str] = None,
+    status: Optional[str] = None,
+) -> dict:
+    """Update an existing location.
+
+    Args:
+        id: Location UUID.
+        name: New name (optional).
+        status: New status (optional).
+
+    Returns:
+        Updated location dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if status is not None:
+            updates["status"] = status
+        result = organization.update_location(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CIRCUIT TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_list_circuits")
+def nautobot_list_circuits(
+    provider: Optional[str] = None,
+    circuit_type: Optional[str] = None,
+    location: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List circuits with optional filtering.
+
+    Args:
+        provider: Filter by provider name.
+        circuit_type: Filter by circuit type name.
+        location: Filter by location name.
+        q: Full-text search query.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of circuit dicts).
+    """
+    try:
+        client = get_client()
+        result = circuits.list_circuits(
+            client, provider=provider, circuit_type=circuit_type,
+            location=location, q=q, limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_get_circuit")
+def nautobot_get_circuit(
+    cid: Optional[str] = None,
+    id: Optional[str] = None,
+) -> dict:
+    """Get a single circuit by circuit ID or UUID.
+
+    Args:
+        cid: Circuit identifier string.
+        id: Circuit UUID.
+
+    Returns:
+        Circuit dict with cid, provider, circuit_type, status, etc.
+    """
+    try:
+        client = get_client()
+        result = circuits.get_circuit(client, cid=cid, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_circuit")
+def nautobot_create_circuit(
+    cid: str,
+    provider: str,
+    circuit_type: str,
+    status: str = "Active",
+) -> dict:
+    """Create a new circuit.
+
+    Args:
+        cid: Circuit identifier string.
+        provider: Provider name (must exist in Nautobot).
+        circuit_type: Circuit type name (must exist in Nautobot).
+        status: Circuit status (default: Active).
+
+    Returns:
+        Created circuit dict.
+    """
+    try:
+        client = get_client()
+        result = circuits.create_circuit(
+            client, cid=cid, provider=provider, circuit_type=circuit_type,
+            status=status,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_update_circuit")
+def nautobot_update_circuit(
+    id: str,
+    cid: Optional[str] = None,
+    status: Optional[str] = None,
+) -> dict:
+    """Update an existing circuit.
+
+    Args:
+        id: Circuit UUID.
+        cid: New circuit identifier (optional).
+        status: New status (optional).
+
+    Returns:
+        Updated circuit dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if cid is not None:
+            updates["cid"] = cid
+        if status is not None:
+            updates["status"] = status
+        result = circuits.update_circuit(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ---------------------------------------------------------------------------
+# Server entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    mcp.run()
