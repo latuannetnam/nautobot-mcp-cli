@@ -68,6 +68,9 @@ from nautobot_mcp.golden_config import (
 # Onboarding
 from nautobot_mcp.onboarding import onboard_config
 
+# Verification
+from nautobot_mcp.verification import verify_config_compliance, verify_data_model
+
 __all__ = [
     # Version
     "__version__",
@@ -129,5 +132,8 @@ __all__ = [
     "quick_diff_config",
     # Onboarding
     "onboard_config",
+    # Verification
+    "verify_config_compliance",
+    "verify_data_model",
 ]
 
