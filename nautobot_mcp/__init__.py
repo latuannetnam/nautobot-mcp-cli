@@ -2,6 +2,9 @@
 
 This package provides a Python client library for interacting with Nautobot,
 with curated pydantic models and structured error handling.
+
+# MCP Server: nautobot_mcp.server (import separately — requires fastmcp)
+# CLI: nautobot_mcp.cli.app (registered as entry point — requires typer)
 """
 
 __version__ = "0.1.0"
