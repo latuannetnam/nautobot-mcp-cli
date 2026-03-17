@@ -18,6 +18,7 @@ from nautobot_mcp.exceptions import NautobotMCPError
 # Domain imports
 from nautobot_mcp import circuits, devices, interfaces, ipam, organization
 from nautobot_mcp import golden_config as gc
+from nautobot_mcp import onboarding, verification
 from nautobot_mcp.parsers import ParserRegistry
 
 mcp = FastMCP("Nautobot MCP Server")
@@ -1118,6 +1119,118 @@ def nautobot_list_parsers() -> dict:
         Dict with 'parsers' list of registered parser identifiers.
     """
     return {"parsers": ParserRegistry.list_parsers()}
+
+# ===========================================================================
+# ONBOARDING TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_onboard_config")
+def nautobot_onboard_config(
+    config_json: str,
+    device_name: str,
+    network_os: str = "juniper_junos",
+    dry_run: bool = True,
+    update_existing: bool = False,
+    location: Optional[str] = None,
+    device_type: Optional[str] = None,
+    role: str = "Router",
+    namespace: str = "Global",
+) -> dict:
+    """Onboard a parsed router config into Nautobot.
+
+    Parses the config, then creates/updates device, interfaces, IPs, and VLANs.
+    Default is dry-run mode (shows planned changes without committing).
+
+    Args:
+        config_json: Raw JSON string of the device configuration.
+        device_name: Target device name in Nautobot.
+        network_os: Parser identifier (default: juniper_junos).
+        dry_run: If True, show planned changes without committing.
+        update_existing: If True, update existing objects with new values.
+        location: Device location name.
+        device_type: Device type name.
+        role: Device role (default: Router).
+        namespace: IPAM namespace (default: Global).
+
+    Returns:
+        OnboardResult dict with summary, actions, and warnings.
+    """
+    try:
+        import json as json_mod
+        config_data = json_mod.loads(config_json)
+        parser = ParserRegistry.get(network_os)
+        parsed_config = parser.parse(config_data)
+        client = get_client()
+        result = onboarding.onboard_config(
+            client, parsed_config, device_name,
+            dry_run=dry_run, update_existing=update_existing,
+            location=location, device_type=device_type,
+            role=role, namespace=namespace,
+        )
+        return result.model_dump()
+    except ValueError as e:
+        raise ToolError(str(e))
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# VERIFICATION TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_verify_config_compliance")
+def nautobot_verify_config_compliance(device: str) -> dict:
+    """Compare device's intended vs backup config using Golden Config.
+
+    Runs a quick diff and returns structured compliance results.
+
+    Args:
+        device: Device name or UUID.
+
+    Returns:
+        DriftReport dict with config_compliance field.
+    """
+    try:
+        client = get_client()
+        result = verification.verify_config_compliance(client, device)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_verify_data_model")
+def nautobot_verify_data_model(
+    config_json: str,
+    device_name: str,
+    network_os: str = "juniper_junos",
+) -> dict:
+    """Compare parsed device config against Nautobot data model records.
+
+    Uses DiffSync for object-by-object comparison across interfaces,
+    IP addresses, and VLANs. Returns a structured drift report.
+
+    Args:
+        config_json: Raw JSON string of the device configuration.
+        device_name: Device name in Nautobot.
+        network_os: Parser identifier (default: juniper_junos).
+
+    Returns:
+        DriftReport dict with interface, IP, VLAN drift sections and summary.
+    """
+    try:
+        import json as json_mod
+        config_data = json_mod.loads(config_json)
+        parser = ParserRegistry.get(network_os)
+        parsed_config = parser.parse(config_data)
+        client = get_client()
+        result = verification.verify_data_model(client, device_name, parsed_config)
+        return result.model_dump()
+    except ValueError as e:
+        raise ToolError(str(e))
+    except Exception as e:
+        handle_error(e)
 
 
 # ---------------------------------------------------------------------------
