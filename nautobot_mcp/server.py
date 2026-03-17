@@ -17,6 +17,8 @@ from nautobot_mcp.exceptions import NautobotMCPError
 
 # Domain imports
 from nautobot_mcp import circuits, devices, interfaces, ipam, organization
+from nautobot_mcp import golden_config as gc
+from nautobot_mcp.parsers import ParserRegistry
 
 mcp = FastMCP("Nautobot MCP Server")
 
@@ -824,6 +826,298 @@ def nautobot_update_circuit(
         return result.model_dump()
     except Exception as e:
         handle_error(e)
+
+
+# ===========================================================================
+# GOLDEN CONFIG TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_get_intended_config")
+def nautobot_get_intended_config(device: str) -> dict:
+    """Retrieve the intended (golden) configuration for a device.
+
+    Returns the full config text that should be on the device.
+
+    Args:
+        device: Device name or UUID.
+
+    Returns:
+        Dict with device, intended_config, backup_config fields.
+    """
+    try:
+        client = get_client()
+        result = gc.get_intended_config(client, device)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_get_backup_config")
+def nautobot_get_backup_config(device: str) -> dict:
+    """Retrieve the backup (actual) configuration for a device.
+
+    Returns the last collected config from the device.
+
+    Args:
+        device: Device name or UUID.
+
+    Returns:
+        Dict with device, intended_config, backup_config fields.
+    """
+    try:
+        client = get_client()
+        result = gc.get_backup_config(client, device)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_list_compliance_features")
+def nautobot_list_compliance_features() -> dict:
+    """List all compliance features defined in Golden Config.
+
+    Returns:
+        Dict with 'count' and 'results' (list of feature dicts).
+    """
+    try:
+        client = get_client()
+        result = gc.list_compliance_features(client)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_compliance_feature")
+def nautobot_create_compliance_feature(
+    name: str,
+    slug: str,
+    description: str = "",
+) -> dict:
+    """Create a new compliance feature.
+
+    Args:
+        name: Feature name.
+        slug: Feature slug.
+        description: Optional description.
+
+    Returns:
+        Created compliance feature dict.
+    """
+    try:
+        client = get_client()
+        result = gc.create_compliance_feature(client, name=name, slug=slug, description=description)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_delete_compliance_feature")
+def nautobot_delete_compliance_feature(feature_id: str) -> dict:
+    """Delete a compliance feature.
+
+    Args:
+        feature_id: UUID of the compliance feature.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return gc.delete_compliance_feature(client, feature_id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_list_compliance_rules")
+def nautobot_list_compliance_rules(
+    feature: Optional[str] = None,
+    platform: Optional[str] = None,
+) -> dict:
+    """List compliance rules with optional filtering.
+
+    Args:
+        feature: Filter by feature name.
+        platform: Filter by platform slug.
+
+    Returns:
+        Dict with 'count' and 'results' (list of rule dicts).
+    """
+    try:
+        client = get_client()
+        result = gc.list_compliance_rules(client, feature=feature, platform=platform)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_create_compliance_rule")
+def nautobot_create_compliance_rule(
+    feature: str,
+    platform: str,
+    config_ordered: bool = False,
+    match_config: str = "",
+    description: str = "",
+) -> dict:
+    """Create a new compliance rule.
+
+    Args:
+        feature: Feature name to associate.
+        platform: Platform slug.
+        config_ordered: Whether config order matters.
+        match_config: Regex/pattern to match config sections.
+        description: Optional description.
+
+    Returns:
+        Created compliance rule dict.
+    """
+    try:
+        client = get_client()
+        result = gc.create_compliance_rule(
+            client, feature=feature, platform=platform,
+            config_ordered=config_ordered, match_config=match_config,
+            description=description,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_update_compliance_rule")
+def nautobot_update_compliance_rule(
+    rule_id: str,
+    config_ordered: Optional[bool] = None,
+    match_config: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update an existing compliance rule.
+
+    Args:
+        rule_id: UUID of the rule.
+        config_ordered: New value for config ordering.
+        match_config: New match config pattern.
+        description: New description.
+
+    Returns:
+        Updated compliance rule dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if config_ordered is not None:
+            updates["config_ordered"] = config_ordered
+        if match_config is not None:
+            updates["match_config"] = match_config
+        if description is not None:
+            updates["description"] = description
+        result = gc.update_compliance_rule(client, rule_id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_delete_compliance_rule")
+def nautobot_delete_compliance_rule(rule_id: str) -> dict:
+    """Delete a compliance rule.
+
+    Args:
+        rule_id: UUID of the compliance rule.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return gc.delete_compliance_rule(client, rule_id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_get_compliance_results")
+def nautobot_get_compliance_results(device: str) -> dict:
+    """Get compliance results for a device from Golden Config.
+
+    Returns per-feature compliance status (compliant/non-compliant).
+
+    Args:
+        device: Device name or UUID.
+
+    Returns:
+        ComplianceResult dict with device, overall_status, features.
+    """
+    try:
+        client = get_client()
+        result = gc.get_compliance_results(client, device)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_quick_diff_config")
+def nautobot_quick_diff_config(device: str) -> dict:
+    """Quick diff intended vs backup config for a device.
+
+    Uses difflib to compare configs without running a full compliance check.
+
+    Args:
+        device: Device name or UUID.
+
+    Returns:
+        ComplianceResult dict with diff-based compliance status.
+    """
+    try:
+        client = get_client()
+        result = gc.quick_diff_config(client, device)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# PARSER TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_parse_config")
+def nautobot_parse_config(
+    config_json: str,
+    network_os: str = "juniper_junos",
+) -> dict:
+    """Parse a device configuration JSON to extract structured network data.
+
+    Supports JunOS (show configuration | display json).
+    Returns interfaces, IPs, VLANs, routing instances, protocols,
+    firewall filters, and system settings.
+
+    Args:
+        config_json: Raw JSON string of the device configuration.
+        network_os: Parser identifier (default: juniper_junos).
+
+    Returns:
+        ParsedConfig dict with all extracted network data.
+    """
+    try:
+        import json
+        config_data = json.loads(config_json)
+        parser = ParserRegistry.get(network_os)
+        result = parser.parse(config_data)
+        return result.model_dump()
+    except ValueError as e:
+        raise ToolError(str(e))
+    except json.JSONDecodeError as e:
+        raise ToolError(f"Invalid JSON: {str(e)}")
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_list_parsers")
+def nautobot_list_parsers() -> dict:
+    """List available configuration parsers and their supported network_os identifiers.
+
+    Returns:
+        Dict with 'parsers' list of registered parser identifiers.
+    """
+    return {"parsers": ParserRegistry.list_parsers()}
 
 
 # ---------------------------------------------------------------------------

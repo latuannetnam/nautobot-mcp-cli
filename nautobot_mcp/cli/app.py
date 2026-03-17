@@ -122,12 +122,16 @@ from nautobot_mcp.cli.interfaces import interfaces_app  # noqa: E402
 from nautobot_mcp.cli.ipam import ipam_app  # noqa: E402
 from nautobot_mcp.cli.organization import org_app  # noqa: E402
 from nautobot_mcp.cli.circuits import circuits_app  # noqa: E402
+from nautobot_mcp.cli.golden_config import golden_config_app  # noqa: E402
+from nautobot_mcp.cli.parse import parse_app  # noqa: E402
 
 app.add_typer(devices_app, name="devices")
 app.add_typer(interfaces_app, name="interfaces")
 app.add_typer(ipam_app, name="ipam")
 app.add_typer(org_app, name="org")
 app.add_typer(circuits_app, name="circuits")
+app.add_typer(golden_config_app, name="golden-config")
+app.add_typer(parse_app, name="parse")
 
 
 if __name__ == "__main__":
