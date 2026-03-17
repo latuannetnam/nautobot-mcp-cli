@@ -1,0 +1,223 @@
+"""Device CRUD operations using the Nautobot API client.
+
+Provides list/get/create/update/delete operations for Devices,
+returning curated DeviceSummary pydantic models.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
+
+from nautobot_mcp.exceptions import NautobotNotFoundError
+from nautobot_mcp.models.base import ListResponse
+from nautobot_mcp.models.device import DeviceSummary
+
+if TYPE_CHECKING:
+    from nautobot_mcp.client import NautobotClient
+
+
+def list_devices(
+    client: NautobotClient,
+    location: Optional[str] = None,
+    tenant: Optional[str] = None,
+    role: Optional[str] = None,
+    platform: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 0,
+    **extra_filters: str,
+) -> ListResponse[DeviceSummary]:
+    """List devices with optional filtering.
+
+    Args:
+        client: NautobotClient instance.
+        location: Filter by location name.
+        tenant: Filter by tenant name.
+        role: Filter by device role name.
+        platform: Filter by platform name.
+        q: Full-text search query.
+        limit: Max results to return. 0 = all.
+        **extra_filters: Additional pynautobot filter parameters.
+
+    Returns:
+        ListResponse with count and DeviceSummary results.
+    """
+    try:
+        filters = {}
+        if location:
+            filters["location"] = location
+        if tenant:
+            filters["tenant"] = tenant
+        if role:
+            filters["role"] = role
+        if platform:
+            filters["platform"] = platform
+        if q:
+            filters["q"] = q
+        filters.update(extra_filters)
+
+        if filters:
+            records = list(client.api.dcim.devices.filter(**filters))
+        else:
+            records = list(client.api.dcim.devices.all())
+
+        all_results = [DeviceSummary.from_nautobot(r) for r in records]
+
+        if limit > 0:
+            limited_results = all_results[:limit]
+        else:
+            limited_results = all_results
+
+        return ListResponse(count=len(all_results), results=limited_results)
+
+    except Exception as e:
+        client._handle_api_error(e, "list", "Device")
+        raise  # unreachable, _handle_api_error always raises
+
+
+def get_device(
+    client: NautobotClient,
+    name: Optional[str] = None,
+    id: Optional[str] = None,
+) -> DeviceSummary:
+    """Get a single device by name or ID.
+
+    Args:
+        client: NautobotClient instance.
+        name: Device name to look up.
+        id: Device UUID to look up.
+
+    Returns:
+        DeviceSummary for the found device.
+
+    Raises:
+        NautobotNotFoundError: If device not found.
+        ValueError: If neither name nor id provided.
+    """
+    if not name and not id:
+        raise ValueError("Either 'name' or 'id' must be provided")
+
+    try:
+        if id:
+            record = client.api.dcim.devices.get(id=id)
+        else:
+            record = client.api.dcim.devices.get(name=name)
+
+        if record is None:
+            identifier = name or id
+            raise NautobotNotFoundError(
+                message=f"Device '{identifier}' not found",
+                hint="Check the device name or ID, use list_devices to see available devices",
+            )
+
+        return DeviceSummary.from_nautobot(record)
+
+    except NautobotNotFoundError:
+        raise
+    except Exception as e:
+        client._handle_api_error(e, "get", "Device")
+        raise
+
+
+def create_device(
+    client: NautobotClient,
+    name: str,
+    device_type: str,
+    location: str,
+    role: str,
+    status: str = "Active",
+    **kwargs: str,
+) -> DeviceSummary:
+    """Create a new device in Nautobot.
+
+    Args:
+        client: NautobotClient instance.
+        name: Device hostname.
+        device_type: Device type name (must exist in Nautobot).
+        location: Location name (must exist in Nautobot).
+        role: Device role name (must exist in Nautobot).
+        status: Device status. Default: "Active".
+        **kwargs: Additional device fields.
+
+    Returns:
+        DeviceSummary for the created device.
+    """
+    try:
+        data = {
+            "name": name,
+            "device_type": {"name": device_type},
+            "location": {"name": location},
+            "role": {"name": role},
+            "status": status,
+        }
+        data.update(kwargs)
+        record = client.api.dcim.devices.create(**data)
+        return DeviceSummary.from_nautobot(record)
+
+    except Exception as e:
+        client._handle_api_error(e, "create", "Device")
+        raise
+
+
+def update_device(
+    client: NautobotClient,
+    id: str,
+    **updates: str,
+) -> DeviceSummary:
+    """Update an existing device.
+
+    Args:
+        client: NautobotClient instance.
+        id: Device UUID to update.
+        **updates: Fields to update.
+
+    Returns:
+        DeviceSummary for the updated device.
+    """
+    try:
+        record = client.api.dcim.devices.get(id=id)
+        if record is None:
+            raise NautobotNotFoundError(
+                message=f"Device '{id}' not found for update",
+                hint="Verify the device ID exists",
+            )
+
+        for key, value in updates.items():
+            setattr(record, key, value)
+        record.save()
+
+        return DeviceSummary.from_nautobot(record)
+
+    except NautobotNotFoundError:
+        raise
+    except Exception as e:
+        client._handle_api_error(e, "update", "Device")
+        raise
+
+
+def delete_device(
+    client: NautobotClient,
+    id: str,
+) -> bool:
+    """Delete a device from Nautobot.
+
+    Args:
+        client: NautobotClient instance.
+        id: Device UUID to delete.
+
+    Returns:
+        True if deletion was successful.
+    """
+    try:
+        record = client.api.dcim.devices.get(id=id)
+        if record is None:
+            raise NautobotNotFoundError(
+                message=f"Device '{id}' not found for deletion",
+            )
+        record.delete()
+        return True
+
+    except NautobotNotFoundError:
+        raise
+    except Exception as e:
+        client._handle_api_error(e, "delete", "Device")
+        raise
