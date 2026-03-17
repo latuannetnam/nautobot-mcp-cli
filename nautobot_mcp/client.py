@@ -188,3 +188,19 @@ class NautobotClient:
     def circuits(self):
         """Access Circuits app endpoints (circuits, providers, etc.)."""
         return self.api.circuits
+
+    @property
+    def golden_config(self):
+        """Access Golden Config plugin endpoints.
+
+        Returns pynautobot plugin app for golden-config.
+        Raises NautobotAPIError if plugin is not installed.
+        """
+        try:
+            return self.api.plugins.golden_config
+        except Exception as e:
+            raise NautobotAPIError(
+                message="Golden Config plugin not available",
+                code="PLUGIN_NOT_FOUND",
+                hint="Ensure nautobot-golden-config is installed on your Nautobot instance",
+            ) from e

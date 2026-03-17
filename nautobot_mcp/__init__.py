@@ -51,6 +51,19 @@ from nautobot_mcp.organization import (
     update_location,
     update_tenant,
 )
+from nautobot_mcp.golden_config import (
+    get_intended_config,
+    get_backup_config,
+    list_compliance_features,
+    create_compliance_feature,
+    delete_compliance_feature,
+    list_compliance_rules,
+    create_compliance_rule,
+    update_compliance_rule,
+    delete_compliance_rule,
+    get_compliance_results,
+    quick_diff_config,
+)
 
 __all__ = [
     # Version
@@ -99,4 +112,17 @@ __all__ = [
     "get_circuit",
     "create_circuit",
     "update_circuit",
+    # Golden Config
+    "get_intended_config",
+    "get_backup_config",
+    "list_compliance_features",
+    "create_compliance_feature",
+    "delete_compliance_feature",
+    "list_compliance_rules",
+    "create_compliance_rule",
+    "update_compliance_rule",
+    "delete_compliance_rule",
+    "get_compliance_results",
+    "quick_diff_config",
 ]
+
