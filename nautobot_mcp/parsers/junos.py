@@ -58,6 +58,34 @@ def _ensure_list(value) -> list:
     return [value]
 
 
+def _scalar(value, default: str = "") -> str:
+    """Extract a plain string from a JunOS JSON scalar field.
+
+    JunOS JSON wraps every scalar in a list-of-dicts: [{"data": "value"}].
+    This helper handles both that wrapped form and plain strings.
+
+    Examples:
+        [{"data": "ge-0/0/0"}]  -> "ge-0/0/0"
+        "ge-0/0/0"              -> "ge-0/0/0"
+        []                      -> default
+        None                    -> default
+    """
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        if not value:
+            return default
+        first = value[0]
+        if isinstance(first, dict):
+            return str(first.get("data", default))
+        return str(first)
+    if isinstance(value, dict):
+        return str(value.get("data", default))
+    return str(value)
+
+
 @ParserRegistry.register
 class JunosJsonParser(VendorParser):
     """Parser for JunOS JSON config output (show configuration | display json)."""
@@ -141,8 +169,8 @@ class JunosJsonParser(VendorParser):
         if not system_data:
             return ParsedSystemSettings()
 
-        hostname = system_data.get("host-name", "")
-        domain_name = system_data.get("domain-name", "")
+        hostname = _scalar(system_data.get("host-name", ""))
+        domain_name = _scalar(system_data.get("domain-name", ""))
 
         # Name servers
         name_servers = []
@@ -188,9 +216,9 @@ class JunosJsonParser(VendorParser):
             if not isinstance(iface, dict):
                 continue
 
-            name = iface.get("name", "")
-            description = iface.get("description", "")
-            enabled = not iface.get("disable", False)
+            name = _scalar(iface.get("name", ""))
+            description = _scalar(iface.get("description", ""))
+            enabled = not bool(iface.get("disable", False))
 
             # Determine interface type
             if name.startswith("lo"):
@@ -226,19 +254,21 @@ class JunosJsonParser(VendorParser):
 
     def _parse_unit(self, unit_data: dict) -> ParsedInterfaceUnit:
         """Parse a single interface unit with IP addresses."""
-        unit_num = unit_data.get("name", 0)
+        unit_num_raw = _scalar(unit_data.get("name", "0"))
         try:
-            unit_num = int(unit_num)
+            unit_num = int(unit_num_raw)
         except (ValueError, TypeError):
             unit_num = 0
 
-        description = unit_data.get("description", "")
-        vlan_id = unit_data.get("vlan-id")
-        if vlan_id is not None:
+        description = _scalar(unit_data.get("description", ""))
+        vlan_id_raw = unit_data.get("vlan-id")
+        if vlan_id_raw is not None:
             try:
-                vlan_id = int(vlan_id)
+                vlan_id = int(_scalar(vlan_id_raw))
             except (ValueError, TypeError):
                 vlan_id = None
+        else:
+            vlan_id = None
 
         # Extract IP addresses from family inet/inet6
         ip_addresses = []
@@ -248,7 +278,7 @@ class JunosJsonParser(VendorParser):
             af_data = family.get(af_key, {})
             for addr in _ensure_list(af_data.get("address", [])):
                 if isinstance(addr, dict):
-                    addr_str = addr.get("name", "")
+                    addr_str = _scalar(addr.get("name", ""))
                 elif isinstance(addr, str):
                     addr_str = addr
                 else:
@@ -284,18 +314,18 @@ class JunosJsonParser(VendorParser):
         for vlan in _ensure_list(vlan_data.get("vlan", [])):
             if not isinstance(vlan, dict):
                 continue
-            name = vlan.get("name", "")
-            vlan_id = vlan.get("vlan-id")
-            if vlan_id is not None:
+            name = _scalar(vlan.get("name", ""))
+            vlan_id_raw = vlan.get("vlan-id")
+            if vlan_id_raw is not None:
                 try:
-                    vlan_id = int(vlan_id)
+                    vlan_id = int(_scalar(vlan_id_raw))
                 except (ValueError, TypeError):
                     continue
             else:
                 continue  # skip vlans without an ID
 
-            description = vlan.get("description", "")
-            l3_interface = vlan.get("l3-interface", "")
+            description = _scalar(vlan.get("description", ""))
+            l3_interface = _scalar(vlan.get("l3-interface", ""))
 
             vlans.append(
                 ParsedVLAN(
@@ -318,16 +348,16 @@ class JunosJsonParser(VendorParser):
             if not isinstance(inst, dict):
                 continue
 
-            name = inst.get("name", "")
-            instance_type = inst.get("instance-type", "")
+            name = _scalar(inst.get("name", ""))
+            instance_type = _scalar(inst.get("instance-type", ""))
             rd = inst.get("route-distinguisher", {})
-            rd_value = rd.get("rd-type", "") if isinstance(rd, dict) else ""
+            rd_value = _scalar(rd.get("rd-type", "")) if isinstance(rd, dict) else ""
 
             # Get interfaces from interface block
             iface_names = []
             for iface in _ensure_list(inst.get("interface", [])):
                 if isinstance(iface, dict):
-                    iface_names.append(iface.get("name", ""))
+                    iface_names.append(_scalar(iface.get("name", "")))
                 elif isinstance(iface, str):
                     iface_names.append(iface)
 
@@ -396,17 +426,17 @@ class JunosJsonParser(VendorParser):
             as_num = local_as_val.get("as-number")
             if as_num is not None:
                 try:
-                    local_as = int(as_num)
+                    local_as = int(_scalar(as_num))
                 except (ValueError, TypeError):
                     pass
 
-        router_id = bgp_data.get("router-id", "")
+        router_id = _scalar(bgp_data.get("router-id", ""))
 
         neighbors = []
         for group in _ensure_list(bgp_data.get("group", [])):
             if not isinstance(group, dict):
                 continue
-            group_name = group.get("name", "")
+            group_name = _scalar(group.get("name", ""))
             peer_as = group.get("peer-as")
             if peer_as is not None:
                 try:
@@ -416,8 +446,8 @@ class JunosJsonParser(VendorParser):
 
             for neighbor in _ensure_list(group.get("neighbor", [])):
                 if isinstance(neighbor, dict):
-                    addr = neighbor.get("name", "")
-                    desc = neighbor.get("description", "")
+                    addr = _scalar(neighbor.get("name", ""))
+                    desc = _scalar(neighbor.get("description", ""))
                     # Neighbor-level peer-as overrides group-level
                     n_peer_as = neighbor.get("peer-as")
                     if n_peer_as is not None:
@@ -446,17 +476,17 @@ class JunosJsonParser(VendorParser):
 
     def _parse_ospf(self, ospf_data: dict) -> ParsedProtocol:
         """Parse OSPF protocol data."""
-        router_id = ospf_data.get("router-id", "")
+        router_id = _scalar(ospf_data.get("router-id", ""))
 
         areas = []
         for area in _ensure_list(ospf_data.get("area", [])):
             if not isinstance(area, dict):
                 continue
-            area_id = area.get("name", "")
+            area_id = _scalar(area.get("name", ""))
             iface_names = []
             for iface in _ensure_list(area.get("interface", [])):
                 if isinstance(iface, dict):
-                    iface_names.append(iface.get("name", ""))
+                    iface_names.append(_scalar(iface.get("name", "")))
                 elif isinstance(iface, str):
                     iface_names.append(iface)
             areas.append(ParsedOSPFArea(area_id=area_id, interfaces=iface_names))
@@ -497,14 +527,14 @@ class JunosJsonParser(VendorParser):
         self, filt_data: dict, family: str
     ) -> ParsedFirewallFilter | None:
         """Parse a single firewall filter."""
-        name = filt_data.get("name", "")
+        name = _scalar(filt_data.get("name", ""))
         if not name:
             return None
 
         terms = []
         for term in _ensure_list(filt_data.get("term", [])):
             if isinstance(term, dict):
-                term_name = term.get("name", "")
+                term_name = _scalar(term.get("name", ""))
                 if term_name:
                     terms.append(term_name)
 

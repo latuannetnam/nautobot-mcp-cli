@@ -52,7 +52,7 @@ class IPAddressSummary(BaseModel):
     id: str = Field(description="UUID of the IP address")
     address: str = Field(description="IP address with mask (e.g., 10.0.0.1/24)")
     status: str = Field(description="IP address status")
-    namespace: RelatedObject = Field(description="IPAM namespace")
+    namespace: Optional[RelatedObject] = Field(default=None, description="IPAM namespace")
     tenant: Optional[RelatedObject] = Field(default=None, description="Owning tenant")
     dns_name: Optional[str] = Field(default=None, description="DNS name")
     type: str = Field(default="Host", description="IP address type")
@@ -72,7 +72,7 @@ class IPAddressSummary(BaseModel):
             id=str(record.id),
             address=str(getattr(record, "address", record)),
             status=status,
-            namespace=related_from_record(record.namespace),
+            namespace=related_from_record_or_none(getattr(record, "namespace", None)),
             tenant=related_from_record_or_none(getattr(record, "tenant", None)),
             dns_name=getattr(record, "dns_name", None) or None,
             type=ip_type,

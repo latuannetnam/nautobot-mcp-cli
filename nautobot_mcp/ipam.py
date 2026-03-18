@@ -142,6 +142,7 @@ def list_vlans(
     location: Optional[str] = None,
     tenant: Optional[str] = None,
     vlan_group: Optional[str] = None,
+    vid: Optional[int] = None,
     limit: int = 0,
     **extra_filters: str,
 ) -> ListResponse[VLANSummary]:
@@ -154,12 +155,15 @@ def list_vlans(
             filters["tenant"] = tenant
         if vlan_group:
             filters["vlan_group"] = vlan_group
+        if vid is not None:
+            filters["vid"] = vid
         filters.update(extra_filters)
 
         if filters:
             records = list(client.api.ipam.vlans.filter(**filters))
         else:
             records = list(client.api.ipam.vlans.all())
+
 
         all_results = [VLANSummary.from_nautobot(r) for r in records]
         limited_results = all_results[:limit] if limit > 0 else all_results

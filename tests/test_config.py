@@ -39,8 +39,10 @@ def test_settings_default_profile():
     assert settings.active_profile == "default"
 
 
-def test_settings_get_active_profile():
+def test_settings_get_active_profile(monkeypatch):
     """get_active_profile should return the correct profile."""
+    monkeypatch.delenv("NAUTOBOT_URL", raising=False)
+    monkeypatch.delenv("NAUTOBOT_TOKEN", raising=False)
     profile = NautobotProfile(
         url="https://nautobot.example.com",
         token="my-token",
@@ -54,8 +56,10 @@ def test_settings_get_active_profile():
     assert active.token == "my-token"
 
 
-def test_settings_get_active_profile_not_found():
+def test_settings_get_active_profile_not_found(monkeypatch):
     """get_active_profile should raise ValueError if profile doesn't exist."""
+    monkeypatch.delenv("NAUTOBOT_URL", raising=False)
+    monkeypatch.delenv("NAUTOBOT_TOKEN", raising=False)
     settings = NautobotSettings(
         profiles={},
         active_profile="nonexistent",
@@ -67,8 +71,10 @@ def test_settings_get_active_profile_not_found():
         assert "nonexistent" in str(e)
 
 
-def test_settings_multiple_profiles():
+def test_settings_multiple_profiles(monkeypatch):
     """Settings should support multiple named profiles."""
+    monkeypatch.delenv("NAUTOBOT_URL", raising=False)
+    monkeypatch.delenv("NAUTOBOT_TOKEN", raising=False)
     settings = NautobotSettings(
         profiles={
             "production": NautobotProfile(

@@ -119,12 +119,14 @@ class NautobotLiveAdapter(Adapter):
 
     client: Any = None  # NautobotClient
     device_name: str = ""
+    parsed_config: Any = None  # ParsedConfig — used to scope VLAN queries
 
     def load(self):
-        """Load Nautobot data into DiffSync models."""
+        """Load Nautobot data into DiffSync models (scoped to what parsed config has)."""
         if not self.client:
             return
-        # Load interfaces
+
+        # Load interfaces for the specific device only
         ifaces = list_interfaces(self.client, device_name=self.device_name)
         for iface in ifaces.results:
             self.add(SyncInterface(
@@ -134,10 +136,9 @@ class NautobotLiveAdapter(Adapter):
                 enabled=iface.enabled,
             ))
 
-        # Load IPs for the device
+        # Load IPs for the specific device — API-level filter, not all 6k
         ips = list_ip_addresses(self.client, device=self.device_name)
         for ip in ips.results:
-            # Determine interface name from the IP record
             iface_name = ""
             if hasattr(ip, "interface") and ip.interface:
                 iface_name = ip.interface if isinstance(ip.interface, str) else ""
@@ -147,14 +148,21 @@ class NautobotLiveAdapter(Adapter):
                 family="inet" if "." in ip.address else "inet6",
             ))
 
-        # Load VLANs
-        vlans = list_vlans(self.client)
-        for vlan in vlans.results:
-            self.add(SyncVLAN(
-                vlan_id=vlan.vid,
-                name=vlan.name,
-                description=vlan.description or "",
-            ))
+        # Load VLANs ONLY for vids present in parsed config — skip if none
+        # This avoids fetching all 10k VLANs from Nautobot unnecessarily
+        if self.parsed_config and self.parsed_config.vlans:
+            vids_to_check = {v.vlan_id for v in self.parsed_config.vlans}
+            for vid in vids_to_check:
+                try:
+                    vlan_result = list_vlans(self.client, vid=vid)
+                    for vlan in vlan_result.results:
+                        self.add(SyncVLAN(
+                            vlan_id=vlan.vid,
+                            name=vlan.name,
+                            description=vlan.description or "",
+                        ))
+                except Exception:
+                    pass  # VLAN not found — will show as drift
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +223,7 @@ def verify_data_model(
     nautobot_adapter = NautobotLiveAdapter()
     nautobot_adapter.client = client
     nautobot_adapter.device_name = device_name
+    nautobot_adapter.parsed_config = parsed_config  # scopes VLAN queries
 
     # Load data
     parsed_adapter.load()

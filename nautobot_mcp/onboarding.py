@@ -241,7 +241,9 @@ def _resolve_interfaces(
                     details={"id": existing.id},
                     reason="Already exists in Nautobot",
                 ))
-        except NautobotNotFoundError:
+        except Exception:
+            # NautobotNotFoundError: interface doesn't exist yet
+            # Other errors (e.g. 400 when device doesn't exist): treat as not found
             iface_type = map_interface_type(iface.name)
             actions.append(OnboardAction(
                 action="create",
