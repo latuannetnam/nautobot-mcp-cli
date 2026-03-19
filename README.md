@@ -174,11 +174,11 @@ The MCP server exposes all Nautobot operations as tools that AI agents (Claude, 
 ### Starting the server
 
 ```bash
-# Using uv
+# Recommended — uses the project venv automatically
 uv run python main.py
 
-# Or directly
-python -m nautobot_mcp.server
+# Alternative — via fastmcp CLI
+uv run fastmcp run nautobot_mcp/server.py
 ```
 
 ### Integrating with Claude Desktop

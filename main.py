@@ -1,6 +1,6 @@
-def main():
-    print("Hello from nautobot-mcp-cli!")
+"""Entry point for the Nautobot MCP server."""
 
+from nautobot_mcp.server import mcp
 
 if __name__ == "__main__":
-    main()
+    mcp.run()
