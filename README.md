@@ -317,8 +317,10 @@ Add to `claude_desktop_config.json`:
 ## CLI Usage
 
 ```
-nautobot-mcp [OPTIONS] COMMAND [ARGS]...
+uv run nautobot-mcp [OPTIONS] COMMAND [ARGS]...
 ```
+
+> **Tip:** `uv run` automatically uses the project venv. Alternatively, activate it first (`source .venv/bin/activate` or `.venv\Scripts\activate`) and then use `nautobot-mcp` directly.
 
 ### Global options
 
@@ -334,45 +336,45 @@ nautobot-mcp [OPTIONS] COMMAND [ARGS]...
 
 ```bash
 # Devices
-nautobot-mcp devices list
-nautobot-mcp devices list --location "HAN DC1" --role Router
-nautobot-mcp devices get --name core-rtr-01
-nautobot-mcp devices create --name new-rtr --device-type "MX480" --location "HAN DC1" --role Router
+uv run nautobot-mcp devices list
+uv run nautobot-mcp devices list --location "HAN DC1" --role Router
+uv run nautobot-mcp devices get --name core-rtr-01
+uv run nautobot-mcp devices create --name new-rtr --device-type "MX480" --location "HAN DC1" --role Router
 
 # Interfaces
-nautobot-mcp interfaces list --device core-rtr-01
-nautobot-mcp interfaces get --device-name core-rtr-01 --name ge-0/0/0
+uv run nautobot-mcp interfaces list --device core-rtr-01
+uv run nautobot-mcp interfaces get --device-name core-rtr-01 --name ge-0/0/0
 
 # IPAM
-nautobot-mcp ipam prefixes list
-nautobot-mcp ipam ips list --device core-rtr-01
-nautobot-mcp ipam vlans list --location "HAN DC1"
+uv run nautobot-mcp ipam prefixes list
+uv run nautobot-mcp ipam ips list --device core-rtr-01
+uv run nautobot-mcp ipam vlans list --location "HAN DC1"
 
 # Organization
-nautobot-mcp org tenants list
-nautobot-mcp org locations list
+uv run nautobot-mcp org tenants list
+uv run nautobot-mcp org locations list
 
 # Circuits
-nautobot-mcp circuits list --provider "VNPT"
+uv run nautobot-mcp circuits list --provider "VNPT"
 
 # Golden Config
-nautobot-mcp golden-config show-intended core-rtr-01
-nautobot-mcp golden-config show-backup core-rtr-01
-nautobot-mcp golden-config compliance-results core-rtr-01
+uv run nautobot-mcp golden-config show-intended core-rtr-01
+uv run nautobot-mcp golden-config show-backup core-rtr-01
+uv run nautobot-mcp golden-config compliance-results core-rtr-01
 
 # Parse JunOS config
-nautobot-mcp parse junos config.json
+uv run nautobot-mcp parse junos config.json
 
 # Onboard device config (dry-run by default)
-nautobot-mcp onboard config config.json core-rtr-01
-nautobot-mcp onboard config config.json core-rtr-01 --commit        # apply changes
-nautobot-mcp onboard config config.json core-rtr-01 --commit --update  # also update existing
+uv run nautobot-mcp onboard config config.json core-rtr-01
+uv run nautobot-mcp onboard config config.json core-rtr-01 --commit        # apply changes
+uv run nautobot-mcp onboard config config.json core-rtr-01 --commit --update  # also update existing
 
 # Verify compliance
-nautobot-mcp verify compliance core-rtr-01
+uv run nautobot-mcp verify compliance core-rtr-01
 
 # Verify data model drift
-nautobot-mcp verify data-model config.json core-rtr-01
+uv run nautobot-mcp verify data-model config.json core-rtr-01
 ```
 
 ---

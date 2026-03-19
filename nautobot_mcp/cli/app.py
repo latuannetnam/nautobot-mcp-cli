@@ -69,7 +69,7 @@ def get_client_from_ctx(ctx: typer.Context) -> NautobotClient:
         return NautobotClient(profile=profile)
 
     # Load from settings, optionally switching profile
-    settings = NautobotSettings()
+    settings = NautobotSettings.discover()
     if profile_name:
         settings.active_profile = profile_name
     client = NautobotClient(settings=settings)
