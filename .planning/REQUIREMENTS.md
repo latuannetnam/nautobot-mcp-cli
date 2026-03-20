@@ -10,14 +10,14 @@ Continues numbering from v1.0 (which had 53 requirements).
 
 ### Device IP Query (DEVIP)
 
-- [ ] **DEVIP-01**: Agent can retrieve all IP addresses assigned to a device's interfaces in one MCP call, returning {interface → [IPs]}
-- [ ] **DEVIP-02**: CLI command `nautobot-mcp ipam addresses list --device DEVICE` returns IPs filtered by device
-- [ ] **DEVIP-03**: MCP tool `nautobot_get_device_ips` returns structured JSON: [{interface, address, status}]
+- [x] **DEVIP-01**: Agent can retrieve all IP addresses assigned to a device's interfaces in one MCP call, returning {interface → [IPs]}
+- [x] **DEVIP-02**: CLI command `nautobot-mcp ipam addresses list --device DEVICE` returns IPs filtered by device
+- [x] **DEVIP-03**: MCP tool `nautobot_get_device_ips` returns structured JSON: [{interface, address, status}]
 
 ### Cross-Entity Filters (FILT)
 
-- [ ] **FILT-01**: `nautobot_list_ip_addresses` MCP tool accepts optional `device_name` parameter to filter by device
-- [ ] **FILT-02**: `nautobot_list_vlans` MCP tool accepts optional `device_name` parameter to filter by device
+- [x] **FILT-01**: `nautobot_list_ip_addresses` MCP tool accepts optional `device_name` parameter to filter by device
+- [x] **FILT-02**: `nautobot_list_vlans` MCP tool accepts optional `device_name` parameter to filter by device
 - [ ] **FILT-03**: `nautobot_list_interfaces` MCP tool accepts optional `include_ips` boolean that embeds IP addresses inline per interface
 
 ### Device Summary (SUMM)
@@ -69,11 +69,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEVIP-01 | Phase 5 | Pending |
-| DEVIP-02 | Phase 5 | Pending |
-| DEVIP-03 | Phase 5 | Pending |
-| FILT-01 | Phase 5 | Pending |
-| FILT-02 | Phase 5 | Pending |
+| DEVIP-01 | Phase 5 | Complete |
+| DEVIP-02 | Phase 5 | Complete |
+| DEVIP-03 | Phase 5 | Complete |
+| FILT-01 | Phase 5 | Complete |
+| FILT-02 | Phase 5 | Complete |
 | FILT-03 | Phase 6 | Pending |
 | SUMM-01 | Phase 6 | Pending |
 | SUMM-02 | Phase 6 | Pending |
