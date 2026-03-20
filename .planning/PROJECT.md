@@ -26,7 +26,19 @@ AI agents can read and write Nautobot data through standardized MCP tools, enabl
 - ✓ Config verification workflow (live vs Golden Config + data model drift) — v1.0
 - ✓ Agent skills for multi-step workflows (onboard-router-config, verify-compliance) — v1.0
 
-### Active (v1.1+)
+## Current Milestone: v1.1 Agent-Native MCP Tools
+
+**Goal:** Make MCP tools fully usable by AI agents without manual Python scripting — one MCP call should answer one complete question.
+
+**Target features:**
+- Device-scoped IP query tool (get IPs by device in one call)
+- Cross-entity filters on existing tools (--device filter for addresses/VLANs)
+- Composite device summary tool (device + interfaces + IPs in one response)
+- File-free drift comparison tool (accepts structured data, not file paths)
+- Enriched interface listing with inline IP data
+- jmcp large output handling fix
+
+### Active (v1.2+)
 
 - [ ] Multi-vendor config parsers (Cisco IOS, IOS-XE, Arista EOS)
 - [ ] Bulk device onboarding (multiple devices from batch config files)

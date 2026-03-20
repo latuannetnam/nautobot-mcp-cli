@@ -1,40 +1,43 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-03-18T01:49:37.611Z"
+milestone: v1.1
+milestone_name: Agent-Native MCP Tools
+status: defining-requirements
+last_updated: "2026-03-20T08:51:00+07:00"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State: nautobot-mcp-cli
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-17)
+See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** All phases complete — v1.0 milestone achieved
+**Current focus:** v1.1 — make MCP tools fully agent-native (one call = one complete answer)
 
-## Current Phase
+## Current Position
 
-**Phase 4: Onboarding, Verification & Agent Skills**
-- Status: Complete (2026-03-17)
-- Requirements: ONBOARD-01–03, VERIFY-01–03, SKILL-01–02 ✓
-- Plans: 3/3 complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-20 — Milestone v1.1 started
+
+## Context
+
+**Problem discovered:** During a real-world IP drift comparison (HQV-PE-Test MX204 vs Nautobot), the AI agent had to write a 100-line Python script because MCP tools couldn't answer basic questions like "what IPs are on this device's interfaces?" in a single call.
+
+**Goal:** Eliminate agent scripting by adding composite tools, cross-entity filters, and file-free drift comparison.
 
 ## Progress
 
 | Phase | Status | Plans | Progress |
 |-------|--------|-------|----------|
-| 1     | ✓      | 4/4   | 100%     |
-| 2     | ✓      | 3/3   | 100%     |
-| 3     | ✓      | 3/3   | 100%     |
-| 4     | ✓      | 3/3   | 100%     |
+| (v1.1 phases not yet defined) | | | |
 
 ## Key Decisions
 
@@ -49,11 +52,19 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 | DiffSync v2 for verification | 4 | Object-by-object diff with structured output |
 | Factory-style adapter init | 4 | DiffSync v2 Adapter.__new__ only accepts kwargs |
 
+## Accumulated Context
+
+- v1.0 shipped 2026-03-18 with 44+ MCP tools, CLI, agent skills
+- 76 unit tests passing
+- Architecture: shared core library + thin MCP/CLI layers
+- jmcp `show configuration | display json` returns null for large configs
+- pynautobot `ip_addresses.filter(interface_id=...)` not a valid filter
+- Nautobot IPs often have `assigned_object_id=None` (unlinked)
+
 ## Blockers
 
 None.
 
 ---
 *State initialized: 2026-03-17*
-*Last updated: 2026-03-17T20:55:00+07:00*
-
+*Last updated: 2026-03-20T08:51:00+07:00*
