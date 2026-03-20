@@ -62,3 +62,25 @@ class CMSBaseSummary(BaseModel):
         if value is None:
             return default
         return value
+
+    @classmethod
+    def from_nautobot(cls, record) -> "CMSBaseSummary":
+        """Create a CMSBaseSummary from a pynautobot record.
+
+        Subclasses should override this to extract domain-specific fields.
+
+        Args:
+            record: pynautobot Record object.
+
+        Returns:
+            CMSBaseSummary instance.
+        """
+        device_id, device_name = cls._extract_device(record)
+        return cls(
+            id=str(record.id),
+            display=str(getattr(record, "display", "") or ""),
+            url=str(getattr(record, "url", None) or "") or None,
+            device_id=device_id,
+            device_name=device_name,
+        )
+

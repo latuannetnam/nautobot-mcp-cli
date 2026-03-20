@@ -201,7 +201,6 @@ class NautobotClient:
         except Exception as e:
             raise NautobotAPIError(
                 message="Golden Config plugin not available",
-                code="PLUGIN_NOT_FOUND",
                 hint="Ensure nautobot-golden-config is installed on your Nautobot instance",
             ) from e
 
@@ -217,6 +216,5 @@ class NautobotClient:
         except Exception as e:
             raise NautobotAPIError(
                 message="NetNam CMS Core plugin not available",
-                code="PLUGIN_NOT_FOUND",
                 hint="Ensure netnam-cms-core is installed on your Nautobot instance",
             ) from e
