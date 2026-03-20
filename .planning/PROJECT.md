@@ -20,8 +20,14 @@ Key additions in v1.1:
 - `verify quick-drift` CLI — human-friendly colored output with per-interface detail
 
 **Stats at v1.1:**
-- 46 MCP tools | 105 unit tests passing | ~11k LOC Python
+- 46 MCP tools | 131 unit tests passing | ~11k LOC Python
 - Tech stack: FastMCP, Typer, pynautobot, DiffSync, Pydantic v2
+
+**v1.2 Progress — Phase 8 complete (2026-03-20):**
+- `NautobotClient.cms` property — netnam-cms-core plugin accessor
+- `nautobot_mcp/cms/` subpackage — 39-endpoint registry, generic CRUD helpers
+- `nautobot_mcp/models/cms/base.py` — `CMSBaseSummary` base model with `from_nautobot()`
+- 26 new unit tests, all passing with zero regressions
 
 <details>
 <summary>v1.0 context (shipped 2026-03-18)</summary>
