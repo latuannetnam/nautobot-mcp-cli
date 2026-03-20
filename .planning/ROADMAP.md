@@ -22,7 +22,7 @@
 
 ### v1.1 Agent-Native MCP Tools
 
-- [ ] Phase 5: Device-Scoped IP Queries & Cross-Entity Filters
+- [x] Phase 5: Device-Scoped IP Queries & Cross-Entity Filters (2/2 plans) — completed 2026-03-20
 - [ ] Phase 6: Device Summary & Enriched Interface Data
 - [ ] Phase 7: File-Free Drift Comparison
 
@@ -73,7 +73,7 @@
 
 | # | Phase | Requirements | Status |
 |---|-------|-------------|--------|
-| 5 | Device-Scoped IP Queries & Cross-Entity Filters | DEVIP-01..03, FILT-01..02 | ⬜ Not started |
+| 5 | Device-Scoped IP Queries & Cross-Entity Filters | DEVIP-01..03, FILT-01..02 | ✅ Completed |
 | 6 | Device Summary & Enriched Interface Data | SUMM-01..03, FILT-03, ENRICH-01..02 | ⬜ Not started |
 | 7 | File-Free Drift Comparison | DRIFT-01..04 | ⬜ Not started |
 
