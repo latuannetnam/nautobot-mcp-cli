@@ -452,10 +452,34 @@ def nautobot_create_ip_address(
         handle_error(e)
 
 
-@mcp.tool(name="nautobot_list_vlans")
+@mcp.tool(name="nautobot_get_device_ips")
+def nautobot_get_device_ips(
+    device_name: str,
+) -> dict:
+    """Get all IP addresses assigned to a device's interfaces in one call.
+
+    Returns IPs mapped to their interfaces — answers "what IPs does device X have?"
+    without needing to query interfaces and IP-to-interface M2M records separately.
+
+    Args:
+        device_name: Device hostname (exact match).
+
+    Returns:
+        Dict with device_name, total_ips, interface_ips (list of {interface_name,
+        interface_id, address, ip_id, status}), and unlinked_ips.
+    """
+    try:
+        client = get_client()
+        result = ipam.get_device_ips(client, device_name=device_name)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
 def nautobot_list_vlans(
     location: Optional[str] = None,
     tenant: Optional[str] = None,
+    device_name: Optional[str] = None,
     limit: int = 50,
 ) -> dict:
     """List VLANs with optional filtering.
@@ -463,6 +487,7 @@ def nautobot_list_vlans(
     Args:
         location: Filter by location name.
         tenant: Filter by tenant name.
+        device_name: Filter by device name — returns only VLANs on device's interfaces.
         limit: Max results (default 50, 0 = all).
 
     Returns:
@@ -471,7 +496,8 @@ def nautobot_list_vlans(
     try:
         client = get_client()
         result = ipam.list_vlans(
-            client, location=location, tenant=tenant, limit=limit,
+            client, location=location, tenant=tenant,
+            device=device_name, limit=limit,
         )
         return result.model_dump()
     except Exception as e:

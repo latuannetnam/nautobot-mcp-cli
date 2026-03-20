@@ -156,3 +156,127 @@ class TestErrorHandling:
 
         with pytest.raises(ToolError, match="Unexpected error"):
             handle_error(RuntimeError("something broke"))
+
+
+# ---------------------------------------------------------------------------
+# Plan 05-01: Device-Scoped IP Query Tool tests
+# ---------------------------------------------------------------------------
+
+
+class TestGetDeviceIPs:
+    """Test nautobot_get_device_ips MCP tool."""
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_get_device_ips_returns_dict(self, mock_get_client):
+        """get_device_ips should return dict with interface_ips."""
+        mock_client = MagicMock()
+
+        # Mock interface with IP assignment
+        mock_iface = MagicMock()
+        mock_iface.id = "iface-uuid-1"
+        mock_iface.name = "ae0.0"
+        mock_client.api.dcim.interfaces.filter.return_value = [mock_iface]
+
+        # Mock M2M record
+        mock_m2m = MagicMock()
+        mock_m2m.ip_address.id = "ip-uuid-1"
+        mock_client.api.ipam.ip_address_to_interface.filter.return_value = [mock_m2m]
+
+        # Mock IP address
+        mock_ip = MagicMock()
+        mock_ip.id = "ip-uuid-1"
+        mock_ip.address = "10.0.0.1/30"
+        mock_ip.status.display = "Active"
+        mock_client.api.ipam.ip_addresses.get.return_value = mock_ip
+
+        mock_get_client.return_value = mock_client
+
+        from nautobot_mcp.server import nautobot_get_device_ips
+        result = nautobot_get_device_ips(device_name="test-device")
+
+        assert isinstance(result, dict)
+        assert result["device_name"] == "test-device"
+        assert result["total_ips"] == 1
+        assert len(result["interface_ips"]) == 1
+        assert result["interface_ips"][0]["interface_name"] == "ae0.0"
+        assert result["interface_ips"][0]["address"] == "10.0.0.1/30"
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_get_device_ips_no_interfaces(self, mock_get_client):
+        """get_device_ips returns empty when device has no interfaces."""
+        mock_client = MagicMock()
+        mock_client.api.dcim.interfaces.filter.return_value = []
+        mock_get_client.return_value = mock_client
+
+        from nautobot_mcp.server import nautobot_get_device_ips
+        result = nautobot_get_device_ips(device_name="empty-device")
+
+        assert result["total_ips"] == 0
+        assert result["interface_ips"] == []
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_get_device_ips_tool_registered(self, mock_get_client):
+        """nautobot_get_device_ips should be registered as an MCP tool."""
+        import asyncio
+        from nautobot_mcp.server import mcp
+        tools = asyncio.run(mcp.list_tools())
+        names = [t.name for t in tools]
+        assert "nautobot_get_device_ips" in names, f"Tool not found. Tools: {names}"
+
+
+# ---------------------------------------------------------------------------
+# Plan 05-02: Cross-Entity Device Filters tests
+# ---------------------------------------------------------------------------
+
+
+class TestVLANDeviceFilter:
+    """Test nautobot_list_vlans with device filter."""
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_list_vlans_with_device_filter(self, mock_get_client):
+        """list_vlans with device_name uses interface-based VLAN lookup."""
+        mock_client = MagicMock()
+
+        # Mock interface with untagged VLAN
+        mock_iface = MagicMock()
+        mock_iface.id = "iface-uuid-1"
+        mock_iface.untagged_vlan = MagicMock()
+        mock_iface.untagged_vlan.id = "vlan-uuid-1"
+        mock_iface.tagged_vlans = []
+        mock_client.api.dcim.interfaces.filter.return_value = [mock_iface]
+
+        # Mock VLAN record
+        mock_vlan = MagicMock()
+        mock_vlan.id = "vlan-uuid-1"
+        mock_vlan.vid = 100
+        mock_vlan.name = "MGMT"
+        mock_vlan.status.display = "Active"
+        mock_vlan.location = None
+        mock_vlan.tenant = None
+        mock_vlan.vlan_group = None
+        mock_client.api.ipam.vlans.get.return_value = mock_vlan
+
+        mock_get_client.return_value = mock_client
+
+        from nautobot_mcp.server import nautobot_list_vlans
+        result = nautobot_list_vlans(device_name="test-device")
+
+        assert isinstance(result, dict)
+        assert result["count"] == 1
+        mock_client.api.dcim.interfaces.filter.assert_called_once_with(device="test-device")
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_list_vlans_no_device_filter(self, mock_get_client):
+        """list_vlans without device_name uses standard filter path."""
+        mock_client = MagicMock()
+        mock_client.api.ipam.vlans.all.return_value = []
+        mock_get_client.return_value = mock_client
+
+        from nautobot_mcp.server import nautobot_list_vlans
+        result = nautobot_list_vlans()
+
+        assert isinstance(result, dict)
+        assert result["count"] == 0
+        # Should NOT call dcim.interfaces.filter when no device filter
+        mock_client.api.dcim.interfaces.filter.assert_not_called()
+

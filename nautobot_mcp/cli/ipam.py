@@ -102,6 +102,31 @@ def addresses_create(
         handle_cli_error(e)
 
 
+@addresses_app.command("device-ips")
+def addresses_device_ips(
+    ctx: typer.Context,
+    device: str = typer.Argument(help="Device name to query"),
+) -> None:
+    """Get all IPs assigned to a device's interfaces."""
+    try:
+        client = get_client_from_ctx(ctx)
+        result = ipam.get_device_ips(client, device_name=device)
+        data = result.model_dump()
+        if ctx.obj.get("json", False):
+            import json
+            typer.echo(json.dumps(data, indent=2))
+        else:
+            typer.echo(f"Device: {data['device_name']} — {data['total_ips']} IPs")
+            for entry in data["interface_ips"]:
+                typer.echo(f"  {entry['interface_name']}: {entry['address']} ({entry['status']})")
+            if data.get("unlinked_ips"):
+                typer.echo(f"\n  Unlinked IPs: {len(data['unlinked_ips'])}")
+                for ip in data["unlinked_ips"]:
+                    typer.echo(f"    {ip['address']} ({ip['status']})")
+    except Exception as e:
+        handle_cli_error(e)
+
+
 # --- VLANs sub-app ---
 vlans_app = typer.Typer(help="VLAN operations")
 ipam_app.add_typer(vlans_app, name="vlans")
@@ -112,13 +137,15 @@ def vlans_list(
     ctx: typer.Context,
     location: Optional[str] = typer.Option(None, help="Filter by location"),
     tenant: Optional[str] = typer.Option(None, help="Filter by tenant"),
+    device: Optional[str] = typer.Option(None, help="Filter by device name"),
     limit: int = typer.Option(50, help="Max results (0=all)"),
 ) -> None:
     """List VLANs."""
     try:
         client = get_client_from_ctx(ctx)
         result = ipam.list_vlans(
-            client, location=location, tenant=tenant, limit=limit,
+            client, location=location, tenant=tenant,
+            device=device, limit=limit,
         )
         output(result.model_dump(), ctx.obj.get("json", False), VLAN_COLUMNS)
     except Exception as e:
