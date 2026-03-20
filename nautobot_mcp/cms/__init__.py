@@ -7,3 +7,7 @@ Provides CRUD operations for all netnam-cms-core plugin models:
 - Policies: Policy statements, JPS terms/matches/actions
 - ARP: ARP entries
 """
+
+from nautobot_mcp.cms import routing  # noqa: F401
+
+__all__ = ["routing"]

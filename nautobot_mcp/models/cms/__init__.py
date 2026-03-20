@@ -9,7 +9,25 @@ Submodules per domain are added in subsequent phases:
 """
 
 from nautobot_mcp.models.cms.base import CMSBaseSummary
+from nautobot_mcp.models.cms.routing import (
+    BGPAddressFamilySummary,
+    BGPGroupSummary,
+    BGPNeighborSummary,
+    BGPPolicyAssociationSummary,
+    BGPReceivedRouteSummary,
+    StaticRouteNexthopSummary,
+    StaticRouteQualifiedNexthopSummary,
+    StaticRouteSummary,
+)
 
 __all__ = [
     "CMSBaseSummary",
+    "StaticRouteSummary",
+    "StaticRouteNexthopSummary",
+    "StaticRouteQualifiedNexthopSummary",
+    "BGPGroupSummary",
+    "BGPNeighborSummary",
+    "BGPAddressFamilySummary",
+    "BGPPolicyAssociationSummary",
+    "BGPReceivedRouteSummary",
 ]
