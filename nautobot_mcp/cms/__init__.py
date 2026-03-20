@@ -1,0 +1,9 @@
+"""CMS Plugin domain operations for Juniper network models.
+
+Provides CRUD operations for all netnam-cms-core plugin models:
+- Routing: Static routes, BGP groups/neighbors/address families
+- Interfaces: Interface units, families, VRRP
+- Firewalls: Filters, terms, policers, match conditions
+- Policies: Policy statements, JPS terms/matches/actions
+- ARP: ARP entries
+"""

@@ -204,3 +204,19 @@ class NautobotClient:
                 code="PLUGIN_NOT_FOUND",
                 hint="Ensure nautobot-golden-config is installed on your Nautobot instance",
             ) from e
+
+    @property
+    def cms(self):
+        """Access NetNam CMS Core plugin endpoints.
+
+        Returns pynautobot plugin app for netnam-cms-core.
+        Raises NautobotAPIError if plugin is not installed.
+        """
+        try:
+            return self.api.plugins.netnam_cms_core
+        except Exception as e:
+            raise NautobotAPIError(
+                message="NetNam CMS Core plugin not available",
+                code="PLUGIN_NOT_FOUND",
+                hint="Ensure netnam-cms-core is installed on your Nautobot instance",
+            ) from e
