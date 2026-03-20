@@ -423,3 +423,47 @@ class TestInterfaceIPEnrichment:
         assert result["results"][0]["ip_addresses"] == []
         # Should NOT call M2M endpoint
         mock_client.api.ipam.ip_address_to_interface.filter.assert_not_called()
+
+
+class TestCompareDevice:
+    """Test nautobot_compare_device MCP tool."""
+
+    @patch("nautobot_mcp.server.get_client")
+    @patch("nautobot_mcp.drift.get_device_ips")
+    @patch("nautobot_mcp.drift.list_interfaces")
+    def test_compare_device_returns_dict(
+        self, mock_list_ifaces, mock_get_ips, mock_get_client,
+    ):
+        """compare_device returns QuickDriftReport dict."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+
+        # Mock Nautobot side: one interface with one IP
+        ip_entry = MagicMock()
+        ip_entry.interface_name = "ae0.0"
+        ip_entry.address = "10.1.1.1/30"
+        mock_get_ips.return_value = MagicMock(interface_ips=[ip_entry])
+
+        iface_record = MagicMock()
+        iface_record.name = "ae0.0"
+        iface_record.untagged_vlan = None
+        iface_record.tagged_vlans = []
+        mock_list_ifaces.return_value = MagicMock(results=[iface_record])
+
+        from nautobot_mcp.server import nautobot_compare_device
+        result = nautobot_compare_device(
+            device_name="test-device",
+            interfaces_data={"ae0.0": {"ips": ["10.1.1.1/30"]}},
+        )
+
+        assert isinstance(result, dict)
+        assert result["device"] == "test-device"
+        assert result["summary"]["total_drifts"] == 0
+
+    def test_compare_device_tool_registered(self):
+        """nautobot_compare_device should be registered as an MCP tool."""
+        import asyncio
+        from nautobot_mcp.server import mcp
+        tools = asyncio.run(mcp.list_tools())
+        names = [t.name for t in tools]
+        assert "nautobot_compare_device" in names

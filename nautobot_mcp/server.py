@@ -19,6 +19,7 @@ from nautobot_mcp.exceptions import NautobotMCPError
 from nautobot_mcp import circuits, devices, interfaces, ipam, organization
 from nautobot_mcp import golden_config as gc
 from nautobot_mcp import onboarding, verification
+from nautobot_mcp import drift
 from nautobot_mcp.parsers import ParserRegistry
 
 mcp = FastMCP("Nautobot MCP Server")
@@ -1285,6 +1286,43 @@ def nautobot_verify_data_model(
         return result.model_dump()
     except ValueError as e:
         raise ToolError(str(e))
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# DRIFT TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_compare_device")
+def nautobot_compare_device(
+    device_name: str,
+    interfaces_data: dict | list,
+) -> dict:
+    """Compare structured interface data against Nautobot records — no config file needed.
+
+    Accepts two input shapes (auto-detected):
+    1. Flat map: {"ae0.0": {"ips": ["10.1.1.1/30"], "vlans": [100]}, "ge-0/0/0.0": {"ips": ["192.168.1.1/24"]}}
+    2. DeviceIPEntry list: [{"interface": "ae0", "address": "10.1.1.1/30"}, ...]
+       (output from nautobot_get_device_ips can be passed directly)
+
+    Compares per-interface: IPs and VLANs. Returns per-interface drift detail + global summary.
+    Lenient validation: accepts IPs with or without prefix length, warns when normalizing.
+
+    Args:
+        device_name: Device hostname in Nautobot (exact match).
+        interfaces_data: Interface data to compare. Dict maps interface names to
+            {"ips": [...], "vlans": [...]}. List accepts DeviceIPEntry objects.
+
+    Returns:
+        QuickDriftReport dict with interface_drifts (per-interface detail),
+        summary (global counts), and warnings.
+    """
+    try:
+        client = get_client()
+        result = drift.compare_device(client, device_name, interfaces_data)
+        return result.model_dump()
     except Exception as e:
         handle_error(e)
 
