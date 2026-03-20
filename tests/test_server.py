@@ -280,3 +280,146 @@ class TestVLANDeviceFilter:
         # Should NOT call dcim.interfaces.filter when no device filter
         mock_client.api.dcim.interfaces.filter.assert_not_called()
 
+
+# ---------------------------------------------------------------------------
+# Plan 06-01: Device Summary Composite Tool tests
+# ---------------------------------------------------------------------------
+
+
+class TestDeviceSummary:
+    """Test nautobot_device_summary MCP tool."""
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_device_summary_returns_dict(self, mock_get_client):
+        """device_summary returns aggregated dict with counts."""
+        mock_client = MagicMock()
+
+        # Mock device
+        mock_device = MagicMock()
+        mock_device.id = "dev-uuid"
+        mock_device.name = "test-device"
+        mock_device.status.display = "Active"
+        mock_device.device_type = MagicMock(id="dt-1", name="MX204", display="MX204")
+        mock_device.location = MagicMock(id="loc-1", name="DC1", display="DC1")
+        mock_device.tenant = None
+        mock_device.role = None
+        mock_device.platform = None
+        mock_device.serial = None
+        mock_device.primary_ip = None
+        mock_client.api.dcim.devices.get.return_value = mock_device
+
+        # Mock interfaces
+        mock_iface = MagicMock()
+        mock_iface.id = "iface-uuid-1"
+        mock_iface.name = "ae0.0"
+        mock_iface.type.display = "Virtual"
+        mock_iface.device = MagicMock(id="dev-uuid", name="test-device", display="test-device")
+        mock_iface.enabled = True
+        mock_iface.description = None
+        mock_iface.mac_address = None
+        mock_iface.mtu = None
+        mock_iface.ip_addresses = []
+        mock_client.api.dcim.interfaces.filter.return_value = [mock_iface]
+
+        # Mock M2M (no IPs)
+        mock_client.api.ipam.ip_address_to_interface.filter.return_value = []
+
+        # Mock VLANs (none via interface)
+        mock_iface.untagged_vlan = None
+        mock_iface.tagged_vlans = []
+
+        mock_get_client.return_value = mock_client
+
+        from nautobot_mcp.server import nautobot_device_summary
+        result = nautobot_device_summary(device_name="test-device")
+
+        assert isinstance(result, dict)
+        assert result["device"]["name"] == "test-device"
+        assert result["interface_count"] == 1
+        assert result["ip_count"] == 0
+        assert result["vlan_count"] == 0
+        assert result["enabled_count"] == 1
+        assert result["disabled_count"] == 0
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_device_summary_tool_registered(self, mock_get_client):
+        """nautobot_device_summary should be registered as an MCP tool."""
+        import asyncio
+        from nautobot_mcp.server import mcp
+        tools = asyncio.run(mcp.list_tools())
+        names = [t.name for t in tools]
+        assert "nautobot_device_summary" in names
+
+
+# ---------------------------------------------------------------------------
+# Plan 06-02: Enriched Interface Data tests
+# ---------------------------------------------------------------------------
+
+
+class TestInterfaceIPEnrichment:
+    """Test nautobot_list_interfaces with include_ips=True."""
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_list_interfaces_with_ips(self, mock_get_client):
+        """list_interfaces with include_ips=True populates ip_addresses."""
+        mock_client = MagicMock()
+
+        # Mock interface
+        mock_iface = MagicMock()
+        mock_iface.id = "iface-uuid-1"
+        mock_iface.name = "ae0.0"
+        mock_iface.type.display = "Virtual"
+        mock_iface.device = MagicMock(id="dev-1", name="test-dev", display="test-dev")
+        mock_iface.enabled = True
+        mock_iface.description = None
+        mock_iface.mac_address = None
+        mock_iface.mtu = None
+        mock_iface.ip_addresses = []
+        mock_client.api.dcim.interfaces.filter.return_value = [mock_iface]
+
+        # Mock M2M
+        mock_m2m = MagicMock()
+        mock_m2m.ip_address.id = "ip-uuid-1"
+        mock_client.api.ipam.ip_address_to_interface.filter.return_value = [mock_m2m]
+
+        # Mock IP
+        mock_ip = MagicMock()
+        mock_ip.id = "ip-uuid-1"
+        mock_ip.address = "10.0.0.1/30"
+        mock_ip.status.display = "Active"
+        mock_client.api.ipam.ip_addresses.get.return_value = mock_ip
+
+        mock_get_client.return_value = mock_client
+
+        from nautobot_mcp.server import nautobot_list_interfaces
+        result = nautobot_list_interfaces(device="test-dev", include_ips=True)
+
+        assert isinstance(result, dict)
+        assert result["count"] == 1
+        iface = result["results"][0]
+        assert len(iface["ip_addresses"]) == 1
+        assert iface["ip_addresses"][0]["address"] == "10.0.0.1/30"
+
+    @patch("nautobot_mcp.server.get_client")
+    def test_list_interfaces_without_ips(self, mock_get_client):
+        """list_interfaces without include_ips leaves ip_addresses as-is."""
+        mock_client = MagicMock()
+        mock_iface = MagicMock()
+        mock_iface.id = "iface-uuid-1"
+        mock_iface.name = "ge-0/0/0"
+        mock_iface.type.display = "1000base-t"
+        mock_iface.device = MagicMock(id="dev-1", name="test-dev", display="test-dev")
+        mock_iface.enabled = True
+        mock_iface.description = None
+        mock_iface.mac_address = None
+        mock_iface.mtu = None
+        mock_iface.ip_addresses = []
+        mock_client.api.dcim.interfaces.filter.return_value = [mock_iface]
+        mock_get_client.return_value = mock_client
+
+        from nautobot_mcp.server import nautobot_list_interfaces
+        result = nautobot_list_interfaces(device="test-dev", include_ips=False)
+
+        assert result["results"][0]["ip_addresses"] == []
+        # Should NOT call M2M endpoint
+        mock_client.api.ipam.ip_address_to_interface.filter.assert_not_called()

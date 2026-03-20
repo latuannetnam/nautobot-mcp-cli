@@ -7,6 +7,8 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from nautobot_mcp.models.base import RelatedObject, related_from_record, related_from_record_or_none
+from nautobot_mcp.models.interface import InterfaceSummary
+from nautobot_mcp.models.ipam import DeviceIPEntry, VLANSummary
 
 
 class DeviceSummary(BaseModel):
@@ -65,3 +67,26 @@ class DeviceSummary(BaseModel):
             serial=getattr(record, "serial", None) or None,
             primary_ip=primary_ip,
         )
+
+
+class DeviceSummaryResponse(BaseModel):
+    """Complete device overview: info + interfaces + IPs + VLANs + counts."""
+
+    device: DeviceSummary = Field(description="Core device info")
+    interfaces: list[InterfaceSummary] = Field(
+        default_factory=list,
+        description="All interfaces on this device",
+    )
+    interface_ips: list[DeviceIPEntry] = Field(
+        default_factory=list,
+        description="IPs assigned to interfaces via M2M",
+    )
+    vlans: list[VLANSummary] = Field(
+        default_factory=list,
+        description="VLANs on device interfaces",
+    )
+    interface_count: int = Field(default=0, description="Total interface count")
+    ip_count: int = Field(default=0, description="Total IP count")
+    vlan_count: int = Field(default=0, description="Total VLAN count")
+    enabled_count: int = Field(default=0, description="Enabled interfaces")
+    disabled_count: int = Field(default=0, description="Disabled interfaces")

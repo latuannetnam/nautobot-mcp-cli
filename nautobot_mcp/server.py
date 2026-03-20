@@ -196,6 +196,31 @@ def nautobot_delete_device(id: str) -> dict:
         handle_error(e)
 
 
+@mcp.tool(name="nautobot_device_summary")
+def nautobot_device_summary(
+    device_name: str,
+) -> dict:
+    """Get complete device overview in one call: info, interfaces, IPs, VLANs, and counts.
+
+    Answers "tell me everything about device X" — no need to call multiple tools.
+    Includes interface count, IP count, VLAN count, and link state statistics.
+
+    Args:
+        device_name: Device hostname (exact match).
+
+    Returns:
+        Dict with device (info), interfaces (list), interface_ips (list),
+        vlans (list), and counts (interface_count, ip_count, vlan_count,
+        enabled_count, disabled_count).
+    """
+    try:
+        client = get_client()
+        result = devices.get_device_summary(client, name=device_name)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
 # ===========================================================================
 # INTERFACE TOOLS
 # ===========================================================================
@@ -205,13 +230,17 @@ def nautobot_delete_device(id: str) -> dict:
 def nautobot_list_interfaces(
     device: Optional[str] = None,
     device_id: Optional[str] = None,
+    include_ips: bool = False,
     limit: int = 50,
 ) -> dict:
-    """List interfaces with optional device filtering.
+    """List interfaces with optional device filtering and IP enrichment.
 
     Args:
         device: Filter by parent device name.
         device_id: Filter by parent device UUID.
+        include_ips: If True, enrich each interface with its assigned IP
+            addresses via M2M batch query. Each interface's ip_addresses
+            field will contain rich objects with address, status, and IDs.
         limit: Max results (default 50, 0 = all).
 
     Returns:
@@ -220,7 +249,8 @@ def nautobot_list_interfaces(
     try:
         client = get_client()
         result = interfaces.list_interfaces(
-            client, device_name=device, device_id=device_id, limit=limit,
+            client, device_name=device, device_id=device_id,
+            include_ips=include_ips, limit=limit,
         )
         return result.model_dump()
     except Exception as e:

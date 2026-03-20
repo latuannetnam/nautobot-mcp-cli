@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional
 
 from nautobot_mcp.exceptions import NautobotNotFoundError
 from nautobot_mcp.models.base import ListResponse
-from nautobot_mcp.models.device import DeviceSummary
+from nautobot_mcp.models.device import DeviceSummary, DeviceSummaryResponse
 
 if TYPE_CHECKING:
     from nautobot_mcp.client import NautobotClient
@@ -221,3 +221,52 @@ def delete_device(
     except Exception as e:
         client._handle_api_error(e, "delete", "Device")
         raise
+
+
+def get_device_summary(
+    client: NautobotClient,
+    name: str,
+) -> DeviceSummaryResponse:
+    """Get complete device overview: info + interfaces + IPs + VLANs + counts.
+
+    Composes get_device, list_interfaces, get_device_ips, and list_vlans
+    into a single response. Uses existing functions — no duplicate API logic.
+
+    Args:
+        client: NautobotClient instance.
+        name: Device hostname.
+
+    Returns:
+        DeviceSummaryResponse with all device data and counts.
+    """
+    from nautobot_mcp import interfaces as iface_mod  # noqa: PLC0415
+    from nautobot_mcp import ipam as ipam_mod  # noqa: PLC0415
+
+    # Step 1: Get device info
+    device = get_device(client, name=name)
+
+    # Step 2: Get interfaces
+    iface_result = iface_mod.list_interfaces(client, device_name=name, limit=0)
+    iface_list = iface_result.results
+
+    # Step 3: Get IPs via M2M
+    ip_result = ipam_mod.get_device_ips(client, device_name=name)
+
+    # Step 4: Get VLANs via interfaces
+    vlan_result = ipam_mod.list_vlans(client, device=name, limit=0)
+
+    # Step 5: Compute counts
+    enabled_count = sum(1 for i in iface_list if i.enabled)
+    disabled_count = len(iface_list) - enabled_count
+
+    return DeviceSummaryResponse(
+        device=device,
+        interfaces=iface_list,
+        interface_ips=ip_result.interface_ips,
+        vlans=vlan_result.results,
+        interface_count=len(iface_list),
+        ip_count=ip_result.total_ips,
+        vlan_count=vlan_result.count,
+        enabled_count=enabled_count,
+        disabled_count=disabled_count,
+    )
