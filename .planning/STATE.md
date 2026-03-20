@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Agent-Native MCP Tools
-status: unknown
-last_updated: "2026-03-20T09:02:00.985Z"
+milestone: v1.2
+milestone_name: Juniper CMS Model MCP Tools
+status: requirements
+last_updated: "2026-03-20T16:43:00+07:00"
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 19
-  completed_plans: 19
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State: nautobot-mcp-cli
@@ -18,26 +18,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Phase 07 — file-free-drift-comparison
+**Current focus:** Defining requirements for v1.2
 
 ## Current Position
 
-Phase: 07 (file-free-drift-comparison) — EXECUTING
-Plan: 1 of 2
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-20 — Milestone v1.2 started
 
 ## Context
 
-**Problem discovered:** During a real-world IP drift comparison (HQV-PE-Test MX204 vs Nautobot), the AI agent had to write a 100-line Python script because MCP tools couldn't answer basic questions like "what IPs are on this device's interfaces?" in a single call.
+**Goal:** Add full CRUD MCP tools for all Juniper-specific models in the netnam-cms-core Nautobot plugin, plus composite summary tools and live drift verification against CMS model records.
 
-**Goal:** Eliminate agent scripting by adding composite tools, cross-entity filters, and file-free drift comparison.
-
-## Progress
-
-| Phase | Status | Plans | Progress |
-|-------|--------|-------|----------|
-| Phase 5 | ✅ Completed | 2/2 | 100% |
-| Phase 6 | ⬜ Not started | 0/0 | 0% |
-| Phase 7 | ⬜ Not started | 0/0 | 0% |
+**Scope:** All 5 Juniper model domains (Routing, Interfaces, Firewalls, Policies, ARP) with 40+ models and 49 REST API endpoints.
 
 ## Key Decisions
 
@@ -51,15 +45,17 @@ Plan: 1 of 2
 | JSON parser for JunOS | 3 | `show configuration | display json` provides structured data |
 | DiffSync v2 for verification | 4 | Object-by-object diff with structured output |
 | Factory-style adapter init | 4 | DiffSync v2 Adapter.__new__ only accepts kwargs |
+| netnam-cms-core via plugin API | v1.2 | Plugin exposes 49 DRF endpoints, consume directly |
 
 ## Accumulated Context
 
 - v1.0 shipped 2026-03-18 with 44+ MCP tools, CLI, agent skills
-- 76 unit tests passing
+- v1.1 shipped 2026-03-20 with 46 MCP tools, 105 tests, ~11k LOC
 - Architecture: shared core library + thin MCP/CLI layers
 - jmcp `show configuration | display json` returns null for large configs
 - pynautobot `ip_addresses.filter(interface_id=...)` not a valid filter
 - Nautobot IPs often have `assigned_object_id=None` (unlinked)
+- netnam-cms-core has 40+ Juniper models across routing, interfaces, firewalls, policies, ARP
 
 ## Blockers
 
@@ -67,4 +63,4 @@ None.
 
 ---
 *State initialized: 2026-03-17*
-*Last updated: 2026-03-20T10:40:00+07:00*
+*Last updated: 2026-03-20T16:43:00+07:00*
