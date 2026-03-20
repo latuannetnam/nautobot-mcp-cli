@@ -1,6 +1,6 @@
 # nautobot-mcp-cli
 
-**MCP server and CLI for Nautobot network automation** — lets AI agents (and humans) interact with [Nautobot](https://nautobot.readthedocs.io/) to query inventory, manage objects, parse router configs, onboard devices, and detect configuration drift.
+**MCP server and CLI for Nautobot network automation** — lets AI agents (and humans) interact with [Nautobot](https://nautobot.readthedocs.io/) to query inventory, manage objects, parse router configs, onboard devices, and detect configuration drift — no config files required.
 
 ---
 
@@ -9,14 +9,18 @@
 | Capability | MCP Tool | CLI Command |
 |---|---|---|
 | **Devices** — list, get, create, update, delete | `nautobot_*_device` | `nautobot-mcp devices` |
+| **Device Summary** ✨ — interface/IP/VLAN counts + link state in one call | `nautobot_get_device_summary` | `nautobot-mcp devices summary` |
 | **Interfaces** — list, get, create, update, assign IP | `nautobot_*_interface` | `nautobot-mcp interfaces` |
+| **Enriched Interfaces** ✨ — list interfaces with IPs inline | `nautobot_list_interfaces(include_ips=True)` | `nautobot-mcp interfaces list --include-ips` |
 | **IPAM** — prefixes, IP addresses, VLANs | `nautobot_*_prefix/ip/vlan` | `nautobot-mcp ipam` |
+| **Device IP Query** ✨ — all IPs for a device in one call | `nautobot_get_device_ips` | `nautobot-mcp ipam ips list --device` |
 | **Organization** — tenants, locations | `nautobot_*_tenant/location` | `nautobot-mcp org` |
 | **Circuits** — list, get, create, update | `nautobot_*_circuit` | `nautobot-mcp circuits` |
 | **Golden Config** — intended/backup config, compliance rules | `nautobot_get_*_config`, `nautobot_*_compliance_*` | `nautobot-mcp golden-config` |
 | **Config Parsing** — parse JunOS JSON config | `nautobot_parse_config` | `nautobot-mcp parse` |
 | **Onboarding** — push parsed config to Nautobot (dry-run safe) | `nautobot_onboard_config` | `nautobot-mcp onboard config` |
 | **Verification** — compliance check & drift report | `nautobot_verify_*` | `nautobot-mcp verify` |
+| **File-Free Drift** ✨ — compare live interface data vs Nautobot | `nautobot_compare_device` | `nautobot-mcp verify quick-drift` |
 
 ---
 
@@ -301,7 +305,20 @@ Add to `claude_desktop_config.json`:
 </details>
 
 <details>
-<summary><strong>Onboarding &amp; Verification</strong></summary>
+<summary><strong>Device Queries (v1.1 ✨)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `nautobot_get_device_summary` | Interface count, IP count, VLAN count, link-state stats — one call |
+| `nautobot_get_device_ips` | All IP addresses on all interfaces for a device (M2M traversal) |
+| `nautobot_list_interfaces` | List interfaces; pass `include_ips=True` to embed IPs inline (batch query) |
+| `nautobot_list_ip_addresses` | List IPs with optional `device` filter |
+| `nautobot_list_vlans` | List VLANs with optional `device` filter |
+
+</details>
+
+<details>
+<summary><strong>Onboarding, Verification & Drift (v1.1 ✨)</strong></summary>
 
 | Tool | Description |
 |---|---|
@@ -309,6 +326,7 @@ Add to `claude_desktop_config.json`:
 | `nautobot_onboard_config` | Onboard parsed config to Nautobot (supports dry-run) |
 | `nautobot_verify_compliance` | Check config compliance via Golden Config |
 | `nautobot_verify_data_model` | Run DiffSync drift report (interfaces, IPs, VLANs) |
+| `nautobot_compare_device` | **File-free drift** — compare structured interface data vs Nautobot, no config file needed |
 
 </details>
 
@@ -347,8 +365,10 @@ uv run nautobot-mcp interfaces get --device-name core-rtr-01 --name ge-0/0/0
 
 # IPAM
 uv run nautobot-mcp ipam prefixes list
-uv run nautobot-mcp ipam ips list --device core-rtr-01
+uv run nautobot-mcp ipam ips list
+uv run nautobot-mcp ipam ips list --device core-rtr-01   # device-scoped (v1.1)
 uv run nautobot-mcp ipam vlans list --location "HAN DC1"
+uv run nautobot-mcp ipam vlans list --device core-rtr-01  # device-scoped (v1.1)
 
 # Organization
 uv run nautobot-mcp org tenants list
@@ -362,6 +382,10 @@ uv run nautobot-mcp golden-config show-intended core-rtr-01
 uv run nautobot-mcp golden-config show-backup core-rtr-01
 uv run nautobot-mcp golden-config compliance-results core-rtr-01
 
+# Device summary (v1.1)
+uv run nautobot-mcp devices summary core-rtr-01
+uv run nautobot-mcp devices summary core-rtr-01 --detail  # includes interfaces + IPs
+
 # Parse JunOS config
 uv run nautobot-mcp parse junos config.json
 
@@ -373,8 +397,13 @@ uv run nautobot-mcp onboard config config.json core-rtr-01 --commit --update  # 
 # Verify compliance
 uv run nautobot-mcp verify compliance core-rtr-01
 
-# Verify data model drift
+# Verify data model drift (requires config file)
 uv run nautobot-mcp verify data-model config.json core-rtr-01
+
+# File-free drift check (v1.1) — no config file needed
+uv run nautobot-mcp verify quick-drift core-rtr-01 --interface ae0.0 --ip 10.1.1.1/30
+uv run nautobot-mcp verify quick-drift core-rtr-01 -d '{"ae0.0": {"ips": ["10.1.1.1/30"]}}'
+uv run nautobot-mcp verify quick-drift core-rtr-01 -f drift-input.json --json
 ```
 
 ---
@@ -423,7 +452,9 @@ Objects created: **Device → Interfaces → IP Addresses → VLANs**
 
 ## Drift Detection
 
-Compare what is in the JunOS config against what is recorded in Nautobot:
+### File-based (DiffSync, requires parsed config)
+
+Compare a parsed JunOS config against Nautobot:
 
 ```bash
 # Human-readable drift table
@@ -433,10 +464,44 @@ nautobot-mcp verify data-model config.json core-rtr-01
 nautobot-mcp verify data-model config.json core-rtr-01 --json
 ```
 
-Output shows **missing**, **extra**, and **changed** items for:
-- Interfaces
-- IP Addresses
-- VLANs
+Output shows **missing**, **extra**, and **changed** items across Interfaces, IP Addresses, and VLANs.
+
+### File-free (v1.1) — no config file needed
+
+Pass interface data directly — as CLI flags, a JSON string, a file, or piped stdin:
+
+```bash
+# Quick single-interface check
+nautobot-mcp verify quick-drift core-rtr-01 -i ae0.0 --ip 10.1.1.1/30 --vlan 100
+
+# Bulk check via JSON string
+nautobot-mcp verify quick-drift core-rtr-01 -d '{"ae0.0": {"ips": ["10.1.1.1/30"], "vlans": [100]}, "ge-0/0/0.0": {"ips": ["192.168.1.1/24"]}}'
+
+# From a file
+nautobot-mcp verify quick-drift core-rtr-01 -f drift-input.json
+
+# JSON output for agent consumption
+nautobot-mcp verify quick-drift core-rtr-01 -f drift-input.json --json
+```
+
+Output shows per-interface ✅ OK / ❌ DRIFT with details on missing/extra IPs and VLANs.
+
+#### Agent workflow (no filesystem)
+
+AI agents can chain tools directly:
+
+```
+1. nautobot_get_device_ips(device_name="core-rtr-01")
+   → Returns {"interface_ips": [{"interface": "ae0.0", "address": "10.1.1.1/30"}, ...]}
+
+2. nautobot_compare_device(
+       device_name="core-rtr-01",
+       interfaces_data=<output from step 1 or from jmcp>
+   )
+   → Returns {"summary": {"total_drifts": 0, ...}, "interface_drifts": [...]}
+```
+
+Input auto-detected: accepts either a flat dict `{"iface": {"ips": [...], "vlans": [...]}}` or a DeviceIPEntry list from `nautobot_get_device_ips`.
 
 ---
 

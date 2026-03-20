@@ -106,3 +106,28 @@ class VLANSummary(BaseModel):
             tenant=related_from_record_or_none(getattr(record, "tenant", None)),
             vlan_group=related_from_record_or_none(getattr(record, "vlan_group", None)),
         )
+
+
+class DeviceIPEntry(BaseModel):
+    """An IP address with its interface assignment context."""
+
+    interface_name: str = Field(description="Interface name (e.g., ae0.0)")
+    interface_id: str = Field(description="Interface UUID")
+    address: str = Field(description="IP address with mask (e.g., 10.0.0.1/24)")
+    ip_id: str = Field(description="IP address UUID")
+    status: str = Field(description="IP address status")
+
+
+class DeviceIPsResponse(BaseModel):
+    """Response for get_device_ips: all IPs mapped to a device's interfaces."""
+
+    device_name: str = Field(description="Device name")
+    total_ips: int = Field(description="Total IP count")
+    interface_ips: list[DeviceIPEntry] = Field(
+        default_factory=list,
+        description="IPs assigned to interfaces",
+    )
+    unlinked_ips: list[IPAddressSummary] = Field(
+        default_factory=list,
+        description="IPs mentioning device but not linked to any interface",
+    )

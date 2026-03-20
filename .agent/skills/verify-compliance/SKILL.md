@@ -65,4 +65,31 @@ If stale records found, review and delete from Nautobot.
 nautobot-mcp verify compliance core-rtr-01
 nautobot-mcp verify data-model router-config.json core-rtr-01
 nautobot-mcp verify data-model router-config.json core-rtr-01 --json
+nautobot-mcp verify quick-drift core-rtr-01 -i ae0.0 --ip 10.1.1.1/30
 ```
+
+## File-Free Drift Check (Quick Drift)
+
+For comparing interface data against Nautobot without config files:
+
+### From jmcp output (most common)
+1. Run `jmcp show interfaces terse` on the device
+2. Parse the output: extract interface names and IP addresses
+3. Build the interfaces_data dict:
+   ```json
+   {
+     "ae0.0": {"ips": ["10.1.1.1/30"], "vlans": [100]},
+     "ge-0/0/0.0": {"ips": ["192.168.1.1/24"]}
+   }
+   ```
+4. Call `nautobot_compare_device(device_name="DEVICE", interfaces_data=...)`
+
+### From get_device_ips output (chain existing tools)
+1. Call `nautobot_get_device_ips(device_name="DEVICE_A")` to get source IPs
+2. Pass the `interface_ips` list directly to compare against a different device:
+   `nautobot_compare_device(device_name="DEVICE_B", interfaces_data=interface_ips)`
+
+### Reading the result
+- `summary.total_drifts`: 0 means no drift detected
+- `interface_drifts`: per-interface detail with missing_ips, extra_ips, missing_vlans, extra_vlans
+- `warnings`: validation messages (e.g., IPs without prefix length)

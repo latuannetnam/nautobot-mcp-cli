@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Optional
 from nautobot_mcp.exceptions import NautobotNotFoundError
 from nautobot_mcp.models.base import ListResponse
 from nautobot_mcp.models.interface import InterfaceSummary
+from nautobot_mcp.models.ipam import DeviceIPEntry
 
 if TYPE_CHECKING:
     from nautobot_mcp.client import NautobotClient
@@ -20,15 +21,19 @@ def list_interfaces(
     client: NautobotClient,
     device_name: Optional[str] = None,
     device_id: Optional[str] = None,
+    include_ips: bool = False,
     limit: int = 0,
     **extra_filters: str,
 ) -> ListResponse[InterfaceSummary]:
-    """List interfaces with optional device filtering.
+    """List interfaces with optional device filtering and IP enrichment.
 
     Args:
         client: NautobotClient instance.
         device_name: Filter by parent device name.
         device_id: Filter by parent device ID.
+        include_ips: If True, enrich each interface with IP assignments
+                     via M2M batch query. Changes ip_addresses from
+                     list[str] to list[dict] with DeviceIPEntry structure.
         limit: Max results to return. 0 = all.
         **extra_filters: Additional filter parameters.
 
@@ -49,6 +54,44 @@ def list_interfaces(
             records = list(client.api.dcim.interfaces.all())
 
         all_results = [InterfaceSummary.from_nautobot(r) for r in records]
+
+        # Batch IP enrichment when requested
+        if include_ips and all_results:
+            # Build interface ID → index map for batch assignment
+            iface_id_map: dict[str, list[int]] = {}
+            for idx, iface in enumerate(all_results):
+                iface_id_map.setdefault(iface.id, []).append(idx)
+
+            # For each interface, fetch M2M records and resolve IP addresses
+            for iface_id, indices in iface_id_map.items():
+                m2m_records = list(
+                    client.api.ipam.ip_address_to_interface.filter(
+                        interface=iface_id
+                    )
+                )
+                ip_entries = []
+                for m2m in m2m_records:
+                    ip_record = client.api.ipam.ip_addresses.get(
+                        id=str(m2m.ip_address.id)
+                    )
+                    if ip_record:
+                        status = "Unknown"
+                        if hasattr(ip_record, "status") and ip_record.status:
+                            status = getattr(
+                                ip_record.status, "display", str(ip_record.status)
+                            )
+                        ip_entries.append(
+                            DeviceIPEntry(
+                                interface_name=all_results[indices[0]].name,
+                                interface_id=iface_id,
+                                address=str(ip_record.address),
+                                ip_id=str(ip_record.id),
+                                status=status,
+                            ).model_dump()
+                        )
+                # Assign enriched IPs to all matching results
+                for idx in indices:
+                    all_results[idx].ip_addresses = ip_entries
 
         if limit > 0:
             limited_results = all_results[:limit]

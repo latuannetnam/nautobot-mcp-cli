@@ -2,83 +2,82 @@
 
 ## What This Is
 
-An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. It provides 44+ structured tools for managing network infrastructure data in Nautobot — devices, interfaces, IP addresses, VLANs, circuits, Golden Config — and integrates with vendor-specific MCP servers (Juniper jmcp) to bridge the gap between live network state and Nautobot as the source of truth.
+An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. It provides 46 structured tools for managing network infrastructure data in Nautobot — devices, interfaces, IP addresses, VLANs, circuits, Golden Config — and integrates with vendor-specific MCP servers (Juniper jmcp) to bridge the gap between live network state and Nautobot as the source of truth.
 
 ## Core Value
 
-AI agents can read and write Nautobot data through standardized MCP tools, enabling automated network configuration management and compliance verification against Nautobot's source of truth.
+AI agents can read and write Nautobot data through standardized MCP tools, enabling automated network configuration management, device-scoped queries, and file-free drift comparison against Nautobot's source of truth.
 
-## Requirements
+## Current State: v1.1 Shipped ✅
 
-### Validated (v1.0)
+**Shipped 2026-03-20** — v1.1 Agent-Native MCP Tools
 
-- ✓ MCP server exposing 44+ Nautobot operations as named tools — v1.0
-- ✓ CLI interface for human/script access to all operations — v1.0
-- ✓ Nautobot REST API client with authentication and profile support — v1.0
-- ✓ Device management (CRUD operations via Nautobot API) — v1.0
-- ✓ Interface management (list, create, update interfaces in Nautobot) — v1.0
-- ✓ IPAM operations (prefixes, IP addresses, VLANs) — v1.0
-- ✓ Organization data (tenants, locations) — v1.0
-- ✓ Circuit management — v1.0
-- ✓ Golden Config plugin integration (intended/backup configs, compliance) — v1.0
-- ✓ JunOS config parser with extensible vendor architecture — v1.0
-- ✓ Config onboarding workflow (parse → dry-run → commit to Nautobot) — v1.0
-- ✓ Config verification workflow (live vs Golden Config + data model drift) — v1.0
-- ✓ Agent skills for multi-step workflows (onboard-router-config, verify-compliance) — v1.0
+Key additions in v1.1:
+- `nautobot_get_device_ips` — all IPs for a device in one call (M2M traversal)
+- `nautobot_get_device_summary` — device health at a glance (interface/IP/VLAN counts)
+- `nautobot_list_interfaces(include_ips=True)` — inline IP enrichment (batch query)
+- `nautobot_compare_device` — file-free drift: accepts dict or DeviceIPEntry list, no config file
+- `verify quick-drift` CLI — human-friendly colored output with per-interface detail
 
-## Current Milestone: v1.1 Agent-Native MCP Tools
+**Stats at v1.1:**
+- 46 MCP tools | 105 unit tests passing | ~11k LOC Python
+- Tech stack: FastMCP, Typer, pynautobot, DiffSync, Pydantic v2
 
-**Goal:** Make MCP tools fully usable by AI agents without manual Python scripting — one MCP call should answer one complete question.
+<details>
+<summary>v1.0 context (shipped 2026-03-18)</summary>
 
-**Target features:**
-- Device-scoped IP query tool (get IPs by device in one call)
-- Cross-entity filters on existing tools (--device filter for addresses/VLANs)
-- Composite device summary tool (device + interfaces + IPs in one response)
-- File-free drift comparison tool (accepts structured data, not file paths)
-- Enriched interface listing with inline IP data
-- jmcp large output handling fix
+**Shipped 2026-03-18** with ~3,400 LOC Python, 76 tests, 44 MCP tools.
 
-### Active (v1.2+)
+Requirements validated:
+- ✓ MCP server exposing 44+ Nautobot operations as named tools
+- ✓ CLI interface for human/script access to all operations
+- ✓ Nautobot REST API client with authentication and profile support
+- ✓ Device, Interface, IPAM, Organization, Circuit management
+- ✓ Golden Config plugin integration
+- ✓ JunOS config parser with extensible vendor architecture
+- ✓ Config onboarding workflow (parse → dry-run → commit to Nautobot)
+- ✓ Config verification workflow (live vs Golden Config + data model drift)
+- ✓ Agent skills for multi-step workflows (onboard-router-config, verify-compliance)
 
-- [ ] Multi-vendor config parsers (Cisco IOS, IOS-XE, Arista EOS)
-- [ ] Bulk device onboarding (multiple devices from batch config files)
-- [ ] Config remediation suggestions based on drift reports
-- [ ] Enhanced "Audit Device" agent skill — comprehensive health check
+</details>
 
-### Out of Scope
+## Next Milestone: v1.2 (TBD)
+
+Run `/gsd-new-milestone` to define requirements and roadmap.
+
+Candidate features:
+- Multi-vendor config parsers (Cisco IOS, Arista EOS)
+- Bulk device onboarding (batch config files)
+- Config remediation suggestions based on drift reports
+- Enhanced "Audit Device" agent skill — comprehensive health check
+
+## Out of Scope
 
 - Direct device communication — handled by vendor MCP servers (jmcp for Juniper)
 - Nautobot server deployment/management — server already running at nautobot.netnam.vn
 - Nautobot plugin development — this tool consumes existing Nautobot APIs
-- Automated remediation without confirmation — v1 reports drift only
-
-## Context
-
-- **Shipped v1.0 2026-03-18** with ~3,400 LOC Python
-- Tech stack: FastMCP, Typer, pynautobot, DiffSync, pydantic v2
-- Nautobot server running at https://nautobot.netnam.vn/
-- Juniper MCP server (jmcp) configured and operational
-- 76 unit tests, all passing
-- Architecture: shared core library + thin MCP layer + thin CLI layer + agent skills
+- Automated remediation without confirmation — reports drift only, requires human approval
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------| 
-| Shared core library with thin MCP/CLI layers | Avoid duplicating logic, single source of truth | ✓ Good — clean separation, easy to add tools |
-| MCP + CLI + Skills as three interfaces | MCP for agents, CLI for humans, Skills for workflows | ✓ Good — all three patterns work independently |
-| Juniper-first, extensible vendor architecture | jmcp exists; VendorParser ABC for future vendors | ✓ Good — ParserRegistry ready for Cisco/Arista |
-| Nautobot REST API (not GraphQL) | Standard, well-documented, broad coverage | ✓ Good — pynautobot handles all operations |
-| DiffSync for data model verification | Semantic diff vs string diff for structured comparison | ✓ Good — clean drift reports with missing/extra/changed |
-| dry_run=True default for onboarding | Safety first — preview before committing | ✓ Good — avoids accidental bulk writes |
+| Shared core library with thin MCP/CLI layers | Single source of truth | ✓ Clean separation, easy to add tools |
+| MCP + CLI + Skills as three interfaces | MCP for agents, CLI for humans, Skills for workflows | ✓ All three patterns work |
+| Juniper-first, extensible vendor architecture | jmcp exists; VendorParser ABC for future | ✓ ParserRegistry ready for Cisco/Arista |
+| Nautobot REST API (not GraphQL) | Standard, well-documented, broad coverage | ✓ pynautobot handles all operations |
+| DiffSync for data model verification | Semantic diff vs string diff | ✓ Clean drift reports |
+| dry_run=True default for onboarding | Safety first — preview before committing | ✓ Avoids accidental bulk writes |
+| M2M traversal for device-IP queries | `ip_addresses.filter(device=...)` unreliable in Nautobot | ✓ Reliable via `ip_address_to_interface` |
+| Auto-detecting drift input shape | Allows chaining `get_device_ips` output directly | ✓ Zero transformation needed |
 
 ## Constraints
 
 - **Protocol**: MCP (Model Context Protocol) for AI agent interaction
 - **Language**: Python (pyproject.toml with uv)
-- **Nautobot API**: REST API v2
+- **Nautobot API**: REST API v2 at https://nautobot.netnam.vn/
 - **Vendor scope**: Juniper first, extensible VendorParser ABC for others
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-18 after v1.0 milestone*
+*Last updated: 2026-03-20 after v1.1 milestone*
