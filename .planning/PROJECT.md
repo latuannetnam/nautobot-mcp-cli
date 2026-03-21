@@ -2,70 +2,54 @@
 
 ## What This Is
 
-An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. It provides 46 structured tools for managing network infrastructure data in Nautobot — devices, interfaces, IP addresses, VLANs, circuits, Golden Config — and integrates with vendor-specific MCP servers (Juniper jmcp) to bridge the gap between live network state and Nautobot as the source of truth.
+An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. It provides 164 structured tools for managing network infrastructure data in Nautobot — devices, interfaces, IP addresses, VLANs, circuits, Golden Config, and full Juniper CMS model coverage (BGP, routing, interfaces, firewalls, policies, ARP) — and integrates with vendor-specific MCP servers (Juniper jmcp) to bridge the gap between live network state and Nautobot as the source of truth.
 
 ## Core Value
 
-AI agents can read and write Nautobot data through standardized MCP tools, enabling automated network configuration management, device-scoped queries, and file-free drift comparison against Nautobot's source of truth.
+AI agents can read and write Nautobot data — including Juniper CMS model records — through standardized MCP tools, enabling automated network configuration management, file-free drift comparison against Nautobot's source of truth, and comprehensive device audits that chain live device state (jmcp) against CMS records.
 
 ## Current State: v1.2 Complete ✅
 
 **Shipped 2026-03-21** — v1.2 Juniper CMS Model MCP Tools
 
-Phase 14 complete — all v1.2 requirements met (CLI + Skills):
-- `nautobot-mcp cms drift bgp/routes` — CLI drift verification commands
-- `.agent/skills/cms-device-audit/SKILL.md` — 8-step CMS-aware device audit skill
-- 293 unit tests passing | ~13k LOC Python
+- **164 MCP tools** across 5 Juniper CMS model domains + 4 composite summaries + 2 drift tools
+- **293 unit tests** | ~13k LOC Python | 6 phases, 18 plans
+- `nautobot-mcp cms` CLI covering all CMS model operations
+- `cms-device-audit` agent skill for full jmcp → CMS audit workflows
 
-**v1.2 Summary — all 7 phases complete:**
-- Phase 8: CMS plugin client foundation (`NautobotClient.cms`, 39-endpoint registry)
-- Phase 9: Routing models (8 Pydantic models, 14 MCP tools, 13 CLI commands, 22 tests)
-- Phase 10: Interface models (full CRUD, device-scoped, VLAN handling)
-- Phase 11: Firewall & Policy models (filters, terms, policers, policies)
-- Phase 12: ARP and composite summary tools (BGP summary, routing table, interface detail, firewall summary)
-- Phase 13: CMS drift verification engine (DiffSync-based, compare_bgp_neighbors, compare_static_routes)
-- Phase 14: CLI commands & agent skill guides (drift CLI, CMS device audit skill)
+## Requirements
 
-<details>
-<summary>v1.0 context (shipped 2026-03-18)</summary>
+### Validated
 
-**Shipped 2026-03-18** with ~3,400 LOC Python, 76 tests, 44 MCP tools.
+- ✓ MCP server exposing 44+ core Nautobot operations — v1.0
+- ✓ CLI interface for human/script access to all operations — v1.0
+- ✓ Nautobot REST API client with authentication and profile support — v1.0
+- ✓ Device, Interface, IPAM, Organization, Circuit management — v1.0
+- ✓ Golden Config plugin integration — v1.0
+- ✓ JunOS config parser with extensible vendor architecture — v1.0
+- ✓ Config onboarding workflow (parse → dry-run → commit to Nautobot) — v1.0
+- ✓ Config verification workflow (live vs Golden Config + data model drift) — v1.0
+- ✓ Agent skills for multi-step workflows (onboard-router-config, verify-compliance) — v1.0
+- ✓ Device-scoped IP query (`nautobot_get_device_ips`) — v1.1
+- ✓ Device health summary (`nautobot_get_device_summary`) — v1.1
+- ✓ Enriched interface list with inline IPs — v1.1
+- ✓ File-free drift comparison (`nautobot_compare_device`) — v1.1
+- ✓ Full CRUD for Juniper routing models (BGP groups, neighbors, static routes) — v1.2
+- ✓ Full CRUD for Juniper interface models (units, families, VRRP, ARP) — v1.2
+- ✓ Full CRUD for Juniper firewall and policy models — v1.2
+- ✓ Composite summary tools (BGP summary, routing table, interface detail, firewall summary) — v1.2
+- ✓ CMS drift verification (compare live jmcp data vs Nautobot CMS records) — v1.2
+- ✓ `nautobot-mcp cms` CLI for all CMS model operations — v1.2
+- ✓ `cms-device-audit` agent skill for CMS-aware device audit workflows — v1.2
 
-Requirements validated:
-- ✓ MCP server exposing 44+ Nautobot operations as named tools
-- ✓ CLI interface for human/script access to all operations
-- ✓ Nautobot REST API client with authentication and profile support
-- ✓ Device, Interface, IPAM, Organization, Circuit management
-- ✓ Golden Config plugin integration
-- ✓ JunOS config parser with extensible vendor architecture
-- ✓ Config onboarding workflow (parse → dry-run → commit to Nautobot)
-- ✓ Config verification workflow (live vs Golden Config + data model drift)
-- ✓ Agent skills for multi-step workflows (onboard-router-config, verify-compliance)
+### Active
 
-</details>
+- [ ] Multi-vendor config parsers (Cisco IOS/IOS-XE, Arista EOS)
+- [ ] Bulk device onboarding (batch config files)
+- [ ] Config remediation suggestions based on drift reports
+- [ ] Extended drift coverage (interfaces, firewalls via CMS drift engine)
 
-## Current Milestone: v1.2 — Juniper CMS Model MCP Tools
-
-**Goal:** Add full CRUD MCP tools for all Juniper-specific models in the netnam-cms-core Nautobot plugin, plus composite summary tools and live drift verification against CMS model records.
-
-**Target features:**
-- Full CRUD MCP tools for all 5 Juniper model domains (Routing, Interfaces, Firewalls, Policies, ARP)
-- Composite summary tools (device BGP summary, routing table, interface detail, firewall summary)
-- Drift verification: compare live Juniper state (via jmcp) against CMS model records in Nautobot
-- CLI commands for all new tools
-- Agent skill guides for CMS-aware workflows
-
-<details>
-<summary>Candidate features deferred</summary>
-
-- Multi-vendor config parsers (Cisco IOS, Arista EOS)
-- Bulk device onboarding (batch config files)
-- Config remediation suggestions based on drift reports
-- Enhanced "Audit Device" agent skill — comprehensive health check
-
-</details>
-
-## Out of Scope
+### Out of Scope
 
 - Direct device communication — handled by vendor MCP servers (jmcp for Juniper)
 - Nautobot server deployment/management — server already running at nautobot.netnam.vn
@@ -76,7 +60,7 @@ Requirements validated:
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
-|----------|-----------|---------|
+|----------|-----------|---------| 
 | Shared core library with thin MCP/CLI layers | Single source of truth | ✓ Clean separation, easy to add tools |
 | MCP + CLI + Skills as three interfaces | MCP for agents, CLI for humans, Skills for workflows | ✓ All three patterns work |
 | Juniper-first, extensible vendor architecture | jmcp exists; VendorParser ABC for future | ✓ ParserRegistry ready for Cisco/Arista |
@@ -85,7 +69,10 @@ Requirements validated:
 | dry_run=True default for onboarding | Safety first — preview before committing | ✓ Avoids accidental bulk writes |
 | M2M traversal for device-IP queries | `ip_addresses.filter(device=...)` unreliable in Nautobot | ✓ Reliable via `ip_address_to_interface` |
 | Auto-detecting drift input shape | Allows chaining `get_device_ips` output directly | ✓ Zero transformation needed |
-| netnam-cms-core via plugin REST API | Plugin exposes 49 DRF endpoints under /api/plugins/netnam-cms-core/ | — Pending |
+| netnam-cms-core via plugin REST API | Plugin exposes 49 DRF endpoints under /api/plugins/netnam-cms-core/ | ✓ Full CRUD on all 5 domains |
+| 1:1 Pydantic model per CMS endpoint | Mirrors API shape exactly; avoids impedance mismatch | ✓ 40+ CMS Pydantic models, clean validation |
+| Composite tools as thin aggregators | Single-call UX for common agent workflows | ✓ Reduces agent round-trips from N to 1 |
+| DiffSync for CMS drift (not set comparison) | Field-level change detection vs presence-only | ✓ Reports changed fields, not just missing/extra |
 
 ## Constraints
 
@@ -97,4 +84,4 @@ Requirements validated:
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-21 after v1.2 milestone complete (Phase 14)*
+*Last updated: 2026-03-21 after v1.2 milestone complete*
