@@ -8,26 +8,23 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can read and write Nautobot data through standardized MCP tools, enabling automated network configuration management, device-scoped queries, and file-free drift comparison against Nautobot's source of truth.
 
-## Current State: v1.1 Shipped ✅
+## Current State: v1.2 Complete ✅
 
-**Shipped 2026-03-20** — v1.1 Agent-Native MCP Tools
+**Shipped 2026-03-21** — v1.2 Juniper CMS Model MCP Tools
 
-Key additions in v1.1:
-- `nautobot_get_device_ips` — all IPs for a device in one call (M2M traversal)
-- `nautobot_get_device_summary` — device health at a glance (interface/IP/VLAN counts)
-- `nautobot_list_interfaces(include_ips=True)` — inline IP enrichment (batch query)
-- `nautobot_compare_device` — file-free drift: accepts dict or DeviceIPEntry list, no config file
-- `verify quick-drift` CLI — human-friendly colored output with per-interface detail
+Phase 14 complete — all v1.2 requirements met (CLI + Skills):
+- `nautobot-mcp cms drift bgp/routes` — CLI drift verification commands
+- `.agent/skills/cms-device-audit/SKILL.md` — 8-step CMS-aware device audit skill
+- 293 unit tests passing | ~13k LOC Python
 
-**Stats at v1.1:**
-- 46 MCP tools | 131 unit tests passing | ~11k LOC Python
-- Tech stack: FastMCP, Typer, pynautobot, DiffSync, Pydantic v2
-
-**v1.2 Progress — Phase 8 complete (2026-03-20):**
-- `NautobotClient.cms` property — netnam-cms-core plugin accessor
-- `nautobot_mcp/cms/` subpackage — 39-endpoint registry, generic CRUD helpers
-- `nautobot_mcp/models/cms/base.py` — `CMSBaseSummary` base model with `from_nautobot()`
-- 26 new unit tests, all passing with zero regressions
+**v1.2 Summary — all 7 phases complete:**
+- Phase 8: CMS plugin client foundation (`NautobotClient.cms`, 39-endpoint registry)
+- Phase 9: Routing models (8 Pydantic models, 14 MCP tools, 13 CLI commands, 22 tests)
+- Phase 10: Interface models (full CRUD, device-scoped, VLAN handling)
+- Phase 11: Firewall & Policy models (filters, terms, policers, policies)
+- Phase 12: ARP and composite summary tools (BGP summary, routing table, interface detail, firewall summary)
+- Phase 13: CMS drift verification engine (DiffSync-based, compare_bgp_neighbors, compare_static_routes)
+- Phase 14: CLI commands & agent skill guides (drift CLI, CMS device audit skill)
 
 <details>
 <summary>v1.0 context (shipped 2026-03-18)</summary>
@@ -100,4 +97,4 @@ Requirements validated:
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-20 after v1.2 milestone started*
+*Last updated: 2026-03-21 after v1.2 milestone complete (Phase 14)*
