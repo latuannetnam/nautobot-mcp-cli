@@ -325,3 +325,51 @@ def list_policer_actions(
         _output(result.model_dump(), ctx.obj.get("json", False), POLICER_ACTION_COLUMNS)
     except Exception as e:
         handle_cli_error(e)
+
+
+# ===========================================================================
+# COMPOSITE SUMMARY COMMANDS
+# ===========================================================================
+
+
+@firewalls_app.command("firewall-summary")
+def firewall_summary(
+    ctx: typer.Context,
+    device: str = typer.Option(..., help="Device name or UUID"),
+    detail: bool = typer.Option(False, "--detail", help="Include terms per filter and actions per policer"),
+) -> None:
+    """Get composite firewall summary for a device (filters + policers).
+
+    Use --detail to include inlined terms per filter and actions per policer.
+    """
+    try:
+        client = get_client_from_ctx(ctx)
+        result = cms_firewalls.get_device_firewall_summary(client, device=device, detail=detail)
+        data = result.model_dump()
+        if ctx.obj.get("json", False):
+            typer.echo(json_mod.dumps(data, indent=2, default=str))
+            return
+        typer.echo(
+            f"Device: {data['device_name']} | "
+            f"Filters: {data['total_filters']} | Policers: {data['total_policers']}"
+        )
+        filters = data.get("filters", [])
+        if filters:
+            typer.echo("\nFirewall Filters:")
+            f_rows = [[f.get("name", ""), f.get("family", ""), f.get("term_count", 0)] for f in filters]
+            typer.echo(tabulate(f_rows, headers=["Filter Name", "Family", "Terms"], tablefmt="simple"))
+        if detail:
+            for fw in filters:
+                terms = fw.get("terms", [])
+                if terms:
+                    typer.echo(f"\nFilter: {fw.get('name')} — Terms:")
+                    t_rows = [[t.get("name", ""), t.get("order", ""), t.get("match_count", 0), t.get("action_count", 0)] for t in terms]
+                    typer.echo(tabulate(t_rows, headers=["Term", "Order", "Matches", "Actions"], tablefmt="simple"))
+        policers = data.get("policers", [])
+        if policers:
+            typer.echo("\nFirewall Policers:")
+            p_rows = [[p.get("name", ""), p.get("action_count", 0)] for p in policers]
+            typer.echo(tabulate(p_rows, headers=["Policer Name", "Actions"], tablefmt="simple"))
+    except Exception as e:
+        handle_cli_error(e)
+

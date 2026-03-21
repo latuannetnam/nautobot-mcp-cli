@@ -12,6 +12,7 @@ import typer
 from tabulate import tabulate
 
 from nautobot_mcp.cli.app import get_client_from_ctx, handle_cli_error
+from nautobot_mcp.cms import arp
 from nautobot_mcp.cms import interfaces as cms_interfaces
 
 interfaces_cli_app = typer.Typer(help="Juniper interface model operations")
@@ -28,6 +29,7 @@ POLICER_COLUMNS = ["family_id", "policer_name", "policer_type", "enabled"]
 VRRP_GROUP_COLUMNS = ["group_number", "virtual_address", "interface_address", "priority", "accept_data", "family_display"]
 VRRP_TRACK_ROUTE_COLUMNS = ["vrrp_group_id", "route_address", "priority_cost", "routing_instance"]
 VRRP_TRACK_IFACE_COLUMNS = ["vrrp_group_id", "tracked_interface_name", "priority_cost"]
+ARP_COLUMNS = ["mac_address", "ip_address", "interface_name", "hostname", "device_name"]
 
 
 # ---------------------------------------------------------------------------
@@ -417,5 +419,77 @@ def list_vrrp_track_interfaces(
         client = get_client_from_ctx(ctx)
         result = cms_interfaces.list_vrrp_track_interfaces(client, vrrp_group_id=vrrp_group_id, limit=limit)
         _output(result.model_dump(), ctx.obj.get("json", False), VRRP_TRACK_IFACE_COLUMNS)
+    except Exception as e:
+        handle_cli_error(e)
+
+
+# ===========================================================================
+# ARP (read-only)
+# ===========================================================================
+
+
+@interfaces_cli_app.command("list-arp-entries")
+def list_arp_entries(
+    ctx: typer.Context,
+    device: str = typer.Option(..., help="Device name or UUID (required)"),
+    interface: Optional[str] = typer.Option(None, help="Filter by interface name or UUID"),
+    mac_address: Optional[str] = typer.Option(None, "--mac-address", help="Filter by MAC address"),
+    limit: int = typer.Option(0, help="Max results (0=all)"),
+) -> None:
+    """List ARP entries for a Juniper device (read-only)."""
+    try:
+        client = get_client_from_ctx(ctx)
+        result = arp.list_arp_entries(
+            client, device=device, interface=interface,
+            mac_address=mac_address, limit=limit,
+        )
+        _output(result.model_dump(), ctx.obj.get("json", False), ARP_COLUMNS)
+    except Exception as e:
+        handle_cli_error(e)
+
+
+@interfaces_cli_app.command("get-arp-entry")
+def get_arp_entry(
+    ctx: typer.Context,
+    id: str = typer.Option(..., help="ARP entry UUID"),
+) -> None:
+    """Get a single ARP entry by UUID."""
+    try:
+        client = get_client_from_ctx(ctx)
+        result = arp.get_arp_entry(client, id=id)
+        _output_single(result.model_dump(), ctx.obj.get("json", False), ARP_COLUMNS)
+    except Exception as e:
+        handle_cli_error(e)
+
+
+# ===========================================================================
+# COMPOSITE SUMMARY
+# ===========================================================================
+
+
+@interfaces_cli_app.command("detail")
+def interface_detail(
+    ctx: typer.Context,
+    device: str = typer.Option(..., help="Device name or UUID"),
+    include_arp: bool = typer.Option(False, "--include-arp", help="Include ARP entries per interface"),
+) -> None:
+    """Get composite interface detail summary for a device (units, families, VRRP)."""
+    try:
+        client = get_client_from_ctx(ctx)
+        result = cms_interfaces.get_interface_detail(client, device=device, include_arp=include_arp)
+        data = result.model_dump()
+        if ctx.obj.get("json", False):
+            import json as json_mod
+            typer.echo(json_mod.dumps(data, indent=2, default=str))
+        else:
+            typer.echo(f"Device: {data['device_name']} — Total units: {data['total_units']}")
+            for unit in data.get("units", []):
+                typer.echo(f"  Unit {unit.get('unit_number', '-')}: {unit.get('interface_name', '-')} "
+                           f"[{unit.get('family_count', 0)} families]")
+                for fam in unit.get("families", []):
+                    vrrp_count = fam.get("vrrp_group_count", 0)
+                    typer.echo(f"    {fam.get('family_type', '-')} | VRRP groups: {vrrp_count}")
+            if include_arp and data.get("arp_entries"):
+                typer.echo(f"  ARP entries ({len(data['arp_entries'])})")
     except Exception as e:
         handle_cli_error(e)

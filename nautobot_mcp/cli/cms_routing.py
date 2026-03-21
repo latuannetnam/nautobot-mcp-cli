@@ -349,3 +349,92 @@ def list_bgp_received_routes(
         _output(result.model_dump(), ctx.obj.get("json", False), BGP_RR_COLUMNS)
     except Exception as e:
         handle_cli_error(e)
+
+
+# ===========================================================================
+# COMPOSITE SUMMARY COMMANDS
+# ===========================================================================
+
+
+@routing_app.command("bgp-summary")
+def bgp_summary(
+    ctx: typer.Context,
+    device: str = typer.Option(..., help="Device name or UUID"),
+    detail: bool = typer.Option(False, "--detail", help="Expand neighbors per group with AF and policy data"),
+) -> None:
+    """Get BGP summary for a device (groups + neighbor counts).
+
+    Use --detail to also display per-group neighbors with address families
+    and policy associations.
+    """
+    try:
+        client = get_client_from_ctx(ctx)
+        result = cms_routing.get_device_bgp_summary(client, device=device, detail=detail)
+        data = result.model_dump()
+        if ctx.obj.get("json", False):
+            typer.echo(json_mod.dumps(data, indent=2, default=str))
+            return
+        typer.echo(f"Device: {data['device_name']} | BGP Groups: {data['total_groups']} | Neighbors: {data['total_neighbors']}")
+        groups = data.get("groups", [])
+        if groups:
+            rows = [[
+                g.get("name", ""),
+                g.get("type", ""),
+                g.get("local_as", ""),
+                g.get("neighbor_count", 0),
+            ] for g in groups]
+            typer.echo(tabulate(rows, headers=["Group", "Type", "Local AS", "Neighbors"], tablefmt="simple"))
+        if detail:
+            for g in groups:
+                neighbors = g.get("neighbors", [])
+                if neighbors:
+                    typer.echo(f"\nGroup: {g.get('name')} — Neighbors:")
+                    n_rows = [[
+                        n.get("peer_ip", ""), n.get("peer_as", ""),
+                        n.get("session_state", ""), n.get("af_count", 0), n.get("policy_count", 0),
+                    ] for n in neighbors]
+                    typer.echo(tabulate(n_rows, headers=["Peer IP", "Peer AS", "State", "AFs", "Policies"], tablefmt="simple"))
+    except Exception as e:
+        handle_cli_error(e)
+
+
+@routing_app.command("routing-table")
+def routing_table(
+    ctx: typer.Context,
+    device: str = typer.Option(..., help="Device name or UUID"),
+    detail: bool = typer.Option(False, "--detail", help="Expand next-hops per route"),
+) -> None:
+    """Get routing table summary for a device (static routes with next-hop counts).
+
+    Use --detail to display per-route next-hops with interface and metric data.
+    """
+    try:
+        client = get_client_from_ctx(ctx)
+        result = cms_routing.get_device_routing_table(client, device=device, detail=detail)
+        data = result.model_dump()
+        if ctx.obj.get("json", False):
+            typer.echo(json_mod.dumps(data, indent=2, default=str))
+            return
+        typer.echo(f"Device: {data['device_name']} | Static Routes: {data['total_routes']}")
+        routes = data.get("routes", [])
+        if routes:
+            rows = [[
+                r.get("destination", ""),
+                r.get("preference", ""),
+                r.get("routing_instance_name", ""),
+                r.get("nexthop_count", 0),
+            ] for r in routes]
+            typer.echo(tabulate(rows, headers=["Destination", "Pref", "Routing Instance", "Nexthops"], tablefmt="simple"))
+        if detail:
+            for r in routes:
+                nexthops = r.get("nexthops", [])
+                if nexthops:
+                    typer.echo(f"\nRoute: {r.get('destination')} — Nexthops:")
+                    nh_rows = [[
+                        n.get("ip_address", ""), n.get("via_interface_name", ""),
+                        n.get("metric", ""), n.get("preference", ""),
+                    ] for n in nexthops]
+                    typer.echo(tabulate(nh_rows, headers=["Next-hop IP", "Interface", "Metric", "Pref"], tablefmt="simple"))
+    except Exception as e:
+        handle_cli_error(e)
+

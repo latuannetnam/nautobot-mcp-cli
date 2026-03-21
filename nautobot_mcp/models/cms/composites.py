@@ -41,30 +41,22 @@ class RoutingTableResponse(BaseModel):
 
 
 class InterfaceDetailResponse(BaseModel):
-    """Composite response model for interface unit detail.
+    """Composite response model for device interface detail summary.
 
-    Aggregates interface unit, families, VRRP groups, and ARP entries.
+    Aggregates all interface units with their families and VRRP groups,
+    optionally including device-level ARP entries.
     """
 
-    unit: dict[str, Any] = Field(
-        default_factory=dict,
-        description="InterfaceUnitSummary data as dict",
-    )
-    families: list[Any] = Field(
+    device_name: str = Field(description="Name of the device")
+    units: list[Any] = Field(
         default_factory=list,
-        description="List of InterfaceFamilySummary objects (with optional filters/policers)",
+        description="List of interface unit dicts (each with nested families and vrrp_groups)",
     )
-    vrrp_groups: list[Any] = Field(
-        default_factory=list,
-        description="List of VRRPGroupSummary objects",
-    )
+    total_units: int = Field(default=0, description="Total number of interface units")
     arp_entries: list[Any] = Field(
         default_factory=list,
-        description="List of ArpEntrySummary objects for this interface",
+        description="List of ArpEntrySummary dicts (populated when include_arp=True)",
     )
-    family_count: int = Field(default=0, description="Number of address families")
-    vrrp_count: int = Field(default=0, description="Number of VRRP groups")
-    arp_count: int = Field(default=0, description="Number of ARP entries")
 
 
 class FirewallSummaryResponse(BaseModel):
