@@ -136,13 +136,19 @@ class NautobotSettings(BaseSettings):
         """Discover and load settings from standard locations.
 
         Search order:
-        1. .nautobot-mcp.yaml in current directory
-        2. ~/.config/nautobot-mcp/config.yaml
-        3. Environment variables only (empty profiles)
+        1. NAUTOBOT_CONFIG_FILE env var (explicit absolute path)
+        2. .nautobot-mcp.yaml in current directory
+        3. ~/.config/nautobot-mcp/config.yaml
+        4. Environment variables only (empty profiles)
 
         Returns:
             NautobotSettings from first found config or env vars.
         """
+        # Explicit config file wins over all discovery
+        env_config = os.environ.get("NAUTOBOT_CONFIG_FILE")
+        if env_config:
+            return cls.load_from_yaml(env_config)
+
         search_paths = [
             Path(".nautobot-mcp.yaml"),
             Path.home() / ".config" / "nautobot-mcp" / "config.yaml",

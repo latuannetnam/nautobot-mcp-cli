@@ -40,7 +40,7 @@ def get_client() -> NautobotClient:
     """Return a lazily-initialized NautobotClient singleton."""
     global _client
     if _client is None:
-        settings = NautobotSettings()
+        settings = NautobotSettings.discover()
         _client = NautobotClient(settings=settings)
     return _client
 
