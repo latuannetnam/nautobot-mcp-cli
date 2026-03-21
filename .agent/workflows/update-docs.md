@@ -64,6 +64,22 @@ Also read:
 3. `nautobot_mcp/server.py` — count `@mcp.tool` decorators for tool count
 4. `uv run pytest tests/ --co -q 2>&1 | tail -1` — for test count
 
+### ⚠️ CHANGELOG editing pitfall — read before writing
+
+When promoting `[Unreleased]` to `[vX.Y]`, **do NOT** use a replace-file-content tool that includes existing version sections in the replacement text. Doing so will:
+- Duplicate existing `[vX.Y]` sections (v1.1 appears twice, etc.)
+- Place the new version in the wrong position (old ones end up before it)
+
+**Safe approach:** overwrite the entire CHANGELOG from scratch, or only edit the `[Unreleased]` heading line and insert a new fresh `[Unreleased]` block above it — never paste old version content into the replacement.
+
+**Always reconstruct the file in correct order:**
+```
+[Unreleased]   ← fresh, empty
+[vN.N]         ← newest, just promoted
+[vN.N-1]       ← previous (unchanged)
+[vN.N-2]       ← older (unchanged)
+```
+
 ---
 
 ## Step 3 — Update `README.md`
@@ -111,12 +127,20 @@ If this follows a milestone completion, the commit should go on the same branch 
 
 Quick sanity check before declaring done:
 
-```bash
-# Confirm tool count in README matches actual
-grep -n "tools" README.md | grep -E "[0-9]+ (MCP )?tools"
+```powershell
+# Confirm each version section appears EXACTLY ONCE, in newest-first order
+Select-String -Pattern "^## \[" CHANGELOG.md | Select-Object LineNumber, Line
+# Expected: [Unreleased] first, then [vN.N] descending. No duplicates.
 
-# Confirm version appears in CHANGELOG
-grep "^## \[v" CHANGELOG.md
+# Confirm tool count in README matches actual
+Select-String -Pattern "\d+ (MCP )?tools" README.md
+
+# Confirm new version appears in CHANGELOG
+Select-String -Pattern "^## \[v" CHANGELOG.md
 ```
 
-Confirm the `[Unreleased]` section exists and is empty (if a milestone was just closed).
+Confirm:
+- `[Unreleased]` section exists and is empty (if a milestone was just closed)
+- No version header appears more than once
+- Newest version is the first `[vX.Y]` entry after `[Unreleased]`
+- README has no stale `(vX.Y)` version tags in section headings (those belong in CHANGELOG only)
