@@ -9,6 +9,15 @@ Submodules per domain are added in subsequent phases:
 """
 
 from nautobot_mcp.models.cms.base import CMSBaseSummary
+from nautobot_mcp.models.cms.interfaces import (
+    InterfaceFamilyFilterSummary,
+    InterfaceFamilyPolicerSummary,
+    InterfaceFamilySummary,
+    InterfaceUnitSummary,
+    VRRPGroupSummary,
+    VRRPTrackInterfaceSummary,
+    VRRPTrackRouteSummary,
+)
 from nautobot_mcp.models.cms.routing import (
     BGPAddressFamilySummary,
     BGPGroupSummary,
@@ -22,6 +31,7 @@ from nautobot_mcp.models.cms.routing import (
 
 __all__ = [
     "CMSBaseSummary",
+    # Routing models (Phase 9)
     "StaticRouteSummary",
     "StaticRouteNexthopSummary",
     "StaticRouteQualifiedNexthopSummary",
@@ -30,4 +40,12 @@ __all__ = [
     "BGPAddressFamilySummary",
     "BGPPolicyAssociationSummary",
     "BGPReceivedRouteSummary",
+    # Interface models (Phase 10)
+    "InterfaceUnitSummary",
+    "InterfaceFamilySummary",
+    "InterfaceFamilyFilterSummary",
+    "InterfaceFamilyPolicerSummary",
+    "VRRPGroupSummary",
+    "VRRPTrackRouteSummary",
+    "VRRPTrackInterfaceSummary",
 ]

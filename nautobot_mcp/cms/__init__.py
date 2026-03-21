@@ -8,6 +8,8 @@ Provides CRUD operations for all netnam-cms-core plugin models:
 - ARP: ARP entries
 """
 
+from nautobot_mcp.cms import interfaces  # noqa: F401
 from nautobot_mcp.cms import routing  # noqa: F401
 
-__all__ = ["routing"]
+__all__ = ["routing", "interfaces"]
+
