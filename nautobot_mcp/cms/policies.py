@@ -74,21 +74,18 @@ def list_policy_statements(
         )
 
         if statements.results:
-            try:
-                all_terms = cms_list(
-                    client,
-                    "jps_terms",
-                    JPSTermSummary,
-                    limit=0,
-                    device=device_id,
-                )
-                term_count: dict[str, int] = {}
-                for t in all_terms.results:
-                    term_count[t.statement_id] = term_count.get(t.statement_id, 0) + 1
-                for s in statements.results:
-                    s.term_count = term_count.get(s.id, 0)
-            except Exception:
-                pass
+            for s in statements.results:
+                try:
+                    terms = cms_list(
+                        client,
+                        "jps_terms",
+                        JPSTermSummary,
+                        limit=0,
+                        policy_statement=s.id,
+                    )
+                    s.term_count = len(terms.results)
+                except Exception:
+                    pass
 
         all_results = statements.results
         limited = all_results[:limit] if limit > 0 else all_results
@@ -180,17 +177,14 @@ def list_policy_prefix_lists(
         pls = cms_list(client, "juniper_policy_prefix_lists", PolicyPrefixListSummary, limit=0, device=device_id)
 
         if pls.results:
-            try:
-                all_prefixes = cms_list(
-                    client, "juniper_policy_prefixes", PolicyPrefixSummary, limit=0, device=device_id
-                )
-                prefix_count: dict[str, int] = {}
-                for p in all_prefixes.results:
-                    prefix_count[p.prefix_list_id] = prefix_count.get(p.prefix_list_id, 0) + 1
-                for pl in pls.results:
-                    pl.prefix_count = prefix_count.get(pl.id, 0)
-            except Exception:
-                pass
+            for pl in pls.results:
+                try:
+                    prefixes = cms_list(
+                        client, "juniper_policy_prefixes", PolicyPrefixSummary, limit=0, prefix_list=pl.id
+                    )
+                    pl.prefix_count = len(prefixes.results)
+                except Exception:
+                    pass
 
         all_results = pls.results
         limited = all_results[:limit] if limit > 0 else all_results

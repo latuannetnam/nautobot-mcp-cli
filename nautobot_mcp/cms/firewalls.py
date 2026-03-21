@@ -67,21 +67,18 @@ def list_firewall_filters(
         filters = cms_list(client, "juniper_firewall_filters", FirewallFilterSummary, limit=0, **extra)
 
         if filters.results:
-            try:
-                all_terms = cms_list(
-                    client,
-                    "juniper_firewall_terms",
-                    FirewallTermSummary,
-                    limit=0,
-                    device=device_id,
-                )
-                term_count_by_filter: dict[str, int] = {}
-                for term in all_terms.results:
-                    term_count_by_filter[term.filter_id] = term_count_by_filter.get(term.filter_id, 0) + 1
-                for f in filters.results:
-                    f.term_count = term_count_by_filter.get(f.id, 0)
-            except Exception:
-                pass
+            for f in filters.results:
+                try:
+                    terms = cms_list(
+                        client,
+                        "juniper_firewall_terms",
+                        FirewallTermSummary,
+                        limit=0,
+                        filter=f.id,
+                    )
+                    f.term_count = len(terms.results)
+                except Exception:
+                    pass
 
         all_results = filters.results
         limited = all_results[:limit] if limit > 0 else all_results
@@ -240,23 +237,18 @@ def list_firewall_policers(
         policers = cms_list(client, "juniper_firewall_policers", FirewallPolicerSummary, limit=0, device=device_id)
 
         if policers.results:
-            try:
-                all_actions = cms_list(
-                    client,
-                    "juniper_firewall_policer_actions",
-                    FirewallPolicerActionSummary,
-                    limit=0,
-                    device=device_id,
-                )
-                action_count_by_policer: dict[str, int] = {}
-                for action in all_actions.results:
-                    action_count_by_policer[action.policer_id] = (
-                        action_count_by_policer.get(action.policer_id, 0) + 1
+            for p in policers.results:
+                try:
+                    actions = cms_list(
+                        client,
+                        "juniper_firewall_policer_actions",
+                        FirewallPolicerActionSummary,
+                        limit=0,
+                        policer=p.id,
                     )
-                for p in policers.results:
-                    p.action_count = action_count_by_policer.get(p.id, 0)
-            except Exception:
-                pass
+                    p.action_count = len(actions.results)
+                except Exception:
+                    pass
 
         all_results = policers.results
         limited = all_results[:limit] if limit > 0 else all_results

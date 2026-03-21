@@ -68,29 +68,24 @@ def list_static_routes(
 
         routes = cms_list(client, "juniper_static_routes", StaticRouteSummary, limit=0, **filters)
 
-        # Batch-fetch nexthops and qualified nexthops for the device
-        nhs = cms_list(client, "juniper_static_route_nexthops", StaticRouteNexthopSummary, limit=0, device=device_id)
-        qnhs = cms_list(
-            client,
-            "juniper_static_route_qualified_nexthops",
-            StaticRouteQualifiedNexthopSummary,
-            limit=0,
-            device=device_id,
-        )
-
-        # Build lookup by route_id
-        nh_by_route: dict[str, list[StaticRouteNexthopSummary]] = {}
-        for nh in nhs.results:
-            nh_by_route.setdefault(nh.route_id, []).append(nh)
-
-        qnh_by_route: dict[str, list[StaticRouteQualifiedNexthopSummary]] = {}
-        for qnh in qnhs.results:
-            qnh_by_route.setdefault(qnh.route_id, []).append(qnh)
-
-        # Inline nexthops into route objects
+        # Inline nexthops per-route (gracefully handle API errors if filter not supported)
         for route in routes.results:
-            route.nexthops = nh_by_route.get(route.id, [])
-            route.qualified_nexthops = qnh_by_route.get(route.id, [])
+            try:
+                nhs = cms_list(client, "juniper_static_route_nexthops", StaticRouteNexthopSummary, limit=0, route=route.id)
+                route.nexthops = nhs.results
+            except Exception:
+                route.nexthops = []
+            try:
+                qnhs = cms_list(
+                    client,
+                    "juniper_static_route_qualified_nexthops",
+                    StaticRouteQualifiedNexthopSummary,
+                    limit=0,
+                    route=route.id,
+                )
+                route.qualified_nexthops = qnhs.results
+            except Exception:
+                route.qualified_nexthops = []
 
         # Apply limit after inlining
         all_results = routes.results
@@ -113,17 +108,23 @@ def get_static_route(client: NautobotClient, id: str) -> StaticRouteSummary:
     """
     try:
         route = cms_get(client, "juniper_static_routes", StaticRouteSummary, id=id)
-        # Fetch nexthops for this specific route
-        nhs = cms_list(client, "juniper_static_route_nexthops", StaticRouteNexthopSummary, limit=0, route=id)
-        qnhs = cms_list(
-            client,
-            "juniper_static_route_qualified_nexthops",
-            StaticRouteQualifiedNexthopSummary,
-            limit=0,
-            route=id,
-        )
-        route.nexthops = nhs.results
-        route.qualified_nexthops = qnhs.results
+        # Fetch nexthops for this specific route (gracefully handle API errors)
+        try:
+            nhs = cms_list(client, "juniper_static_route_nexthops", StaticRouteNexthopSummary, limit=0, route=id)
+            route.nexthops = nhs.results
+        except Exception:
+            route.nexthops = []
+        try:
+            qnhs = cms_list(
+                client,
+                "juniper_static_route_qualified_nexthops",
+                StaticRouteQualifiedNexthopSummary,
+                limit=0,
+                route=id,
+            )
+            route.qualified_nexthops = qnhs.results
+        except Exception:
+            route.qualified_nexthops = []
         return route
     except Exception as e:
         client._handle_api_error(e, "get", "StaticRoute")
@@ -211,7 +212,6 @@ def delete_static_route(client: NautobotClient, id: str) -> dict:
 def list_static_route_nexthops(
     client: NautobotClient,
     route_id: Optional[str] = None,
-    device: Optional[str] = None,
     limit: int = 0,
 ) -> ListResponse[StaticRouteNexthopSummary]:
     """List static route nexthops.
@@ -219,7 +219,6 @@ def list_static_route_nexthops(
     Args:
         client: NautobotClient instance.
         route_id: Filter by parent route UUID.
-        device: Filter by device name or UUID.
         limit: Maximum results (0 = all).
 
     Returns:
@@ -229,8 +228,6 @@ def list_static_route_nexthops(
         filters: dict = {}
         if route_id:
             filters["route"] = route_id
-        if device:
-            filters["device"] = resolve_device_id(client, device)
         return cms_list(client, "juniper_static_route_nexthops", StaticRouteNexthopSummary, limit=limit, **filters)
     except Exception as e:
         client._handle_api_error(e, "list", "StaticRouteNexthop")
@@ -249,7 +246,6 @@ def get_static_route_nexthop(client: NautobotClient, id: str) -> StaticRouteNext
 def list_static_route_qualified_nexthops(
     client: NautobotClient,
     route_id: Optional[str] = None,
-    device: Optional[str] = None,
     limit: int = 0,
 ) -> ListResponse[StaticRouteQualifiedNexthopSummary]:
     """List static route qualified nexthops.
@@ -257,7 +253,6 @@ def list_static_route_qualified_nexthops(
     Args:
         client: NautobotClient instance.
         route_id: Filter by parent route UUID.
-        device: Filter by device name or UUID.
         limit: Maximum results (0 = all).
 
     Returns:
@@ -267,8 +262,6 @@ def list_static_route_qualified_nexthops(
         filters: dict = {}
         if route_id:
             filters["route"] = route_id
-        if device:
-            filters["device"] = resolve_device_id(client, device)
         return cms_list(
             client,
             "juniper_static_route_qualified_nexthops",

@@ -280,7 +280,7 @@ class TestListStaticRoutes:
         assert result.results[0].destination == "192.168.1.0/24"
 
     def test_list_inlines_nexthops(self, mock_client_with_cms, mock_static_route_record):
-        """Verifies nexthops are attached to route results."""
+        """Verifies nexthops are attached to route results via per-route queries."""
         mock_device = MagicMock()
         mock_device.id = "dev-1111-2222-3333-4444"
         mock_client_with_cms.api.dcim.devices.get.return_value = mock_device
@@ -302,8 +302,15 @@ class TestListStaticRoutes:
         nh_record.nexthop_type = "unicast"
         nh_record.via_interface = None
 
+        # Routes query returns route; per-route nexthop queries return nh/empty
         mock_client_with_cms.cms.juniper_static_routes.filter.return_value = [mock_static_route_record]
-        mock_client_with_cms.cms.juniper_static_route_nexthops.filter.return_value = [nh_record]
+
+        def nh_filter_side_effect(**kwargs):
+            if kwargs.get("route") == "route-aaaa-bbbb-cccc-dddd":
+                return [nh_record]
+            return []
+
+        mock_client_with_cms.cms.juniper_static_route_nexthops.filter.side_effect = nh_filter_side_effect
         mock_client_with_cms.cms.juniper_static_route_qualified_nexthops.filter.return_value = []
 
         result = list_static_routes(mock_client_with_cms, device="core-rtr-01")

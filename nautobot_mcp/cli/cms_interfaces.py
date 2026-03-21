@@ -324,14 +324,29 @@ def delete_interface_family_policer(
 @interfaces_cli_app.command("list-vrrp-groups")
 def list_vrrp_groups(
     ctx: typer.Context,
+    device: Optional[str] = typer.Option(None, help="Device name (convenience: lists all VRRP groups for device)"),
     family_id: Optional[str] = typer.Option(None, "--family-id", help="Filter by interface family UUID"),
     limit: int = typer.Option(50, help="Max results (0=all)"),
 ) -> None:
-    """List VRRP groups."""
+    """List VRRP groups, optionally scoped by device."""
     try:
         client = get_client_from_ctx(ctx)
-        result = cms_interfaces.list_vrrp_groups(client, family_id=family_id, limit=limit)
-        _output(result.model_dump(), ctx.obj.get("json", False), VRRP_GROUP_COLUMNS)
+        if device and not family_id:
+            # Device-scoped: traverse units → families → VRRP groups
+            from nautobot_mcp.models.base import ListResponse
+            units = cms_interfaces.list_interface_units(client, device=device, limit=0)
+            all_vrrp = []
+            for unit in units.results:
+                families = cms_interfaces.list_interface_families(client, unit_id=unit.id, limit=0)
+                for fam in families.results:
+                    vrrps = cms_interfaces.list_vrrp_groups(client, family_id=fam.id, limit=0)
+                    all_vrrp.extend(vrrps.results)
+            limited = all_vrrp[:limit] if limit > 0 else all_vrrp
+            result = ListResponse(count=len(all_vrrp), results=limited)
+            _output(result.model_dump(), ctx.obj.get("json", False), VRRP_GROUP_COLUMNS)
+        else:
+            result = cms_interfaces.list_vrrp_groups(client, family_id=family_id, limit=limit)
+            _output(result.model_dump(), ctx.obj.get("json", False), VRRP_GROUP_COLUMNS)
     except Exception as e:
         handle_cli_error(e)
 
