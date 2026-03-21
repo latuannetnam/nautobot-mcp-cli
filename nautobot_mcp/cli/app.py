@@ -128,6 +128,8 @@ from nautobot_mcp.cli.onboard import onboard_app  # noqa: E402
 from nautobot_mcp.cli.verify import verify_app  # noqa: E402
 from nautobot_mcp.cli.cms_routing import routing_app  # noqa: E402
 from nautobot_mcp.cli.cms_interfaces import interfaces_cli_app  # noqa: E402
+from nautobot_mcp.cli.cms_firewalls import firewalls_app  # noqa: E402
+from nautobot_mcp.cli.cms_policies import policies_app  # noqa: E402
 
 app.add_typer(devices_app, name="devices")
 app.add_typer(interfaces_app, name="interfaces")
@@ -143,6 +145,8 @@ app.add_typer(verify_app, name="verify")
 cms_app = typer.Typer(name="cms", help="CMS plugin operations (Juniper models)")
 cms_app.add_typer(routing_app, name="routing")
 cms_app.add_typer(interfaces_cli_app, name="interfaces")
+cms_app.add_typer(firewalls_app, name="firewalls")
+cms_app.add_typer(policies_app, name="policies")
 app.add_typer(cms_app, name="cms")
 
 
