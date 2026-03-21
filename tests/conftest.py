@@ -98,3 +98,41 @@ def mock_interface_record() -> MagicMock:
     iface.ip_addresses = []
 
     return iface
+
+
+@pytest.fixture
+def mock_cms_plugin():
+    """Returns a mock CMS plugin accessor mimicking api.plugins.netnam_cms_core."""
+    cms = MagicMock()
+    # Each endpoint is a mock that supports .all(), .filter(), .get(), .create()
+    return cms
+
+
+@pytest.fixture
+def mock_client_with_cms(mock_nautobot_profile, mock_cms_plugin):
+    """Returns a NautobotClient with mocked CMS plugin accessor."""
+    from nautobot_mcp.client import NautobotClient
+
+    client = NautobotClient(profile=mock_nautobot_profile)
+    # Mock the api property to return a mock with plugins.netnam_cms_core
+    mock_api = MagicMock()
+    mock_api.plugins.netnam_cms_core = mock_cms_plugin
+    mock_api.dcim.devices = MagicMock()
+    client._api = mock_api
+    return client
+
+
+@pytest.fixture
+def mock_cms_record():
+    """Returns a mock CMS record mimicking a pynautobot plugin Record."""
+    record = MagicMock()
+    record.id = "cms-1111-2222-3333-4444"
+    record.display = "test-cms-record"
+    record.url = "http://test/api/plugins/netnam-cms-core/juniper-static-routes/cms-1111/"
+
+    # Device reference
+    record.device.id = "aaaa-bbbb-cccc-dddd"
+    record.device.name = "core-rtr-01"
+    record.device.display = "core-rtr-01"
+
+    return record

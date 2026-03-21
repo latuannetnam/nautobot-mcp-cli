@@ -126,6 +126,11 @@ from nautobot_mcp.cli.golden_config import golden_config_app  # noqa: E402
 from nautobot_mcp.cli.parse import parse_app  # noqa: E402
 from nautobot_mcp.cli.onboard import onboard_app  # noqa: E402
 from nautobot_mcp.cli.verify import verify_app  # noqa: E402
+from nautobot_mcp.cli.cms_routing import routing_app  # noqa: E402
+from nautobot_mcp.cli.cms_interfaces import interfaces_cli_app  # noqa: E402
+from nautobot_mcp.cli.cms_firewalls import firewalls_app  # noqa: E402
+from nautobot_mcp.cli.cms_policies import policies_app  # noqa: E402
+from nautobot_mcp.cli.cms_drift import drift_app  # noqa: E402
 
 app.add_typer(devices_app, name="devices")
 app.add_typer(interfaces_app, name="interfaces")
@@ -136,6 +141,15 @@ app.add_typer(golden_config_app, name="golden-config")
 app.add_typer(parse_app, name="parse")
 app.add_typer(onboard_app, name="onboard")
 app.add_typer(verify_app, name="verify")
+
+# CMS plugin sub-group
+cms_app = typer.Typer(name="cms", help="CMS plugin operations (Juniper models)")
+cms_app.add_typer(routing_app, name="routing")
+cms_app.add_typer(interfaces_cli_app, name="interfaces")
+cms_app.add_typer(firewalls_app, name="firewalls")
+cms_app.add_typer(policies_app, name="policies")
+cms_app.add_typer(drift_app, name="drift")
+app.add_typer(cms_app, name="cms")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,84 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+> Changes targeting the next milestone (v1.3) will appear here.
+
+Candidates:
+- Multi-vendor config parsers (Cisco IOS/IOS-XE, Arista EOS)
+- Bulk device onboarding (batch config files)
+- Config remediation suggestions based on drift reports
+- Extended drift coverage (interfaces, firewalls)
+
+---
+
+## [v1.2] — 2026-03-21
+
+### Juniper CMS Model CRUD Tools
+
+Full CRUD MCP tools for all Juniper-specific models in the `netnam-cms-core` Nautobot plugin — 5 model domains, 40+ Pydantic models, and a new `nautobot_mcp/cms/` subpackage.
+
+**Routing** (BGP groups, BGP neighbors, static routes with inlined next-hops, routing instances)
+- `nautobot_cms_list_static_routes` / `nautobot_cms_get_static_route` / `nautobot_cms_create_static_route` / `nautobot_cms_delete_static_route`
+- `nautobot_cms_list_bgp_groups` / `nautobot_cms_get_bgp_group` / `nautobot_cms_create_bgp_group` / `nautobot_cms_delete_bgp_group`
+- `nautobot_cms_list_bgp_neighbors` / `nautobot_cms_get_bgp_neighbor` / `nautobot_cms_create_bgp_neighbor` / `nautobot_cms_delete_bgp_neighbor`
+- `nautobot_cms_list_bgp_address_families` / `nautobot_cms_list_bgp_policy_associations` / `nautobot_cms_list_bgp_received_routes`
+- `nautobot_cms_list_routing_instances` / `nautobot_cms_list_static_route_nexthops`
+
+**Interfaces** (interface units, address families, filter/policer associations, VRRP)
+- `nautobot_cms_list_interface_units` / `nautobot_cms_get_interface_unit` / `nautobot_cms_create_interface_unit` / `nautobot_cms_delete_interface_unit`
+- `nautobot_cms_list_interface_families` / `nautobot_cms_get_interface_family`
+- `nautobot_cms_list_ff_associations` / `nautobot_cms_create_ff_association` / `nautobot_cms_delete_ff_association`
+- `nautobot_cms_list_fp_associations` / `nautobot_cms_create_fp_association` / `nautobot_cms_delete_fp_association`
+- `nautobot_cms_list_vrrp_groups` / `nautobot_cms_get_vrrp_group` / `nautobot_cms_create_vrrp_group` / `nautobot_cms_delete_vrrp_group`
+
+**Firewalls & Policies** (firewall filters, terms, match conditions, policers, policy statements)
+- `nautobot_cms_list_firewall_filters` / `nautobot_cms_get_firewall_filter` / `nautobot_cms_create_firewall_filter` / `nautobot_cms_delete_firewall_filter`
+- `nautobot_cms_list_firewall_terms` / `nautobot_cms_create_firewall_term` / `nautobot_cms_delete_firewall_term`
+- `nautobot_cms_list_firewall_policers` / `nautobot_cms_create_firewall_policer` / `nautobot_cms_delete_firewall_policer`
+- `nautobot_cms_list_policy_statements` / `nautobot_cms_create_policy_statement` / `nautobot_cms_delete_policy_statement`
+- Plus policy terms, match conditions, actions, prefix lists, communities, AS paths
+
+**ARP**
+- `nautobot_cms_list_arp_entries` / `nautobot_cms_get_arp_entry` / `nautobot_cms_create_arp_entry` / `nautobot_cms_delete_arp_entry`
+
+### Composite Summary Tools
+
+Single-call summaries aggregating across related models:
+- `nautobot_cms_get_device_bgp_summary` — all BGP groups + neighbor counts + session state in one call; `detail=True` expands per-group neighbors with address families and policy associations
+- `nautobot_cms_get_device_routing_table` — all static routes with inlined next-hops and routing instances
+- `nautobot_cms_get_interface_detail` — full interface unit view: families, filter/policer associations, VRRP groups, ARP entries
+- `nautobot_cms_get_device_firewall_summary` — all firewall filters with term counts and policer associations
+
+### CMS Drift Verification
+
+DiffSync-based live-vs-CMS comparison — no config files required:
+- `nautobot_cms_compare_bgp_neighbors` — compare BGP neighbors collected from a live device (via jmcp) against Nautobot CMS records; returns `CMSDriftReport` with `missing`, `extra`, and `changed` sections
+- `nautobot_cms_compare_static_routes` — same for static routes; nexthop comparison is order-independent
+
+### CLI Commands
+
+CMS model operations under `nautobot-mcp cms`:
+- `nautobot-mcp cms routing <subcommand>` — full CRUD + `bgp-summary` + `routing-table`
+- `nautobot-mcp cms interfaces <subcommand>` — full CRUD + `detail` + ARP (`list-arp-entries`, `get-arp-entry`)
+- `nautobot-mcp cms firewalls <subcommand>` — full CRUD + `firewall-summary`
+- `nautobot-mcp cms policies <subcommand>` — full CRUD
+- `nautobot-mcp cms drift bgp --device DEVICE --from-file live.json` — BGP drift check
+- `nautobot-mcp cms drift routes --device DEVICE --from-file live.json` — route drift check
+
+### Agent Skills
+
+- `cms-device-audit` skill — 8-step CMS-aware device audit workflow: confirm device in Nautobot → collect live BGP + routes via jmcp → compare against CMS records → review interface detail + firewall summary → compile audit report with action guidance
+
+### Stats
+
+- MCP tools: 46 → **164**
+- Unit tests: 105 → **293**
+- Phases: 7 (CMS foundation, routing, interfaces, firewalls/policies, ARP+composites, drift engine, CLI+skills)
+
+---
+
 ## [v1.1] — 2026-03-20
 
 ### Added
@@ -101,18 +179,6 @@ Initial release — full Nautobot automation via MCP and CLI.
 - MCP tools: **44**
 - Unit tests: **76**
 - Lines of code: ~3,400 Python
-
----
-
-## [Unreleased]
-
-> Changes targeting the next milestone (v1.2) will appear here.
-
-Candidates:
-- Multi-vendor config parsers (Cisco IOS/IOS-XE, Arista EOS)
-- Bulk device onboarding (batch config files)
-- Config remediation suggestions based on drift reports
-- Enhanced "Audit Device" agent skill
 
 ---
 

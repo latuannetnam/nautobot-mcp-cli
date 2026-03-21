@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.2
-milestone_name: Juniper CMS Model MCP Tools
-status: requirements
-last_updated: "2026-03-20T16:43:00+07:00"
+milestone_name: — Juniper CMS Model MCP Tools
+status: unknown
+last_updated: "2026-03-21T11:41:16.046Z"
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 18
+  completed_plans: 18
 ---
 
 # Project State: nautobot-mcp-cli
@@ -18,14 +18,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Defining requirements for v1.2
+**Current focus:** Phase 14 — cli-commands-agent-skill-guides
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-20 — Milestone v1.2 started
+Phase: 14 (cli-commands-agent-skill-guides) — PENDING
+Plan: 0 of 0
+
+## Phase 09 Summary
+
+All 3 plans executed:
+
+- **09-01**: 8 Pydantic routing models + 20+ CRUD functions
+- **09-02**: 14 MCP tools in server.py (nautobot_cms_ prefix)
+- **09-03**: 13 CLI commands + 22 unit tests (153 total passing)
+
+Key files added:
+
+- `nautobot_mcp/models/cms/routing.py` — StaticRoute, BGPGroup, BGPNeighbor, etc.
+- `nautobot_mcp/cms/routing.py` — all CRUD + nexthop inlining
+- `nautobot_mcp/cli/cms_routing.py` — routing subcommands
+- `tests/test_cms_routing.py` — 22 unit tests
+- server.py extended with 14 nautobot_cms_* tools
 
 ## Context
 
@@ -46,11 +60,14 @@ Last activity: 2026-03-20 — Milestone v1.2 started
 | DiffSync v2 for verification | 4 | Object-by-object diff with structured output |
 | Factory-style adapter init | 4 | DiffSync v2 Adapter.__new__ only accepts kwargs |
 | netnam-cms-core via plugin API | v1.2 | Plugin exposes 49 DRF endpoints, consume directly |
+| CMS routing nexthop inlining | 9 | Static route nexthops inlined into parent for MCP efficiency |
+| BGP neighbor device-scoping | 9 | Neighbors scoped via group → device chain for device queries |
 
 ## Accumulated Context
 
 - v1.0 shipped 2026-03-18 with 44+ MCP tools, CLI, agent skills
 - v1.1 shipped 2026-03-20 with 46 MCP tools, 105 tests, ~11k LOC
+- v1.2 in progress: Phase 8 (CMS foundation) + Phase 9 (routing) done
 - Architecture: shared core library + thin MCP/CLI layers
 - jmcp `show configuration | display json` returns null for large configs
 - pynautobot `ip_addresses.filter(interface_id=...)` not a valid filter
@@ -63,4 +80,4 @@ None.
 
 ---
 *State initialized: 2026-03-17*
-*Last updated: 2026-03-20T16:43:00+07:00*
+*Last updated: 2026-03-20T17:00:00+07:00*

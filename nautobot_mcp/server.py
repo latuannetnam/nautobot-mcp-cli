@@ -21,6 +21,11 @@ from nautobot_mcp import golden_config as gc
 from nautobot_mcp import onboarding, verification
 from nautobot_mcp import drift
 from nautobot_mcp.parsers import ParserRegistry
+from nautobot_mcp.cms import firewalls as cms_firewalls
+from nautobot_mcp.cms import interfaces as cms_interfaces
+from nautobot_mcp.cms import policies as cms_policies
+from nautobot_mcp.cms import routing as cms_routing
+from nautobot_mcp.cms import arp as cms_arp
 
 mcp = FastMCP("Nautobot MCP Server")
 
@@ -1327,9 +1332,2551 @@ def nautobot_compare_device(
         handle_error(e)
 
 
+# ===========================================================================
+# CMS ROUTING TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_static_routes")
+def nautobot_cms_list_static_routes(
+    device: str,
+    routing_instance: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List Juniper static routes for a device with inlined next-hops.
+
+    Args:
+        device: Device name or UUID.
+        routing_instance: Filter by routing instance name (e.g. "mgmt").
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results. Each route includes nexthops and
+        qualified_nexthops inlined.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_static_routes(
+            client, device=device, routing_instance=routing_instance, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_static_route")
+def nautobot_cms_get_static_route(id: str) -> dict:
+    """Get a single Juniper static route by UUID, with inlined next-hops.
+
+    Args:
+        id: Static route UUID.
+
+    Returns:
+        Static route dict with nexthops and qualified_nexthops inlined.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_static_route(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_static_route")
+def nautobot_cms_create_static_route(
+    device: str,
+    destination: str,
+    routing_table: str = "inet.0",
+    preference: int = 5,
+) -> dict:
+    """Create a Juniper static route.
+
+    Args:
+        device: Device name or UUID.
+        destination: Route destination prefix (e.g. "192.168.1.0/24").
+        routing_table: Routing table name (default: inet.0).
+        preference: Administrative distance (default: 5).
+
+    Returns:
+        Created static route dict.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.create_static_route(
+            client, device=device, destination=destination,
+            routing_table=routing_table, preference=preference,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_static_route")
+def nautobot_cms_update_static_route(
+    id: str,
+    preference: Optional[int] = None,
+    metric: Optional[int] = None,
+    enabled: Optional[bool] = None,
+) -> dict:
+    """Update a Juniper static route.
+
+    Args:
+        id: Static route UUID.
+        preference: New preference (optional).
+        metric: New metric (optional).
+        enabled: Enable/disable (optional).
+
+    Returns:
+        Updated static route dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if preference is not None:
+            updates["preference"] = preference
+        if metric is not None:
+            updates["metric"] = metric
+        if enabled is not None:
+            updates["enabled"] = enabled
+        result = cms_routing.update_static_route(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_static_route")
+def nautobot_cms_delete_static_route(id: str) -> dict:
+    """Delete a Juniper static route.
+
+    Args:
+        id: Static route UUID.
+
+    Returns:
+        Dict with success status and message.
+    """
+    try:
+        client = get_client()
+        return cms_routing.delete_static_route(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_groups")
+def nautobot_cms_list_bgp_groups(
+    device: str,
+    routing_instance: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List Juniper BGP groups for a device.
+
+    Args:
+        device: Device name or UUID.
+        routing_instance: Filter by routing instance name (optional).
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (list of BGP group dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_groups(
+            client, device=device, routing_instance=routing_instance, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_bgp_group")
+def nautobot_cms_get_bgp_group(id: str) -> dict:
+    """Get a single Juniper BGP group by UUID.
+
+    Args:
+        id: BGP group UUID.
+
+    Returns:
+        BGP group dict.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_bgp_group(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_bgp_group")
+def nautobot_cms_create_bgp_group(
+    device: str,
+    name: str,
+    type: str,
+    local_address: Optional[str] = None,
+    cluster_id: Optional[str] = None,
+) -> dict:
+    """Create a Juniper BGP group.
+
+    Args:
+        device: Device name or UUID.
+        name: BGP group name.
+        type: Group type ('internal' or 'external').
+        local_address: Local address IP UUID (optional).
+        cluster_id: Cluster ID for route reflector (optional).
+
+    Returns:
+        Created BGP group dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if local_address is not None:
+            kwargs["local_address"] = local_address
+        if cluster_id is not None:
+            kwargs["cluster_id"] = cluster_id
+        result = cms_routing.create_bgp_group(
+            client, device=device, name=name, type=type, **kwargs
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_bgp_group")
+def nautobot_cms_update_bgp_group(
+    id: str,
+    name: Optional[str] = None,
+    enabled: Optional[bool] = None,
+) -> dict:
+    """Update a Juniper BGP group.
+
+    Args:
+        id: BGP group UUID.
+        name: New name (optional).
+        enabled: Enable/disable (optional).
+
+    Returns:
+        Updated BGP group dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if enabled is not None:
+            updates["enabled"] = enabled
+        result = cms_routing.update_bgp_group(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_bgp_group")
+def nautobot_cms_delete_bgp_group(id: str) -> dict:
+    """Delete a Juniper BGP group.
+
+    Args:
+        id: BGP group UUID.
+
+    Returns:
+        Dict with success status and message.
+    """
+    try:
+        client = get_client()
+        return cms_routing.delete_bgp_group(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_neighbors")
+def nautobot_cms_list_bgp_neighbors(
+    device: Optional[str] = None,
+    group_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List BGP neighbors. Provide device name to see all neighbors across all groups
+    for device, or group_id for a specific group.
+
+    Args:
+        device: Device name or UUID (device-scoped query via all groups).
+        group_id: Filter by specific BGP group UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (list of BGP neighbor dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_neighbors(
+            client, device=device, group_id=group_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_bgp_neighbor")
+def nautobot_cms_get_bgp_neighbor(id: str) -> dict:
+    """Get a single BGP neighbor by UUID.
+
+    Args:
+        id: BGP neighbor UUID.
+
+    Returns:
+        BGP neighbor dict with session state and prefix counts.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_bgp_neighbor(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_bgp_neighbor")
+def nautobot_cms_create_bgp_neighbor(
+    group_id: str,
+    peer_ip: str,
+    peer_as: Optional[int] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a BGP neighbor.
+
+    Args:
+        group_id: Parent BGP group UUID.
+        peer_ip: Peer IP address UUID or string.
+        peer_as: Peer autonomous system number (optional).
+        description: Neighbor description (optional).
+
+    Returns:
+        Created BGP neighbor dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if peer_as is not None:
+            kwargs["peer_as"] = peer_as
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_routing.create_bgp_neighbor(
+            client, group_id=group_id, peer_ip=peer_ip, **kwargs
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_bgp_neighbor")
+def nautobot_cms_update_bgp_neighbor(
+    id: str,
+    peer_as: Optional[int] = None,
+    enabled: Optional[bool] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a BGP neighbor.
+
+    Args:
+        id: BGP neighbor UUID.
+        peer_as: New peer AS (optional).
+        enabled: Enable/disable (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated BGP neighbor dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if peer_as is not None:
+            updates["peer_as"] = peer_as
+        if enabled is not None:
+            updates["enabled"] = enabled
+        if description is not None:
+            updates["description"] = description
+        result = cms_routing.update_bgp_neighbor(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_bgp_neighbor")
+def nautobot_cms_delete_bgp_neighbor(id: str) -> dict:
+    """Delete a BGP neighbor.
+
+    Args:
+        id: BGP neighbor UUID.
+
+    Returns:
+        Dict with success status and message.
+    """
+    try:
+        client = get_client()
+        return cms_routing.delete_bgp_neighbor(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_address_families")
+def nautobot_cms_list_bgp_address_families(
+    group_id: Optional[str] = None,
+    neighbor_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List BGP address families, optionally filtered by group or neighbor.
+
+    Args:
+        group_id: Filter by BGP group UUID.
+        neighbor_id: Filter by BGP neighbor UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_address_families(
+            client, group_id=group_id, neighbor_id=neighbor_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_policy_associations")
+def nautobot_cms_list_bgp_policy_associations(
+    group_id: Optional[str] = None,
+    neighbor_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List BGP policy associations, optionally filtered by group or neighbor.
+
+    Args:
+        group_id: Filter by BGP group UUID.
+        neighbor_id: Filter by BGP neighbor UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_policy_associations(
+            client, group_id=group_id, neighbor_id=neighbor_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_received_routes")
+def nautobot_cms_list_bgp_received_routes(
+    neighbor_id: str,
+    limit: int = 50,
+) -> dict:
+    """List BGP received routes for a specific BGP neighbor (read-only).
+
+    Args:
+        neighbor_id: BGP neighbor UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (BGP received route dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_received_routes(
+            client, neighbor_id=neighbor_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_static_route_nexthops")
+def nautobot_cms_list_static_route_nexthops(
+    route_id: Optional[str] = None,
+    device: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List static route nexthops, optionally filtered by route or device.
+
+    Args:
+        route_id: Filter by parent static route UUID.
+        device: Filter by device name or UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_static_route_nexthops(
+            client, route_id=route_id, device=device, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS ROUTING COMPOSITE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_get_device_bgp_summary")
+def nautobot_cms_get_device_bgp_summary(
+    device: str,
+    detail: bool = False,
+) -> dict:
+    """Get a composite BGP summary for a Juniper device.
+
+    Aggregates all BGP groups and their neighbors into a single response.
+    In detail mode, each neighbor includes its address families and policy
+    associations inline.
+
+    Args:
+        device: Device name or UUID.
+        detail: If True, include address families and policy associations per neighbor.
+
+    Returns:
+        Dict with device_name, groups (with nested neighbors), total_groups,
+        total_neighbors.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_device_bgp_summary(client, device=device, detail=detail)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_device_routing_table")
+def nautobot_cms_get_device_routing_table(
+    device: str,
+    detail: bool = False,
+) -> dict:
+    """Get a composite routing table summary for a Juniper device.
+
+    Returns all static routes for the device. In default mode, nexthop counts
+    are included but not the full nexthop list. In detail mode, all nexthops
+    and qualified nexthops are inlined per route.
+
+    Args:
+        device: Device name or UUID.
+        detail: If True, include full nexthop data per route.
+
+    Returns:
+        Dict with device_name, routes (list), total_routes.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_device_routing_table(client, device=device, detail=detail)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS INTERFACE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_interface_units")
+def nautobot_cms_list_interface_units(
+    device: str,
+    limit: int = 50,
+) -> dict:
+    """List Juniper interface units for a device. Returns shallow list with family_count per unit.
+
+    Args:
+        device: Device name or UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each unit has family_count).
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_units(client, device=device, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_unit")
+def nautobot_cms_get_interface_unit(id: str) -> dict:
+    """Get a single interface unit with inlined family details (filters, policers).
+
+    Args:
+        id: Interface unit UUID.
+
+    Returns:
+        Interface unit dict with family_count populated.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_unit(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_unit")
+def nautobot_cms_create_interface_unit(
+    interface_id: str,
+    vlan_mode: Optional[str] = None,
+    encapsulation: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper interface unit.
+
+    Args:
+        interface_id: UUID of the parent interface.
+        vlan_mode: VLAN mode (access, trunk, etc.).
+        encapsulation: Encapsulation type.
+        description: Unit description.
+
+    Returns:
+        Created interface unit dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if vlan_mode is not None:
+            kwargs["vlan_mode"] = vlan_mode
+        if encapsulation is not None:
+            kwargs["encapsulation"] = encapsulation
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_interfaces.create_interface_unit(client, interface_id=interface_id, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_interface_unit")
+def nautobot_cms_update_interface_unit(
+    id: str,
+    vlan_mode: Optional[str] = None,
+    encapsulation: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper interface unit.
+
+    Args:
+        id: Interface unit UUID.
+        vlan_mode: New VLAN mode.
+        encapsulation: New encapsulation type.
+        description: New description.
+
+    Returns:
+        Updated interface unit dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if vlan_mode is not None:
+            updates["vlan_mode"] = vlan_mode
+        if encapsulation is not None:
+            updates["encapsulation"] = encapsulation
+        if description is not None:
+            updates["description"] = description
+        result = cms_interfaces.update_interface_unit(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_unit")
+def nautobot_cms_delete_interface_unit(id: str) -> dict:
+    """Delete a Juniper interface unit.
+
+    Args:
+        id: Interface unit UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_unit(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_interface_families")
+def nautobot_cms_list_interface_families(
+    unit_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List interface families, optionally filtered by interface unit.
+
+    Args:
+        unit_id: Filter by parent interface unit UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_families(client, unit_id=unit_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_family")
+def nautobot_cms_get_interface_family(id: str) -> dict:
+    """Get a single interface family by UUID.
+
+    Args:
+        id: Interface family UUID.
+
+    Returns:
+        Interface family dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_family(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_family")
+def nautobot_cms_create_interface_family(
+    unit_id: str,
+    family_type: str,
+) -> dict:
+    """Create a Juniper interface family.
+
+    Args:
+        unit_id: UUID of the parent interface unit.
+        family_type: Address family type (inet, inet6, mpls, etc.).
+
+    Returns:
+        Created interface family dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_interface_family(client, unit_id=unit_id, family_type=family_type)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_interface_family")
+def nautobot_cms_update_interface_family(
+    id: str,
+    family_type: Optional[str] = None,
+) -> dict:
+    """Update a Juniper interface family.
+
+    Args:
+        id: Interface family UUID.
+        family_type: New family type.
+
+    Returns:
+        Updated interface family dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if family_type is not None:
+            updates["family_type"] = family_type
+        result = cms_interfaces.update_interface_family(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_family")
+def nautobot_cms_delete_interface_family(id: str) -> dict:
+    """Delete a Juniper interface family.
+
+    Args:
+        id: Interface family UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_family(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_interface_family_filters")
+def nautobot_cms_list_interface_family_filters(
+    family_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List interface family filter associations, optionally filtered by family.
+
+    Args:
+        family_id: Filter by parent interface family UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only associations).
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_family_filters(client, family_id=family_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_family_filter")
+def nautobot_cms_get_interface_family_filter(id: str) -> dict:
+    """Get a single interface family filter association by UUID.
+
+    Args:
+        id: Filter association UUID.
+
+    Returns:
+        Filter association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_family_filter(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_family_filter")
+def nautobot_cms_create_interface_family_filter(
+    family_id: str,
+    filter_id: str,
+    filter_type: str,
+    enabled: bool = True,
+) -> dict:
+    """Create an interface family filter association.
+
+    Args:
+        family_id: UUID of the parent interface family.
+        filter_id: UUID of the filter to associate.
+        filter_type: Filter direction/type (input, output, etc.).
+        enabled: Whether the association is active.
+
+    Returns:
+        Created filter association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_interface_family_filter(
+            client, family_id=family_id, filter_id=filter_id,
+            filter_type=filter_type, enabled=enabled,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_family_filter")
+def nautobot_cms_delete_interface_family_filter(id: str) -> dict:
+    """Delete an interface family filter association.
+
+    Args:
+        id: Filter association UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_family_filter(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_interface_family_policers")
+def nautobot_cms_list_interface_family_policers(
+    family_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List interface family policer associations, optionally filtered by family.
+
+    Args:
+        family_id: Filter by parent interface family UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_family_policers(client, family_id=family_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_family_policer")
+def nautobot_cms_get_interface_family_policer(id: str) -> dict:
+    """Get a single interface family policer association by UUID.
+
+    Args:
+        id: Policer association UUID.
+
+    Returns:
+        Policer association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_family_policer(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_family_policer")
+def nautobot_cms_create_interface_family_policer(
+    family_id: str,
+    policer_id: str,
+    policer_type: str,
+    enabled: bool = True,
+) -> dict:
+    """Create an interface family policer association.
+
+    Args:
+        family_id: UUID of the parent interface family.
+        policer_id: UUID of the policer to associate.
+        policer_type: Policer direction/type (input, output, etc.).
+        enabled: Whether the association is active.
+
+    Returns:
+        Created policer association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_interface_family_policer(
+            client, family_id=family_id, policer_id=policer_id,
+            policer_type=policer_type, enabled=enabled,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_family_policer")
+def nautobot_cms_delete_interface_family_policer(id: str) -> dict:
+    """Delete an interface family policer association.
+
+    Args:
+        id: Policer association UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_family_policer(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_vrrp_groups")
+def nautobot_cms_list_vrrp_groups(
+    family_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List VRRP groups, optionally filtered by interface family.
+
+    Args:
+        family_id: Filter by parent interface family UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_vrrp_groups(client, family_id=family_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_vrrp_group")
+def nautobot_cms_get_vrrp_group(id: str) -> dict:
+    """Get a single VRRP group by UUID.
+
+    Args:
+        id: VRRP group UUID.
+
+    Returns:
+        VRRP group dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_vrrp_group(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_vrrp_group")
+def nautobot_cms_create_vrrp_group(
+    family_id: str,
+    group_number: int,
+    virtual_address_id: str,
+    priority: int = 100,
+) -> dict:
+    """Create a VRRP group.
+
+    Args:
+        family_id: UUID of the parent interface family.
+        group_number: VRRP group number (1-255).
+        virtual_address_id: UUID of the virtual IP address.
+        priority: VRRP priority (1-254, default 100).
+
+    Returns:
+        Created VRRP group dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_vrrp_group(
+            client, family_id=family_id, group_number=group_number,
+            virtual_address_id=virtual_address_id, priority=priority,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_vrrp_group")
+def nautobot_cms_update_vrrp_group(
+    id: str,
+    priority: Optional[int] = None,
+    accept_data: Optional[bool] = None,
+    preempt_hold_time: Optional[int] = None,
+) -> dict:
+    """Update a VRRP group.
+
+    Args:
+        id: VRRP group UUID.
+        priority: New priority (optional).
+        accept_data: Accept data for virtual IP (optional).
+        preempt_hold_time: Preempt hold time in seconds (optional).
+
+    Returns:
+        Updated VRRP group dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if priority is not None:
+            updates["priority"] = priority
+        if accept_data is not None:
+            updates["accept_data"] = accept_data
+        if preempt_hold_time is not None:
+            updates["preempt_hold_time"] = preempt_hold_time
+        result = cms_interfaces.update_vrrp_group(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_vrrp_group")
+def nautobot_cms_delete_vrrp_group(id: str) -> dict:
+    """Delete a VRRP group.
+
+    Args:
+        id: VRRP group UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_vrrp_group(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_vrrp_track_routes")
+def nautobot_cms_list_vrrp_track_routes(
+    vrrp_group_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List VRRP tracked routes (read-only), optionally filtered by VRRP group.
+
+    Args:
+        vrrp_group_id: Filter by parent VRRP group UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_vrrp_track_routes(client, vrrp_group_id=vrrp_group_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_vrrp_track_route")
+def nautobot_cms_get_vrrp_track_route(id: str) -> dict:
+    """Get a single VRRP tracked route by UUID (read-only).
+
+    Args:
+        id: VRRP track route UUID.
+
+    Returns:
+        VRRP track route dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_vrrp_track_route(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_vrrp_track_interfaces")
+def nautobot_cms_list_vrrp_track_interfaces(
+    vrrp_group_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List VRRP tracked interfaces (read-only), optionally filtered by VRRP group.
+
+    Args:
+        vrrp_group_id: Filter by parent VRRP group UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_vrrp_track_interfaces(client, vrrp_group_id=vrrp_group_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_vrrp_track_interface")
+def nautobot_cms_get_vrrp_track_interface(id: str) -> dict:
+    """Get a single VRRP tracked interface by UUID (read-only).
+
+    Args:
+        id: VRRP track interface UUID.
+
+    Returns:
+        VRRP track interface dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_vrrp_track_interface(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS INTERFACE COMPOSITE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_get_interface_detail")
+def nautobot_cms_get_interface_detail(
+    device: str,
+    include_arp: bool = False,
+) -> dict:
+    """Get a composite interface detail summary for a Juniper device.
+
+    Aggregates all interface units with their sub-families and VRRP groups
+    in one call. Optionally includes ARP entries per interface.
+
+    Args:
+        device: Device name or UUID.
+        include_arp: If True, include ARP entries for the device, matched
+            by interface name.
+
+    Returns:
+        Dict with device_name, units (with nested families and vrrp_groups),
+        total_units, and optionally arp_entries.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_detail(client, device=device, include_arp=include_arp)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_device_firewall_summary")
+def nautobot_cms_get_device_firewall_summary(
+    device: str,
+    detail: bool = False,
+) -> dict:
+    """Get a composite firewall summary for a Juniper device.
+
+    Returns all firewall filters (with term counts) and policers (with
+    action counts) for a device. In detail mode, each filter includes its
+    terms inlined and each policer includes its actions.
+
+    Args:
+        device: Device name or UUID.
+        detail: If True, include inlined terms per filter and actions per policer.
+
+    Returns:
+        Dict with device_name, filters (list), policers (list),
+        total_filters, total_policers.
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.get_device_firewall_summary(client, device=device, detail=detail)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS FIREWALL TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_firewall_filters")
+def nautobot_cms_list_firewall_filters(
+    device: str,
+    family: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List Juniper firewall filters for a device.
+
+    Args:
+        device: Device name or UUID.
+        family: Address family filter (inet, inet6, vpls, etc.).
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each filter has term_count).
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.list_firewall_filters(client, device=device, family=family, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_firewall_filter")
+def nautobot_cms_get_firewall_filter(id: str) -> dict:
+    """Get a firewall filter with inlined term summaries.
+
+    Args:
+        id: Firewall filter UUID.
+
+    Returns:
+        Filter dict with term_count and terms list.
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.get_firewall_filter(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_firewall_filter")
+def nautobot_cms_create_firewall_filter(
+    device: str,
+    name: str,
+    family: str = "inet",
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper firewall filter.
+
+    Args:
+        device: Device name or UUID.
+        name: Filter name.
+        family: Address family (inet, inet6, vpls). Default: inet.
+        description: Optional description.
+
+    Returns:
+        Created filter dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_firewalls.create_firewall_filter(client, device=device, name=name, family=family, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_firewall_filter")
+def nautobot_cms_update_firewall_filter(
+    id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper firewall filter.
+
+    Args:
+        id: Filter UUID.
+        name: New name (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated filter dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if description is not None:
+            updates["description"] = description
+        result = cms_firewalls.update_firewall_filter(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_firewall_filter")
+def nautobot_cms_delete_firewall_filter(id: str) -> dict:
+    """Delete a Juniper firewall filter.
+
+    Args:
+        id: Filter UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_firewalls.delete_firewall_filter(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_firewall_policers")
+def nautobot_cms_list_firewall_policers(
+    device: str,
+    limit: int = 50,
+) -> dict:
+    """List Juniper firewall policers for a device.
+
+    Args:
+        device: Device name or UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each policer has action_count).
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.list_firewall_policers(client, device=device, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_firewall_policer")
+def nautobot_cms_get_firewall_policer(id: str) -> dict:
+    """Get a firewall policer with inlined actions.
+
+    Args:
+        id: Policer UUID.
+
+    Returns:
+        Policer dict with action_count and actions list.
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.get_firewall_policer(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_firewall_policer")
+def nautobot_cms_create_firewall_policer(
+    device: str,
+    name: str,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper firewall policer.
+
+    Args:
+        device: Device name or UUID.
+        name: Policer name.
+        description: Optional description.
+
+    Returns:
+        Created policer dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_firewalls.create_firewall_policer(client, device=device, name=name, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_firewall_policer")
+def nautobot_cms_update_firewall_policer(
+    id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper firewall policer.
+
+    Args:
+        id: Policer UUID.
+        name: New name (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated policer dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if description is not None:
+            updates["description"] = description
+        result = cms_firewalls.update_firewall_policer(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_firewall_policer")
+def nautobot_cms_delete_firewall_policer(id: str) -> dict:
+    """Delete a Juniper firewall policer.
+
+    Args:
+        id: Policer UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_firewalls.delete_firewall_policer(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_firewall_terms")
+def nautobot_cms_list_firewall_terms(
+    filter_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List firewall terms (read-only), optionally by parent filter.
+
+    Args:
+        filter_id: Filter by parent firewall filter UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each term has match_count, action_count).
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.list_firewall_terms(client, filter_id=filter_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_firewall_term")
+def nautobot_cms_get_firewall_term(id: str) -> dict:
+    """Get a firewall term with inlined match conditions and actions.
+
+    Args:
+        id: Term UUID.
+
+    Returns:
+        Term dict with match_conditions and actions lists.
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.get_firewall_term(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_firewall_match_conditions")
+def nautobot_cms_list_firewall_match_conditions(
+    term_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List firewall match conditions (read-only), optionally by parent term.
+
+    Args:
+        term_id: Filter by parent firewall term UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.list_firewall_match_conditions(client, term_id=term_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_firewall_match_condition")
+def nautobot_cms_get_firewall_match_condition(id: str) -> dict:
+    """Get a single firewall match condition by UUID."""
+    try:
+        client = get_client()
+        result = cms_firewalls.get_firewall_match_condition(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_firewall_filter_actions")
+def nautobot_cms_list_firewall_filter_actions(
+    term_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List firewall filter actions (read-only), optionally by parent term.
+
+    Args:
+        term_id: Filter by parent firewall term UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.list_firewall_filter_actions(client, term_id=term_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_firewall_filter_action")
+def nautobot_cms_get_firewall_filter_action(id: str) -> dict:
+    """Get a single firewall filter action by UUID."""
+    try:
+        client = get_client()
+        result = cms_firewalls.get_firewall_filter_action(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_firewall_policer_actions")
+def nautobot_cms_list_firewall_policer_actions(
+    policer_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List firewall policer actions (read-only), optionally by parent policer.
+
+    Args:
+        policer_id: Filter by parent policer UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.list_firewall_policer_actions(client, policer_id=policer_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_firewall_policer_action")
+def nautobot_cms_get_firewall_policer_action(id: str) -> dict:
+    """Get a single firewall policer action by UUID."""
+    try:
+        client = get_client()
+        result = cms_firewalls.get_firewall_policer_action(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_firewall_match_condition_prefix_lists")
+def nautobot_cms_list_firewall_match_condition_prefix_lists(
+    match_condition_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List firewall match condition to prefix list associations (read-only).
+
+    Args:
+        match_condition_id: Filter by parent match condition UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.list_firewall_match_condition_prefix_lists(
+            client, match_condition_id=match_condition_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_firewall_match_condition_prefix_list")
+def nautobot_cms_get_firewall_match_condition_prefix_list(id: str) -> dict:
+    """Get a single firewall match condition to prefix list association by UUID."""
+    try:
+        client = get_client()
+        result = cms_firewalls.get_firewall_match_condition_prefix_list(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS POLICY TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_policy_statements")
+def nautobot_cms_list_policy_statements(
+    device: str,
+    limit: int = 50,
+) -> dict:
+    """List Juniper policy statements for a device.
+
+    Args:
+        device: Device name or UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each statement has term_count).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_policy_statements(client, device=device, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_policy_statement")
+def nautobot_cms_get_policy_statement(id: str) -> dict:
+    """Get a policy statement with inlined term summaries.
+
+    Args:
+        id: Policy statement UUID.
+
+    Returns:
+        Statement dict with term_count and terms list.
+    """
+    try:
+        client = get_client()
+        result = cms_policies.get_policy_statement(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_policy_statement")
+def nautobot_cms_create_policy_statement(
+    device: str,
+    name: str,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper policy statement.
+
+    Args:
+        device: Device name or UUID.
+        name: Statement name.
+        description: Optional description.
+
+    Returns:
+        Created statement dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_policies.create_policy_statement(client, device=device, name=name, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_policy_statement")
+def nautobot_cms_update_policy_statement(
+    id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper policy statement.
+
+    Args:
+        id: Statement UUID.
+        name: New name (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated statement dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if description is not None:
+            updates["description"] = description
+        result = cms_policies.update_policy_statement(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_policy_statement")
+def nautobot_cms_delete_policy_statement(id: str) -> dict:
+    """Delete a Juniper policy statement.
+
+    Args:
+        id: Statement UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_policies.delete_policy_statement(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_policy_prefix_lists")
+def nautobot_cms_list_policy_prefix_lists(
+    device: str,
+    limit: int = 50,
+) -> dict:
+    """List Juniper policy prefix lists for a device.
+
+    Args:
+        device: Device name or UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each list has prefix_count).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_policy_prefix_lists(client, device=device, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_policy_prefix_list")
+def nautobot_cms_get_policy_prefix_list(id: str) -> dict:
+    """Get a policy prefix list with inlined prefixes.
+
+    Args:
+        id: Prefix list UUID.
+
+    Returns:
+        Prefix list dict with prefix_count and prefixes list.
+    """
+    try:
+        client = get_client()
+        result = cms_policies.get_policy_prefix_list(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_policy_prefix_list")
+def nautobot_cms_create_policy_prefix_list(
+    device: str,
+    name: str,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper policy prefix list.
+
+    Args:
+        device: Device name or UUID.
+        name: Prefix list name.
+        description: Optional description.
+
+    Returns:
+        Created prefix list dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_policies.create_policy_prefix_list(client, device=device, name=name, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_policy_prefix_list")
+def nautobot_cms_update_policy_prefix_list(
+    id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper policy prefix list.
+
+    Args:
+        id: Prefix list UUID.
+        name: New name (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated prefix list dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if description is not None:
+            updates["description"] = description
+        result = cms_policies.update_policy_prefix_list(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_policy_prefix_list")
+def nautobot_cms_delete_policy_prefix_list(id: str) -> dict:
+    """Delete a Juniper policy prefix list.
+
+    Args:
+        id: Prefix list UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_policies.delete_policy_prefix_list(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_policy_communities")
+def nautobot_cms_list_policy_communities(
+    device: str,
+    limit: int = 50,
+) -> dict:
+    """List Juniper policy communities for a device.
+
+    Args:
+        device: Device name or UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_policy_communities(client, device=device, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_policy_community")
+def nautobot_cms_get_policy_community(id: str) -> dict:
+    """Get a single policy community by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_policy_community(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_policy_community")
+def nautobot_cms_create_policy_community(
+    device: str,
+    name: str,
+    members: str,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper policy community.
+
+    Args:
+        device: Device name or UUID.
+        name: Community name.
+        members: Community value string (e.g. '65000:100').
+        description: Optional description.
+
+    Returns:
+        Created community dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_policies.create_policy_community(client, device=device, name=name, members=members, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_policy_community")
+def nautobot_cms_update_policy_community(
+    id: str,
+    name: Optional[str] = None,
+    members: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper policy community.
+
+    Args:
+        id: Community UUID.
+        name: New name (optional).
+        members: New community value string (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated community dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if members is not None:
+            updates["members"] = members
+        if description is not None:
+            updates["description"] = description
+        result = cms_policies.update_policy_community(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_policy_community")
+def nautobot_cms_delete_policy_community(id: str) -> dict:
+    """Delete a Juniper policy community."""
+    try:
+        client = get_client()
+        return cms_policies.delete_policy_community(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_policy_as_paths")
+def nautobot_cms_list_policy_as_paths(
+    device: str,
+    limit: int = 50,
+) -> dict:
+    """List Juniper policy AS paths for a device.
+
+    Args:
+        device: Device name or UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_policy_as_paths(client, device=device, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_policy_as_path")
+def nautobot_cms_get_policy_as_path(id: str) -> dict:
+    """Get a single policy AS path by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_policy_as_path(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_policy_as_path")
+def nautobot_cms_create_policy_as_path(
+    device: str,
+    name: str,
+    regex: str,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper policy AS path.
+
+    Args:
+        device: Device name or UUID.
+        name: AS-path name.
+        regex: AS-path regular expression.
+        description: Optional description.
+
+    Returns:
+        Created AS path dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_policies.create_policy_as_path(client, device=device, name=name, regex=regex, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_policy_as_path")
+def nautobot_cms_update_policy_as_path(
+    id: str,
+    name: Optional[str] = None,
+    regex: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper policy AS path.
+
+    Args:
+        id: AS path UUID.
+        name: New name (optional).
+        regex: New AS-path regex (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated AS path dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if regex is not None:
+            updates["regex"] = regex
+        if description is not None:
+            updates["description"] = description
+        result = cms_policies.update_policy_as_path(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_policy_as_path")
+def nautobot_cms_delete_policy_as_path(id: str) -> dict:
+    """Delete a Juniper policy AS path."""
+    try:
+        client = get_client()
+        return cms_policies.delete_policy_as_path(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_policy_prefixes")
+def nautobot_cms_list_policy_prefixes(
+    prefix_list_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List policy prefixes (read-only), optionally by parent prefix list.
+
+    Args:
+        prefix_list_id: Filter by parent prefix list UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_policy_prefixes(client, prefix_list_id=prefix_list_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_policy_prefix")
+def nautobot_cms_get_policy_prefix(id: str) -> dict:
+    """Get a single policy prefix by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_policy_prefix(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_terms")
+def nautobot_cms_list_jps_terms(
+    statement_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS terms (read-only), optionally by parent policy statement.
+
+    Args:
+        statement_id: Filter by parent policy statement UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each term has match_count, action_count).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_terms(client, statement_id=statement_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_term")
+def nautobot_cms_get_jps_term(id: str) -> dict:
+    """Get a JPS term with inlined match conditions and actions.
+
+    Args:
+        id: JPS term UUID.
+
+    Returns:
+        Term dict with match_conditions and actions lists.
+    """
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_term(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_match_conditions")
+def nautobot_cms_list_jps_match_conditions(
+    term_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS match conditions (read-only), optionally by parent term.
+
+    Args:
+        term_id: Filter by parent JPS term UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_match_conditions(client, term_id=term_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_match_condition")
+def nautobot_cms_get_jps_match_condition(id: str) -> dict:
+    """Get a single JPS match condition by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_match_condition(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_match_condition_route_filters")
+def nautobot_cms_list_jps_match_condition_route_filters(
+    match_condition_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS match condition route filters (read-only).
+
+    Args:
+        match_condition_id: Filter by parent match condition UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_match_condition_route_filters(
+            client, match_condition_id=match_condition_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_match_condition_route_filter")
+def nautobot_cms_get_jps_match_condition_route_filter(id: str) -> dict:
+    """Get a single JPS match condition route filter by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_match_condition_route_filter(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_match_condition_prefix_lists")
+def nautobot_cms_list_jps_match_condition_prefix_lists(
+    match_condition_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS match condition prefix list associations (read-only).
+
+    Args:
+        match_condition_id: Filter by parent match condition UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_match_condition_prefix_lists(
+            client, match_condition_id=match_condition_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_match_condition_prefix_list")
+def nautobot_cms_get_jps_match_condition_prefix_list(id: str) -> dict:
+    """Get a single JPS match condition prefix list association by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_match_condition_prefix_list(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_match_condition_communities")
+def nautobot_cms_list_jps_match_condition_communities(
+    match_condition_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS match condition community associations (read-only).
+
+    Args:
+        match_condition_id: Filter by parent match condition UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_match_condition_communities(
+            client, match_condition_id=match_condition_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_match_condition_community")
+def nautobot_cms_get_jps_match_condition_community(id: str) -> dict:
+    """Get a single JPS match condition community association by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_match_condition_community(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_match_condition_as_paths")
+def nautobot_cms_list_jps_match_condition_as_paths(
+    match_condition_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS match condition AS path associations (read-only).
+
+    Args:
+        match_condition_id: Filter by parent match condition UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_match_condition_as_paths(
+            client, match_condition_id=match_condition_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_match_condition_as_path")
+def nautobot_cms_get_jps_match_condition_as_path(id: str) -> dict:
+    """Get a single JPS match condition AS path association by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_match_condition_as_path(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_actions")
+def nautobot_cms_list_jps_actions(
+    term_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS actions (read-only), optionally by parent term.
+
+    Args:
+        term_id: Filter by parent JPS term UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_actions(client, term_id=term_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_action")
+def nautobot_cms_get_jps_action(id: str) -> dict:
+    """Get a single JPS action by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_action(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_action_communities")
+def nautobot_cms_list_jps_action_communities(
+    action_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS action community associations (read-only).
+
+    Args:
+        action_id: Filter by parent JPS action UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_action_communities(client, action_id=action_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_action_community")
+def nautobot_cms_get_jps_action_community(id: str) -> dict:
+    """Get a single JPS action community association by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_action_community(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_action_as_paths")
+def nautobot_cms_list_jps_action_as_paths(
+    action_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS action AS path associations (read-only).
+
+    Args:
+        action_id: Filter by parent JPS action UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_action_as_paths(client, action_id=action_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_action_as_path")
+def nautobot_cms_get_jps_action_as_path(id: str) -> dict:
+    """Get a single JPS action AS path association by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_action_as_path(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_action_load_balances")
+def nautobot_cms_list_jps_action_load_balances(
+    action_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS action load balance configurations (read-only).
+
+    Args:
+        action_id: Filter by parent JPS action UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_action_load_balances(client, action_id=action_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_action_load_balance")
+def nautobot_cms_get_jps_action_load_balance(id: str) -> dict:
+    """Get a single JPS action load balance by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_action_load_balance(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_jps_action_install_nexthops")
+def nautobot_cms_list_jps_action_install_nexthops(
+    action_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List JPS action install nexthop configurations (read-only).
+
+    Args:
+        action_id: Filter by parent JPS action UUID.
+        limit: Max results (default 50, 0 = all).
+    """
+    try:
+        client = get_client()
+        result = cms_policies.list_jps_action_install_nexthops(client, action_id=action_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_jps_action_install_nexthop")
+def nautobot_cms_get_jps_action_install_nexthop(id: str) -> dict:
+    """Get a single JPS action install nexthop by UUID."""
+    try:
+        client = get_client()
+        result = cms_policies.get_jps_action_install_nexthop(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS ARP TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_arp_entries")
+def nautobot_cms_list_arp_entries(
+    device: str,
+    interface: Optional[str] = None,
+    mac_address: Optional[str] = None,
+    limit: int = 0,
+) -> dict:
+    """List ARP entries for a Juniper device.
+
+    Queries the CMS juniper_arp_entries endpoint filtered by device.
+    Optionally narrow by interface name/UUID or MAC address.
+
+    Args:
+        device: Device name or UUID (required — ARP is always device-scoped).
+        interface: Filter by interface name or UUID.
+        mac_address: Filter by exact MAC address.
+        limit: Max results (0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of ARP entry dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_arp.list_arp_entries(
+            client,
+            device=device,
+            interface=interface,
+            mac_address=mac_address,
+            limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_arp_entry")
+def nautobot_cms_get_arp_entry(id: str) -> dict:
+    """Get a single ARP entry by UUID.
+
+    Args:
+        id: ARP entry UUID.
+
+    Returns:
+        ARP entry dict with interface_id, interface_name, device_name, ip_address,
+        mac_address, and hostname.
+    """
+    try:
+        client = get_client()
+        result = cms_arp.get_arp_entry(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS DRIFT TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_compare_bgp_neighbors")
+def nautobot_cms_compare_bgp_neighbors(
+    device_name: str,
+    live_neighbors: list[dict],
+) -> dict:
+    """Compare live BGP neighbors against Nautobot CMS BGP model records.
+
+    Accepts pre-fetched BGP neighbor data (e.g., from jmcp 'show bgp summary')
+    and compares against Nautobot CMS records. Uses DiffSync for semantic comparison.
+
+    Comparison fields: peer IP (identity), peer AS, local address, group name.
+    Volatile fields (session state, prefix counts) are excluded.
+
+    Args:
+        device_name: Device hostname in Nautobot.
+        live_neighbors: List of dicts, each with: peer_ip (str), peer_as (int),
+            local_address (str), group_name (str).
+
+    Returns:
+        CMSDriftReport dict with bgp_neighbors section (missing/extra/changed)
+        and summary with total drift count.
+    """
+    try:
+        client = get_client()
+        from nautobot_mcp.cms.cms_drift import compare_bgp_neighbors
+        result = compare_bgp_neighbors(client, device_name, live_neighbors)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_compare_static_routes")
+def nautobot_cms_compare_static_routes(
+    device_name: str,
+    live_routes: list[dict],
+) -> dict:
+    """Compare live static routes against Nautobot CMS static route records.
+
+    Accepts pre-fetched static route data (e.g., from jmcp 'show route static')
+    and compares against Nautobot CMS records. Uses DiffSync for semantic comparison.
+
+    Comparison fields: destination (identity), next-hops, preference, metric,
+    routing instance.
+
+    Args:
+        device_name: Device hostname in Nautobot.
+        live_routes: List of dicts, each with: destination (str),
+            nexthops (list[str]), preference (int), metric (int),
+            routing_instance (str).
+
+    Returns:
+        CMSDriftReport dict with static_routes section (missing/extra/changed)
+        and summary with total drift count.
+    """
+    try:
+        client = get_client()
+        from nautobot_mcp.cms.cms_drift import compare_static_routes
+        result = compare_static_routes(client, device_name, live_routes)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
 # ---------------------------------------------------------------------------
 # Server entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     mcp.run()
+
