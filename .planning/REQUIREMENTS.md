@@ -70,10 +70,10 @@ Requirements for Juniper CMS Model MCP Tools release. Each maps to roadmap phase
 
 ### CLI & Skills
 
-- [ ] **CLI-01**: CLI commands expose all CMS model tools (routing, interfaces, firewalls, policies, ARP)
-- [ ] **CLI-02**: CLI commands expose composite summary tools
-- [ ] **CLI-03**: CLI commands expose CMS drift verification
-- [ ] **SKILL-01**: Agent skill guide for CMS-aware device audit workflow
+- [x] **CLI-01**: CLI commands expose all CMS model tools (routing, interfaces, firewalls, policies, ARP)
+- [x] **CLI-02**: CLI commands expose composite summary tools
+- [x] **CLI-03**: CLI commands expose CMS drift verification
+- [x] **SKILL-01**: Agent skill guide for CMS-aware device audit workflow
 
 ## v2 Requirements
 
@@ -149,10 +149,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMP-04 | Phase 12 | Pending |
 | DRIFT-01 | Phase 13 | Pending |
 | DRIFT-02 | Phase 13 | Pending |
-| CLI-01 | Phase 14 | Pending |
-| CLI-02 | Phase 14 | Pending |
-| CLI-03 | Phase 14 | Pending |
-| SKILL-01 | Phase 14 | Pending |
+| CLI-01 | Phase 14 | Complete |
+| CLI-02 | Phase 14 | Complete |
+| CLI-03 | Phase 14 | Complete |
+| SKILL-01 | Phase 14 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 42 total

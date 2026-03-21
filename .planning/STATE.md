@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: — Juniper CMS Model MCP Tools
-status: active
-last_updated: "2026-03-21T10:47:34.000Z"
+status: unknown
+last_updated: "2026-03-21T11:21:11.106Z"
 progress:
-  total_phases: 7
+  total_phases: 6
   completed_phases: 6
   total_plans: 18
   completed_plans: 18
