@@ -1817,6 +1817,64 @@ def nautobot_cms_list_static_route_nexthops(
 
 
 # ===========================================================================
+# CMS ROUTING COMPOSITE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_get_device_bgp_summary")
+def nautobot_cms_get_device_bgp_summary(
+    device: str,
+    detail: bool = False,
+) -> dict:
+    """Get a composite BGP summary for a Juniper device.
+
+    Aggregates all BGP groups and their neighbors into a single response.
+    In detail mode, each neighbor includes its address families and policy
+    associations inline.
+
+    Args:
+        device: Device name or UUID.
+        detail: If True, include address families and policy associations per neighbor.
+
+    Returns:
+        Dict with device_name, groups (with nested neighbors), total_groups,
+        total_neighbors.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_device_bgp_summary(client, device=device, detail=detail)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_device_routing_table")
+def nautobot_cms_get_device_routing_table(
+    device: str,
+    detail: bool = False,
+) -> dict:
+    """Get a composite routing table summary for a Juniper device.
+
+    Returns all static routes for the device. In default mode, nexthop counts
+    are included but not the full nexthop list. In detail mode, all nexthops
+    and qualified nexthops are inlined per route.
+
+    Args:
+        device: Device name or UUID.
+        detail: If True, include full nexthop data per route.
+
+    Returns:
+        Dict with device_name, routes (list), total_routes.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_device_routing_table(client, device=device, detail=detail)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
 # CMS INTERFACE TOOLS
 # ===========================================================================
 
