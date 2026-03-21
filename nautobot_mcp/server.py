@@ -25,6 +25,7 @@ from nautobot_mcp.cms import firewalls as cms_firewalls
 from nautobot_mcp.cms import interfaces as cms_interfaces
 from nautobot_mcp.cms import policies as cms_policies
 from nautobot_mcp.cms import routing as cms_routing
+from nautobot_mcp.cms import arp as cms_arp
 
 mcp = FastMCP("Nautobot MCP Server")
 
@@ -3623,6 +3624,65 @@ def nautobot_cms_get_jps_action_install_nexthop(id: str) -> dict:
     try:
         client = get_client()
         result = cms_policies.get_jps_action_install_nexthop(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS ARP TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_arp_entries")
+def nautobot_cms_list_arp_entries(
+    device: str,
+    interface: Optional[str] = None,
+    mac_address: Optional[str] = None,
+    limit: int = 0,
+) -> dict:
+    """List ARP entries for a Juniper device.
+
+    Queries the CMS juniper_arp_entries endpoint filtered by device.
+    Optionally narrow by interface name/UUID or MAC address.
+
+    Args:
+        device: Device name or UUID (required — ARP is always device-scoped).
+        interface: Filter by interface name or UUID.
+        mac_address: Filter by exact MAC address.
+        limit: Max results (0 = all).
+
+    Returns:
+        Dict with 'count' and 'results' (list of ARP entry dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_arp.list_arp_entries(
+            client,
+            device=device,
+            interface=interface,
+            mac_address=mac_address,
+            limit=limit,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_arp_entry")
+def nautobot_cms_get_arp_entry(id: str) -> dict:
+    """Get a single ARP entry by UUID.
+
+    Args:
+        id: ARP entry UUID.
+
+    Returns:
+        ARP entry dict with interface_id, interface_name, device_name, ip_address,
+        mac_address, and hostname.
+    """
+    try:
+        client = get_client()
+        result = cms_arp.get_arp_entry(client, id=id)
         return result.model_dump()
     except Exception as e:
         handle_error(e)

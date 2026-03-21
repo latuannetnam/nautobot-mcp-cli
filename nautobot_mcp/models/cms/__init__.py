@@ -6,6 +6,7 @@ Submodules per domain are added in subsequent phases:
 - firewalls.py (Phase 11)
 - policies.py (Phase 11)
 - arp.py (Phase 12)
+- composites.py (Phase 12)
 """
 
 from nautobot_mcp.models.cms.base import CMSBaseSummary
@@ -55,6 +56,13 @@ from nautobot_mcp.models.cms.routing import (
     StaticRouteQualifiedNexthopSummary,
     StaticRouteSummary,
 )
+from nautobot_mcp.models.cms.arp import ArpEntrySummary
+from nautobot_mcp.models.cms.composites import (
+    BGPSummaryResponse,
+    FirewallSummaryResponse,
+    InterfaceDetailResponse,
+    RoutingTableResponse,
+)
 
 __all__ = [
     "CMSBaseSummary",
@@ -100,4 +108,11 @@ __all__ = [
     "JPSActionAsPathSummary",
     "JPSActionLoadBalanceSummary",
     "JPSActionInstallNexthopSummary",
+    # ARP model (Phase 12)
+    "ArpEntrySummary",
+    # Composite response models (Phase 12)
+    "BGPSummaryResponse",
+    "RoutingTableResponse",
+    "InterfaceDetailResponse",
+    "FirewallSummaryResponse",
 ]
