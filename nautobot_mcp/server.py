@@ -21,6 +21,7 @@ from nautobot_mcp import golden_config as gc
 from nautobot_mcp import onboarding, verification
 from nautobot_mcp import drift
 from nautobot_mcp.parsers import ParserRegistry
+from nautobot_mcp.cms import routing as cms_routing
 
 mcp = FastMCP("Nautobot MCP Server")
 
@@ -1322,6 +1323,490 @@ def nautobot_compare_device(
     try:
         client = get_client()
         result = drift.compare_device(client, device_name, interfaces_data)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS ROUTING TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_static_routes")
+def nautobot_cms_list_static_routes(
+    device: str,
+    routing_instance: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List Juniper static routes for a device with inlined next-hops.
+
+    Args:
+        device: Device name or UUID.
+        routing_instance: Filter by routing instance name (e.g. "mgmt").
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results. Each route includes nexthops and
+        qualified_nexthops inlined.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_static_routes(
+            client, device=device, routing_instance=routing_instance, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_static_route")
+def nautobot_cms_get_static_route(id: str) -> dict:
+    """Get a single Juniper static route by UUID, with inlined next-hops.
+
+    Args:
+        id: Static route UUID.
+
+    Returns:
+        Static route dict with nexthops and qualified_nexthops inlined.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_static_route(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_static_route")
+def nautobot_cms_create_static_route(
+    device: str,
+    destination: str,
+    routing_table: str = "inet.0",
+    preference: int = 5,
+) -> dict:
+    """Create a Juniper static route.
+
+    Args:
+        device: Device name or UUID.
+        destination: Route destination prefix (e.g. "192.168.1.0/24").
+        routing_table: Routing table name (default: inet.0).
+        preference: Administrative distance (default: 5).
+
+    Returns:
+        Created static route dict.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.create_static_route(
+            client, device=device, destination=destination,
+            routing_table=routing_table, preference=preference,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_static_route")
+def nautobot_cms_update_static_route(
+    id: str,
+    preference: Optional[int] = None,
+    metric: Optional[int] = None,
+    enabled: Optional[bool] = None,
+) -> dict:
+    """Update a Juniper static route.
+
+    Args:
+        id: Static route UUID.
+        preference: New preference (optional).
+        metric: New metric (optional).
+        enabled: Enable/disable (optional).
+
+    Returns:
+        Updated static route dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if preference is not None:
+            updates["preference"] = preference
+        if metric is not None:
+            updates["metric"] = metric
+        if enabled is not None:
+            updates["enabled"] = enabled
+        result = cms_routing.update_static_route(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_static_route")
+def nautobot_cms_delete_static_route(id: str) -> dict:
+    """Delete a Juniper static route.
+
+    Args:
+        id: Static route UUID.
+
+    Returns:
+        Dict with success status and message.
+    """
+    try:
+        client = get_client()
+        return cms_routing.delete_static_route(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_groups")
+def nautobot_cms_list_bgp_groups(
+    device: str,
+    routing_instance: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List Juniper BGP groups for a device.
+
+    Args:
+        device: Device name or UUID.
+        routing_instance: Filter by routing instance name (optional).
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (list of BGP group dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_groups(
+            client, device=device, routing_instance=routing_instance, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_bgp_group")
+def nautobot_cms_get_bgp_group(id: str) -> dict:
+    """Get a single Juniper BGP group by UUID.
+
+    Args:
+        id: BGP group UUID.
+
+    Returns:
+        BGP group dict.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_bgp_group(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_bgp_group")
+def nautobot_cms_create_bgp_group(
+    device: str,
+    name: str,
+    type: str,
+    local_address: Optional[str] = None,
+    cluster_id: Optional[str] = None,
+) -> dict:
+    """Create a Juniper BGP group.
+
+    Args:
+        device: Device name or UUID.
+        name: BGP group name.
+        type: Group type ('internal' or 'external').
+        local_address: Local address IP UUID (optional).
+        cluster_id: Cluster ID for route reflector (optional).
+
+    Returns:
+        Created BGP group dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if local_address is not None:
+            kwargs["local_address"] = local_address
+        if cluster_id is not None:
+            kwargs["cluster_id"] = cluster_id
+        result = cms_routing.create_bgp_group(
+            client, device=device, name=name, type=type, **kwargs
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_bgp_group")
+def nautobot_cms_update_bgp_group(
+    id: str,
+    name: Optional[str] = None,
+    enabled: Optional[bool] = None,
+) -> dict:
+    """Update a Juniper BGP group.
+
+    Args:
+        id: BGP group UUID.
+        name: New name (optional).
+        enabled: Enable/disable (optional).
+
+    Returns:
+        Updated BGP group dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if name is not None:
+            updates["name"] = name
+        if enabled is not None:
+            updates["enabled"] = enabled
+        result = cms_routing.update_bgp_group(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_bgp_group")
+def nautobot_cms_delete_bgp_group(id: str) -> dict:
+    """Delete a Juniper BGP group.
+
+    Args:
+        id: BGP group UUID.
+
+    Returns:
+        Dict with success status and message.
+    """
+    try:
+        client = get_client()
+        return cms_routing.delete_bgp_group(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_neighbors")
+def nautobot_cms_list_bgp_neighbors(
+    device: Optional[str] = None,
+    group_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List BGP neighbors. Provide device name to see all neighbors across all groups
+    for device, or group_id for a specific group.
+
+    Args:
+        device: Device name or UUID (device-scoped query via all groups).
+        group_id: Filter by specific BGP group UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (list of BGP neighbor dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_neighbors(
+            client, device=device, group_id=group_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_bgp_neighbor")
+def nautobot_cms_get_bgp_neighbor(id: str) -> dict:
+    """Get a single BGP neighbor by UUID.
+
+    Args:
+        id: BGP neighbor UUID.
+
+    Returns:
+        BGP neighbor dict with session state and prefix counts.
+    """
+    try:
+        client = get_client()
+        result = cms_routing.get_bgp_neighbor(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_bgp_neighbor")
+def nautobot_cms_create_bgp_neighbor(
+    group_id: str,
+    peer_ip: str,
+    peer_as: Optional[int] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a BGP neighbor.
+
+    Args:
+        group_id: Parent BGP group UUID.
+        peer_ip: Peer IP address UUID or string.
+        peer_as: Peer autonomous system number (optional).
+        description: Neighbor description (optional).
+
+    Returns:
+        Created BGP neighbor dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if peer_as is not None:
+            kwargs["peer_as"] = peer_as
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_routing.create_bgp_neighbor(
+            client, group_id=group_id, peer_ip=peer_ip, **kwargs
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_bgp_neighbor")
+def nautobot_cms_update_bgp_neighbor(
+    id: str,
+    peer_as: Optional[int] = None,
+    enabled: Optional[bool] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a BGP neighbor.
+
+    Args:
+        id: BGP neighbor UUID.
+        peer_as: New peer AS (optional).
+        enabled: Enable/disable (optional).
+        description: New description (optional).
+
+    Returns:
+        Updated BGP neighbor dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if peer_as is not None:
+            updates["peer_as"] = peer_as
+        if enabled is not None:
+            updates["enabled"] = enabled
+        if description is not None:
+            updates["description"] = description
+        result = cms_routing.update_bgp_neighbor(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_bgp_neighbor")
+def nautobot_cms_delete_bgp_neighbor(id: str) -> dict:
+    """Delete a BGP neighbor.
+
+    Args:
+        id: BGP neighbor UUID.
+
+    Returns:
+        Dict with success status and message.
+    """
+    try:
+        client = get_client()
+        return cms_routing.delete_bgp_neighbor(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_address_families")
+def nautobot_cms_list_bgp_address_families(
+    group_id: Optional[str] = None,
+    neighbor_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List BGP address families, optionally filtered by group or neighbor.
+
+    Args:
+        group_id: Filter by BGP group UUID.
+        neighbor_id: Filter by BGP neighbor UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_address_families(
+            client, group_id=group_id, neighbor_id=neighbor_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_policy_associations")
+def nautobot_cms_list_bgp_policy_associations(
+    group_id: Optional[str] = None,
+    neighbor_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List BGP policy associations, optionally filtered by group or neighbor.
+
+    Args:
+        group_id: Filter by BGP group UUID.
+        neighbor_id: Filter by BGP neighbor UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_policy_associations(
+            client, group_id=group_id, neighbor_id=neighbor_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_bgp_received_routes")
+def nautobot_cms_list_bgp_received_routes(
+    neighbor_id: str,
+    limit: int = 50,
+) -> dict:
+    """List BGP received routes for a specific BGP neighbor (read-only).
+
+    Args:
+        neighbor_id: BGP neighbor UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (BGP received route dicts).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_bgp_received_routes(
+            client, neighbor_id=neighbor_id, limit=limit
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_static_route_nexthops")
+def nautobot_cms_list_static_route_nexthops(
+    route_id: Optional[str] = None,
+    device: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List static route nexthops, optionally filtered by route or device.
+
+    Args:
+        route_id: Filter by parent static route UUID.
+        device: Filter by device name or UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only).
+    """
+    try:
+        client = get_client()
+        result = cms_routing.list_static_route_nexthops(
+            client, route_id=route_id, device=device, limit=limit
+        )
         return result.model_dump()
     except Exception as e:
         handle_error(e)
