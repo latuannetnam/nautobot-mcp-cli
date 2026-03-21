@@ -643,3 +643,82 @@ def get_firewall_policer_action(client: NautobotClient, id: str) -> FirewallPoli
     except Exception as e:
         client._handle_api_error(e, "get", "FirewallPolicerAction")
         raise
+
+
+# ---------------------------------------------------------------------------
+# Composite Summary Functions (Phase 12)
+# ---------------------------------------------------------------------------
+
+from nautobot_mcp.models.cms.composites import FirewallSummaryResponse  # noqa: E402
+
+
+def get_device_firewall_summary(
+    client: "NautobotClient",
+    device: str,
+    detail: bool = False,
+) -> FirewallSummaryResponse:
+    """Get a composite firewall summary for a Juniper device.
+
+    Aggregates all firewall filters (with term counts) and firewall policers
+    (with action counts) into a single device-scoped response.
+
+    In detail mode, each filter includes its terms inlined, and each policer
+    includes its actions.
+
+    Args:
+        client: NautobotClient instance.
+        device: Device name or UUID.
+        detail: If True, fetch inlined terms per filter and actions per policer.
+
+    Returns:
+        FirewallSummaryResponse with filters, policers, and counts.
+    """
+    try:
+        # Fetch filters (list_firewall_filters populates term_count per filter)
+        filters_resp = list_firewall_filters(client, device=device, limit=0)
+        filters = filters_resp.results
+
+        # Fetch policers (list_firewall_policers populates action_count per policer)
+        policers_resp = list_firewall_policers(client, device=device, limit=0)
+        policers = policers_resp.results
+
+        if detail:
+            # For each filter, fetch full term data
+            filter_dicts = []
+            for fw_filter in filters:
+                fd = fw_filter.model_dump()
+                try:
+                    terms_resp = list_firewall_terms(client, filter_id=fw_filter.id, limit=0)
+                    fd["terms"] = [t.model_dump() for t in terms_resp.results]
+                    fd["term_count"] = terms_resp.count
+                except Exception:
+                    fd["terms"] = []
+                filter_dicts.append(fd)
+
+            # For each policer, fetch full action data
+            policer_dicts = []
+            for policer in policers:
+                pd = policer.model_dump()
+                try:
+                    actions_resp = list_firewall_policer_actions(client, policer_id=policer.id, limit=0)
+                    pd["actions"] = [a.model_dump() for a in actions_resp.results]
+                    pd["action_count"] = actions_resp.count
+                except Exception:
+                    pd["actions"] = []
+                policer_dicts.append(pd)
+        else:
+            # Shallow — term_count and action_count already populated by list_ calls
+            filter_dicts = [f.model_dump() for f in filters]
+            policer_dicts = [p.model_dump() for p in policers]
+
+        return FirewallSummaryResponse(
+            device_name=device,
+            filters=filter_dicts,
+            policers=policer_dicts,
+            total_filters=len(filters),
+            total_policers=len(policers),
+        )
+    except Exception as e:
+        client._handle_api_error(e, "get_device_firewall_summary", "FirewallSummary")
+        raise
+

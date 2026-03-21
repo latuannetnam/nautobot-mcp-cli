@@ -2478,6 +2478,65 @@ def nautobot_cms_get_vrrp_track_interface(id: str) -> dict:
 
 
 # ===========================================================================
+# CMS INTERFACE COMPOSITE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_get_interface_detail")
+def nautobot_cms_get_interface_detail(
+    device: str,
+    include_arp: bool = False,
+) -> dict:
+    """Get a composite interface detail summary for a Juniper device.
+
+    Aggregates all interface units with their sub-families and VRRP groups
+    in one call. Optionally includes ARP entries per interface.
+
+    Args:
+        device: Device name or UUID.
+        include_arp: If True, include ARP entries for the device, matched
+            by interface name.
+
+    Returns:
+        Dict with device_name, units (with nested families and vrrp_groups),
+        total_units, and optionally arp_entries.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_detail(client, device=device, include_arp=include_arp)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_device_firewall_summary")
+def nautobot_cms_get_device_firewall_summary(
+    device: str,
+    detail: bool = False,
+) -> dict:
+    """Get a composite firewall summary for a Juniper device.
+
+    Returns all firewall filters (with term counts) and policers (with
+    action counts) for a device. In detail mode, each filter includes its
+    terms inlined and each policer includes its actions.
+
+    Args:
+        device: Device name or UUID.
+        detail: If True, include inlined terms per filter and actions per policer.
+
+    Returns:
+        Dict with device_name, filters (list), policers (list),
+        total_filters, total_policers.
+    """
+    try:
+        client = get_client()
+        result = cms_firewalls.get_device_firewall_summary(client, device=device, detail=detail)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
 # CMS FIREWALL TOOLS
 # ===========================================================================
 
