@@ -21,6 +21,7 @@ from nautobot_mcp import golden_config as gc
 from nautobot_mcp import onboarding, verification
 from nautobot_mcp import drift
 from nautobot_mcp.parsers import ParserRegistry
+from nautobot_mcp.cms import interfaces as cms_interfaces
 from nautobot_mcp.cms import routing as cms_routing
 
 mcp = FastMCP("Nautobot MCP Server")
@@ -1807,6 +1808,609 @@ def nautobot_cms_list_static_route_nexthops(
         result = cms_routing.list_static_route_nexthops(
             client, route_id=route_id, device=device, limit=limit
         )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+# ===========================================================================
+# CMS INTERFACE TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_list_interface_units")
+def nautobot_cms_list_interface_units(
+    device: str,
+    limit: int = 50,
+) -> dict:
+    """List Juniper interface units for a device. Returns shallow list with family_count per unit.
+
+    Args:
+        device: Device name or UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (each unit has family_count).
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_units(client, device=device, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_unit")
+def nautobot_cms_get_interface_unit(id: str) -> dict:
+    """Get a single interface unit with inlined family details (filters, policers).
+
+    Args:
+        id: Interface unit UUID.
+
+    Returns:
+        Interface unit dict with family_count populated.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_unit(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_unit")
+def nautobot_cms_create_interface_unit(
+    interface_id: str,
+    vlan_mode: Optional[str] = None,
+    encapsulation: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Create a Juniper interface unit.
+
+    Args:
+        interface_id: UUID of the parent interface.
+        vlan_mode: VLAN mode (access, trunk, etc.).
+        encapsulation: Encapsulation type.
+        description: Unit description.
+
+    Returns:
+        Created interface unit dict.
+    """
+    try:
+        client = get_client()
+        kwargs = {}
+        if vlan_mode is not None:
+            kwargs["vlan_mode"] = vlan_mode
+        if encapsulation is not None:
+            kwargs["encapsulation"] = encapsulation
+        if description is not None:
+            kwargs["description"] = description
+        result = cms_interfaces.create_interface_unit(client, interface_id=interface_id, **kwargs)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_interface_unit")
+def nautobot_cms_update_interface_unit(
+    id: str,
+    vlan_mode: Optional[str] = None,
+    encapsulation: Optional[str] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Update a Juniper interface unit.
+
+    Args:
+        id: Interface unit UUID.
+        vlan_mode: New VLAN mode.
+        encapsulation: New encapsulation type.
+        description: New description.
+
+    Returns:
+        Updated interface unit dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if vlan_mode is not None:
+            updates["vlan_mode"] = vlan_mode
+        if encapsulation is not None:
+            updates["encapsulation"] = encapsulation
+        if description is not None:
+            updates["description"] = description
+        result = cms_interfaces.update_interface_unit(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_unit")
+def nautobot_cms_delete_interface_unit(id: str) -> dict:
+    """Delete a Juniper interface unit.
+
+    Args:
+        id: Interface unit UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_unit(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_interface_families")
+def nautobot_cms_list_interface_families(
+    unit_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List interface families, optionally filtered by interface unit.
+
+    Args:
+        unit_id: Filter by parent interface unit UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_families(client, unit_id=unit_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_family")
+def nautobot_cms_get_interface_family(id: str) -> dict:
+    """Get a single interface family by UUID.
+
+    Args:
+        id: Interface family UUID.
+
+    Returns:
+        Interface family dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_family(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_family")
+def nautobot_cms_create_interface_family(
+    unit_id: str,
+    family_type: str,
+) -> dict:
+    """Create a Juniper interface family.
+
+    Args:
+        unit_id: UUID of the parent interface unit.
+        family_type: Address family type (inet, inet6, mpls, etc.).
+
+    Returns:
+        Created interface family dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_interface_family(client, unit_id=unit_id, family_type=family_type)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_interface_family")
+def nautobot_cms_update_interface_family(
+    id: str,
+    family_type: Optional[str] = None,
+) -> dict:
+    """Update a Juniper interface family.
+
+    Args:
+        id: Interface family UUID.
+        family_type: New family type.
+
+    Returns:
+        Updated interface family dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if family_type is not None:
+            updates["family_type"] = family_type
+        result = cms_interfaces.update_interface_family(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_family")
+def nautobot_cms_delete_interface_family(id: str) -> dict:
+    """Delete a Juniper interface family.
+
+    Args:
+        id: Interface family UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_family(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_interface_family_filters")
+def nautobot_cms_list_interface_family_filters(
+    family_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List interface family filter associations, optionally filtered by family.
+
+    Args:
+        family_id: Filter by parent interface family UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results (read-only associations).
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_family_filters(client, family_id=family_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_family_filter")
+def nautobot_cms_get_interface_family_filter(id: str) -> dict:
+    """Get a single interface family filter association by UUID.
+
+    Args:
+        id: Filter association UUID.
+
+    Returns:
+        Filter association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_family_filter(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_family_filter")
+def nautobot_cms_create_interface_family_filter(
+    family_id: str,
+    filter_id: str,
+    filter_type: str,
+    enabled: bool = True,
+) -> dict:
+    """Create an interface family filter association.
+
+    Args:
+        family_id: UUID of the parent interface family.
+        filter_id: UUID of the filter to associate.
+        filter_type: Filter direction/type (input, output, etc.).
+        enabled: Whether the association is active.
+
+    Returns:
+        Created filter association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_interface_family_filter(
+            client, family_id=family_id, filter_id=filter_id,
+            filter_type=filter_type, enabled=enabled,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_family_filter")
+def nautobot_cms_delete_interface_family_filter(id: str) -> dict:
+    """Delete an interface family filter association.
+
+    Args:
+        id: Filter association UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_family_filter(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_interface_family_policers")
+def nautobot_cms_list_interface_family_policers(
+    family_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List interface family policer associations, optionally filtered by family.
+
+    Args:
+        family_id: Filter by parent interface family UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_interface_family_policers(client, family_id=family_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_interface_family_policer")
+def nautobot_cms_get_interface_family_policer(id: str) -> dict:
+    """Get a single interface family policer association by UUID.
+
+    Args:
+        id: Policer association UUID.
+
+    Returns:
+        Policer association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_interface_family_policer(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_interface_family_policer")
+def nautobot_cms_create_interface_family_policer(
+    family_id: str,
+    policer_id: str,
+    policer_type: str,
+    enabled: bool = True,
+) -> dict:
+    """Create an interface family policer association.
+
+    Args:
+        family_id: UUID of the parent interface family.
+        policer_id: UUID of the policer to associate.
+        policer_type: Policer direction/type (input, output, etc.).
+        enabled: Whether the association is active.
+
+    Returns:
+        Created policer association dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_interface_family_policer(
+            client, family_id=family_id, policer_id=policer_id,
+            policer_type=policer_type, enabled=enabled,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_interface_family_policer")
+def nautobot_cms_delete_interface_family_policer(id: str) -> dict:
+    """Delete an interface family policer association.
+
+    Args:
+        id: Policer association UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_interface_family_policer(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_vrrp_groups")
+def nautobot_cms_list_vrrp_groups(
+    family_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List VRRP groups, optionally filtered by interface family.
+
+    Args:
+        family_id: Filter by parent interface family UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_vrrp_groups(client, family_id=family_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_vrrp_group")
+def nautobot_cms_get_vrrp_group(id: str) -> dict:
+    """Get a single VRRP group by UUID.
+
+    Args:
+        id: VRRP group UUID.
+
+    Returns:
+        VRRP group dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_vrrp_group(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_create_vrrp_group")
+def nautobot_cms_create_vrrp_group(
+    family_id: str,
+    group_number: int,
+    virtual_address_id: str,
+    priority: int = 100,
+) -> dict:
+    """Create a VRRP group.
+
+    Args:
+        family_id: UUID of the parent interface family.
+        group_number: VRRP group number (1-255).
+        virtual_address_id: UUID of the virtual IP address.
+        priority: VRRP priority (1-254, default 100).
+
+    Returns:
+        Created VRRP group dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.create_vrrp_group(
+            client, family_id=family_id, group_number=group_number,
+            virtual_address_id=virtual_address_id, priority=priority,
+        )
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_update_vrrp_group")
+def nautobot_cms_update_vrrp_group(
+    id: str,
+    priority: Optional[int] = None,
+    accept_data: Optional[bool] = None,
+    preempt_hold_time: Optional[int] = None,
+) -> dict:
+    """Update a VRRP group.
+
+    Args:
+        id: VRRP group UUID.
+        priority: New priority (optional).
+        accept_data: Accept data for virtual IP (optional).
+        preempt_hold_time: Preempt hold time in seconds (optional).
+
+    Returns:
+        Updated VRRP group dict.
+    """
+    try:
+        client = get_client()
+        updates = {}
+        if priority is not None:
+            updates["priority"] = priority
+        if accept_data is not None:
+            updates["accept_data"] = accept_data
+        if preempt_hold_time is not None:
+            updates["preempt_hold_time"] = preempt_hold_time
+        result = cms_interfaces.update_vrrp_group(client, id=id, **updates)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_delete_vrrp_group")
+def nautobot_cms_delete_vrrp_group(id: str) -> dict:
+    """Delete a VRRP group.
+
+    Args:
+        id: VRRP group UUID.
+
+    Returns:
+        Dict with success status.
+    """
+    try:
+        client = get_client()
+        return cms_interfaces.delete_vrrp_group(client, id=id)
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_vrrp_track_routes")
+def nautobot_cms_list_vrrp_track_routes(
+    vrrp_group_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List VRRP tracked routes (read-only), optionally filtered by VRRP group.
+
+    Args:
+        vrrp_group_id: Filter by parent VRRP group UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_vrrp_track_routes(client, vrrp_group_id=vrrp_group_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_vrrp_track_route")
+def nautobot_cms_get_vrrp_track_route(id: str) -> dict:
+    """Get a single VRRP tracked route by UUID (read-only).
+
+    Args:
+        id: VRRP track route UUID.
+
+    Returns:
+        VRRP track route dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_vrrp_track_route(client, id=id)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_list_vrrp_track_interfaces")
+def nautobot_cms_list_vrrp_track_interfaces(
+    vrrp_group_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """List VRRP tracked interfaces (read-only), optionally filtered by VRRP group.
+
+    Args:
+        vrrp_group_id: Filter by parent VRRP group UUID.
+        limit: Max results (default 50, 0 = all).
+
+    Returns:
+        Dict with count and results.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.list_vrrp_track_interfaces(client, vrrp_group_id=vrrp_group_id, limit=limit)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_get_vrrp_track_interface")
+def nautobot_cms_get_vrrp_track_interface(id: str) -> dict:
+    """Get a single VRRP tracked interface by UUID (read-only).
+
+    Args:
+        id: VRRP track interface UUID.
+
+    Returns:
+        VRRP track interface dict.
+    """
+    try:
+        client = get_client()
+        result = cms_interfaces.get_vrrp_track_interface(client, id=id)
         return result.model_dump()
     except Exception as e:
         handle_error(e)
