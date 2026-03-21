@@ -3805,9 +3805,78 @@ def nautobot_cms_get_arp_entry(id: str) -> dict:
         handle_error(e)
 
 
+# ===========================================================================
+# CMS DRIFT TOOLS
+# ===========================================================================
+
+
+@mcp.tool(name="nautobot_cms_compare_bgp_neighbors")
+def nautobot_cms_compare_bgp_neighbors(
+    device_name: str,
+    live_neighbors: list[dict],
+) -> dict:
+    """Compare live BGP neighbors against Nautobot CMS BGP model records.
+
+    Accepts pre-fetched BGP neighbor data (e.g., from jmcp 'show bgp summary')
+    and compares against Nautobot CMS records. Uses DiffSync for semantic comparison.
+
+    Comparison fields: peer IP (identity), peer AS, local address, group name.
+    Volatile fields (session state, prefix counts) are excluded.
+
+    Args:
+        device_name: Device hostname in Nautobot.
+        live_neighbors: List of dicts, each with: peer_ip (str), peer_as (int),
+            local_address (str), group_name (str).
+
+    Returns:
+        CMSDriftReport dict with bgp_neighbors section (missing/extra/changed)
+        and summary with total drift count.
+    """
+    try:
+        client = get_client()
+        from nautobot_mcp.cms.cms_drift import compare_bgp_neighbors
+        result = compare_bgp_neighbors(client, device_name, live_neighbors)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
+@mcp.tool(name="nautobot_cms_compare_static_routes")
+def nautobot_cms_compare_static_routes(
+    device_name: str,
+    live_routes: list[dict],
+) -> dict:
+    """Compare live static routes against Nautobot CMS static route records.
+
+    Accepts pre-fetched static route data (e.g., from jmcp 'show route static')
+    and compares against Nautobot CMS records. Uses DiffSync for semantic comparison.
+
+    Comparison fields: destination (identity), next-hops, preference, metric,
+    routing instance.
+
+    Args:
+        device_name: Device hostname in Nautobot.
+        live_routes: List of dicts, each with: destination (str),
+            nexthops (list[str]), preference (int), metric (int),
+            routing_instance (str).
+
+    Returns:
+        CMSDriftReport dict with static_routes section (missing/extra/changed)
+        and summary with total drift count.
+    """
+    try:
+        client = get_client()
+        from nautobot_mcp.cms.cms_drift import compare_static_routes
+        result = compare_static_routes(client, device_name, live_routes)
+        return result.model_dump()
+    except Exception as e:
+        handle_error(e)
+
+
 # ---------------------------------------------------------------------------
 # Server entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     mcp.run()
+
