@@ -1,6 +1,6 @@
 # nautobot-mcp-cli
 
-**MCP server and CLI for Nautobot network automation** — lets AI agents (and humans) interact with [Nautobot](https://nautobot.readthedocs.io/) to query inventory, manage objects, parse router configs, onboard devices, and detect configuration drift — no config files required.
+**MCP server and CLI for Nautobot network automation** — lets AI agents (and humans) interact with [Nautobot](https://nautobot.readthedocs.io/) to query inventory, manage objects, parse router configs, onboard devices, detect configuration drift, and audit Juniper CMS model records (BGP, routing, interfaces, firewalls, policies) — no config files required.
 
 ---
 
@@ -9,18 +9,24 @@
 | Capability | MCP Tool | CLI Command |
 |---|---|---|
 | **Devices** — list, get, create, update, delete | `nautobot_*_device` | `nautobot-mcp devices` |
-| **Device Summary** ✨ — interface/IP/VLAN counts + link state in one call | `nautobot_get_device_summary` | `nautobot-mcp devices summary` |
+| **Device Summary** — interface/IP/VLAN counts + link state in one call | `nautobot_get_device_summary` | `nautobot-mcp devices summary` |
 | **Interfaces** — list, get, create, update, assign IP | `nautobot_*_interface` | `nautobot-mcp interfaces` |
-| **Enriched Interfaces** ✨ — list interfaces with IPs inline | `nautobot_list_interfaces(include_ips=True)` | `nautobot-mcp interfaces list --include-ips` |
+| **Enriched Interfaces** — list interfaces with IPs inline | `nautobot_list_interfaces(include_ips=True)` | `nautobot-mcp interfaces list --include-ips` |
 | **IPAM** — prefixes, IP addresses, VLANs | `nautobot_*_prefix/ip/vlan` | `nautobot-mcp ipam` |
-| **Device IP Query** ✨ — all IPs for a device in one call | `nautobot_get_device_ips` | `nautobot-mcp ipam ips list --device` |
+| **Device IP Query** — all IPs for a device in one call | `nautobot_get_device_ips` | `nautobot-mcp ipam ips list --device` |
 | **Organization** — tenants, locations | `nautobot_*_tenant/location` | `nautobot-mcp org` |
 | **Circuits** — list, get, create, update | `nautobot_*_circuit` | `nautobot-mcp circuits` |
 | **Golden Config** — intended/backup config, compliance rules | `nautobot_get_*_config`, `nautobot_*_compliance_*` | `nautobot-mcp golden-config` |
 | **Config Parsing** — parse JunOS JSON config | `nautobot_parse_config` | `nautobot-mcp parse` |
 | **Onboarding** — push parsed config to Nautobot (dry-run safe) | `nautobot_onboard_config` | `nautobot-mcp onboard config` |
 | **Verification** — compliance check & drift report | `nautobot_verify_*` | `nautobot-mcp verify` |
-| **File-Free Drift** ✨ — compare live interface data vs Nautobot | `nautobot_compare_device` | `nautobot-mcp verify quick-drift` |
+| **File-Free Drift** — compare live interface data vs Nautobot | `nautobot_compare_device` | `nautobot-mcp verify quick-drift` |
+| **CMS Routing** ✨ — BGP + static routes CRUD from netnam-cms-core | `nautobot_cms_*_bgp_*/static_route*` | `nautobot-mcp cms routing` |
+| **CMS Interfaces** ✨ — interface units, families, VRRP, ARP | `nautobot_cms_*_interface*/arp*` | `nautobot-mcp cms interfaces` |
+| **CMS Firewalls** ✨ — firewall filters, terms, policers | `nautobot_cms_*_firewall_*` | `nautobot-mcp cms firewalls` |
+| **CMS Policies** ✨ — policy statements, prefix lists, communities | `nautobot_cms_*_policy_*` | `nautobot-mcp cms policies` |
+| **CMS Summaries** ✨ — BGP summary, routing table, interface detail, firewall summary | `nautobot_cms_get_device_bgp_summary`, `nautobot_cms_get_device_routing_table`, `nautobot_cms_get_interface_detail`, `nautobot_cms_get_device_firewall_summary` | `nautobot-mcp cms routing bgp-summary` |
+| **CMS Drift** ✨ — compare live Juniper state vs CMS records (BGP + routes) | `nautobot_cms_compare_bgp_neighbors`, `nautobot_cms_compare_static_routes` | `nautobot-mcp cms drift` |
 
 ---
 
@@ -305,7 +311,7 @@ Add to `claude_desktop_config.json`:
 </details>
 
 <details>
-<summary><strong>Device Queries (v1.1 ✨)</strong></summary>
+<summary><strong>Device Queries</strong></summary>
 
 | Tool | Description |
 |---|---|
@@ -318,7 +324,7 @@ Add to `claude_desktop_config.json`:
 </details>
 
 <details>
-<summary><strong>Onboarding, Verification & Drift (v1.1 ✨)</strong></summary>
+<summary><strong>Onboarding, Verification & Drift</strong></summary>
 
 | Tool | Description |
 |---|---|
@@ -327,6 +333,102 @@ Add to `claude_desktop_config.json`:
 | `nautobot_verify_compliance` | Check config compliance via Golden Config |
 | `nautobot_verify_data_model` | Run DiffSync drift report (interfaces, IPs, VLANs) |
 | `nautobot_compare_device` | **File-free drift** — compare structured interface data vs Nautobot, no config file needed |
+
+</details>
+
+<details>
+<summary><strong>CMS Routing (v1.2 ✨)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `nautobot_cms_list_static_routes` | List static routes for a device (inlines next-hops) |
+| `nautobot_cms_get_static_route` | Get a single static route by ID |
+| `nautobot_cms_create_static_route` | Create a static route with next-hops |
+| `nautobot_cms_delete_static_route` | Delete a static route |
+| `nautobot_cms_list_bgp_groups` | List BGP groups for a device |
+| `nautobot_cms_get_bgp_group` | Get a single BGP group |
+| `nautobot_cms_create_bgp_group` | Create a BGP group |
+| `nautobot_cms_delete_bgp_group` | Delete a BGP group |
+| `nautobot_cms_list_bgp_neighbors` | List BGP neighbors for a device or group |
+| `nautobot_cms_get_bgp_neighbor` | Get a single BGP neighbor |
+| `nautobot_cms_create_bgp_neighbor` | Create a BGP neighbor |
+| `nautobot_cms_delete_bgp_neighbor` | Delete a BGP neighbor |
+| `nautobot_cms_list_bgp_address_families` | List address families for a BGP neighbor |
+| `nautobot_cms_list_bgp_policy_associations` | List policy associations for a group or neighbor |
+| `nautobot_cms_list_bgp_received_routes` | List received routes for a BGP neighbor |
+| `nautobot_cms_list_routing_instances` | List routing instances for a device |
+| `nautobot_cms_list_static_route_nexthops` | List next-hops for a static route |
+
+</details>
+
+<details>
+<summary><strong>CMS Interfaces (v1.2 ✨)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `nautobot_cms_list_interface_units` | List interface units for a device |
+| `nautobot_cms_get_interface_unit` | Get a single interface unit |
+| `nautobot_cms_create_interface_unit` | Create an interface unit |
+| `nautobot_cms_delete_interface_unit` | Delete an interface unit |
+| `nautobot_cms_list_interface_families` | List address families for an interface unit |
+| `nautobot_cms_get_interface_family` | Get a single interface family |
+| `nautobot_cms_list_ff_associations` | List filter-family associations (input/output filters) |
+| `nautobot_cms_create_ff_association` | Add a filter to an interface family |
+| `nautobot_cms_delete_ff_association` | Remove a filter from an interface family |
+| `nautobot_cms_list_fp_associations` | List policer-family associations |
+| `nautobot_cms_create_fp_association` | Add a policer to an interface family |
+| `nautobot_cms_delete_fp_association` | Remove a policer from an interface family |
+| `nautobot_cms_list_vrrp_groups` | List VRRP groups for an interface unit |
+| `nautobot_cms_get_vrrp_group` | Get a single VRRP group |
+| `nautobot_cms_create_vrrp_group` | Create a VRRP group |
+| `nautobot_cms_delete_vrrp_group` | Delete a VRRP group |
+| `nautobot_cms_list_arp_entries` | List ARP entries for a device or interface |
+| `nautobot_cms_get_arp_entry` | Get a single ARP entry |
+| `nautobot_cms_create_arp_entry` | Create an ARP entry |
+| `nautobot_cms_delete_arp_entry` | Delete an ARP entry |
+
+</details>
+
+<details>
+<summary><strong>CMS Firewalls & Policies (v1.2 ✨)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `nautobot_cms_list_firewall_filters` | List firewall filters for a device |
+| `nautobot_cms_get_firewall_filter` | Get a single firewall filter |
+| `nautobot_cms_create_firewall_filter` | Create a firewall filter |
+| `nautobot_cms_delete_firewall_filter` | Delete a firewall filter |
+| `nautobot_cms_list_firewall_terms` | List terms for a firewall filter |
+| `nautobot_cms_create_firewall_term` | Create a term in a firewall filter |
+| `nautobot_cms_delete_firewall_term` | Delete a firewall term |
+| `nautobot_cms_list_firewall_policers` | List firewall policers for a device |
+| `nautobot_cms_create_firewall_policer` | Create a firewall policer |
+| `nautobot_cms_delete_firewall_policer` | Delete a firewall policer |
+| `nautobot_cms_list_policy_statements` | List policy statements for a device |
+| `nautobot_cms_create_policy_statement` | Create a policy statement |
+| `nautobot_cms_delete_policy_statement` | Delete a policy statement |
+
+</details>
+
+<details>
+<summary><strong>CMS Composite Summaries (v1.2 ✨)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `nautobot_cms_get_device_bgp_summary` | All BGP groups + neighbors in one call; `detail=True` expands address families and policy associations |
+| `nautobot_cms_get_device_routing_table` | All static routes with inlined next-hops and routing instances |
+| `nautobot_cms_get_interface_detail` | Full interface unit view: families, filters, policers, VRRP groups, ARP entries |
+| `nautobot_cms_get_device_firewall_summary` | All firewall filters with term counts and policer associations |
+
+</details>
+
+<details>
+<summary><strong>CMS Drift Verification (v1.2 ✨)</strong></summary>
+
+| Tool | Description |
+|---|---|
+| `nautobot_cms_compare_bgp_neighbors` | Compare live BGP neighbors (from jmcp) against Nautobot CMS records — returns `CMSDriftReport` with missing, extra, changed |
+| `nautobot_cms_compare_static_routes` | Compare live static routes against Nautobot CMS records — nexthop comparison is order-independent |
 
 </details>
 
@@ -366,9 +468,9 @@ uv run nautobot-mcp interfaces get --device-name core-rtr-01 --name ge-0/0/0
 # IPAM
 uv run nautobot-mcp ipam prefixes list
 uv run nautobot-mcp ipam ips list
-uv run nautobot-mcp ipam ips list --device core-rtr-01   # device-scoped (v1.1)
+uv run nautobot-mcp ipam ips list --device core-rtr-01   # device-scoped
 uv run nautobot-mcp ipam vlans list --location "HAN DC1"
-uv run nautobot-mcp ipam vlans list --device core-rtr-01  # device-scoped (v1.1)
+uv run nautobot-mcp ipam vlans list --device core-rtr-01  # device-scoped
 
 # Organization
 uv run nautobot-mcp org tenants list
@@ -382,7 +484,7 @@ uv run nautobot-mcp golden-config show-intended core-rtr-01
 uv run nautobot-mcp golden-config show-backup core-rtr-01
 uv run nautobot-mcp golden-config compliance-results core-rtr-01
 
-# Device summary (v1.1)
+# Device summary
 uv run nautobot-mcp devices summary core-rtr-01
 uv run nautobot-mcp devices summary core-rtr-01 --detail  # includes interfaces + IPs
 
@@ -400,10 +502,28 @@ uv run nautobot-mcp verify compliance core-rtr-01
 # Verify data model drift (requires config file)
 uv run nautobot-mcp verify data-model config.json core-rtr-01
 
-# File-free drift check (v1.1) — no config file needed
+# File-free drift check — no config file needed
 uv run nautobot-mcp verify quick-drift core-rtr-01 --interface ae0.0 --ip 10.1.1.1/30
 uv run nautobot-mcp verify quick-drift core-rtr-01 -d '{"ae0.0": {"ips": ["10.1.1.1/30"]}}'
 uv run nautobot-mcp verify quick-drift core-rtr-01 -f drift-input.json --json
+
+# CMS Routing (v1.2)
+uv run nautobot-mcp cms routing list-static-routes --device core-rtr-01
+uv run nautobot-mcp cms routing bgp-summary --device core-rtr-01
+uv run nautobot-mcp cms routing routing-table --device core-rtr-01
+
+# CMS Interfaces (v1.2)
+uv run nautobot-mcp cms interfaces list-units --device core-rtr-01
+uv run nautobot-mcp cms interfaces detail --device core-rtr-01
+uv run nautobot-mcp cms interfaces list-arp-entries --device core-rtr-01
+
+# CMS Firewalls (v1.2)
+uv run nautobot-mcp cms firewalls list-filters --device core-rtr-01
+uv run nautobot-mcp cms firewalls firewall-summary --device core-rtr-01
+
+# CMS Drift (v1.2) — compare live device data against Nautobot CMS records
+uv run nautobot-mcp cms drift bgp --device core-rtr-01 --from-file live-bgp.json
+uv run nautobot-mcp cms drift routes --device core-rtr-01 --from-file live-routes.json
 ```
 
 ---
@@ -450,6 +570,59 @@ Objects created: **Device → Interfaces → IP Addresses → VLANs**
 
 ---
 
+## CMS Drift Detection (v1.2)
+
+Compare live Juniper device state (collected via jmcp) against Nautobot CMS model records.
+No config files required — data flows directly between tools.
+
+### BGP Drift
+
+```bash
+# Collect live BGP output from jmcp and save to file
+# Then compare against Nautobot CMS records
+nautobot-mcp cms drift bgp --device core-rtr-01 --from-file live-bgp.json
+
+# Machine-readable output
+nautobot-mcp --json cms drift bgp --device core-rtr-01 --from-file live-bgp.json
+```
+
+Input (`live-bgp.json`) is a list of BGP neighbor records:
+```json
+[{"peer_ip": "10.0.0.1", "peer_as": 65001, "local_address": "10.0.0.2", "group_name": "EXTERNAL"}]
+```
+
+### Route Drift
+
+```bash
+nautobot-mcp cms drift routes --device core-rtr-01 --from-file live-routes.json
+```
+
+### Agent Workflow (no filesystem)
+
+AI agents can chain jmcp + CMS drift tools directly:
+
+```
+1. execute_junos_command(router_name="core-rtr-01", command="show bgp summary | display json")
+   → Returns live BGP neighbor list
+
+2. nautobot_cms_compare_bgp_neighbors(
+       device_name="core-rtr-01",
+       live_neighbors=<output from step 1>
+   )
+   → Returns CMSDriftReport:
+     {"total_drifts": 0, "missing_in_nautobot": [], "extra_in_nautobot": [], "changed": []}
+
+3. nautobot_cms_compare_static_routes(
+       device_name="core-rtr-01",
+       live_routes=<from jmcp show route protocol static | display json>
+   )
+   → Returns CMSDriftReport for static routes
+```
+
+See the `cms-device-audit` agent skill (`.agent/skills/cms-device-audit/SKILL.md`) for the full 8-step audit workflow.
+
+---
+
 ## Drift Detection
 
 ### File-based (DiffSync, requires parsed config)
@@ -466,7 +639,7 @@ nautobot-mcp verify data-model config.json core-rtr-01 --json
 
 Output shows **missing**, **extra**, and **changed** items across Interfaces, IP Addresses, and VLANs.
 
-### File-free (v1.1) — no config file needed
+### File-free — no config file needed
 
 Pass interface data directly — as CLI flags, a JSON string, a file, or piped stdin:
 
