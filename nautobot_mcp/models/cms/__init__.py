@@ -9,6 +9,15 @@ Submodules per domain are added in subsequent phases:
 """
 
 from nautobot_mcp.models.cms.base import CMSBaseSummary
+from nautobot_mcp.models.cms.firewalls import (
+    FirewallFilterActionSummary,
+    FirewallFilterSummary,
+    FirewallMatchConditionSummary,
+    FirewallMatchConditionToPrefixListSummary,
+    FirewallPolicerActionSummary,
+    FirewallPolicerSummary,
+    FirewallTermSummary,
+)
 from nautobot_mcp.models.cms.interfaces import (
     InterfaceFamilyFilterSummary,
     InterfaceFamilyPolicerSummary,
@@ -17,6 +26,24 @@ from nautobot_mcp.models.cms.interfaces import (
     VRRPGroupSummary,
     VRRPTrackInterfaceSummary,
     VRRPTrackRouteSummary,
+)
+from nautobot_mcp.models.cms.policies import (
+    JPSActionAsPathSummary,
+    JPSActionCommunitySummary,
+    JPSActionInstallNexthopSummary,
+    JPSActionLoadBalanceSummary,
+    JPSActionSummary,
+    JPSMatchConditionAsPathSummary,
+    JPSMatchConditionCommunitySummary,
+    JPSMatchConditionPrefixListSummary,
+    JPSMatchConditionRouteFilterSummary,
+    JPSMatchConditionSummary,
+    JPSTermSummary,
+    PolicyAsPathSummary,
+    PolicyCommunitySummary,
+    PolicyPrefixListSummary,
+    PolicyPrefixSummary,
+    PolicyStatementSummary,
 )
 from nautobot_mcp.models.cms.routing import (
     BGPAddressFamilySummary,
@@ -48,4 +75,29 @@ __all__ = [
     "VRRPGroupSummary",
     "VRRPTrackRouteSummary",
     "VRRPTrackInterfaceSummary",
+    # Firewall models (Phase 11)
+    "FirewallFilterSummary",
+    "FirewallTermSummary",
+    "FirewallMatchConditionSummary",
+    "FirewallMatchConditionToPrefixListSummary",
+    "FirewallFilterActionSummary",
+    "FirewallPolicerSummary",
+    "FirewallPolicerActionSummary",
+    # Policy models (Phase 11)
+    "PolicyPrefixListSummary",
+    "PolicyPrefixSummary",
+    "PolicyCommunitySummary",
+    "PolicyAsPathSummary",
+    "PolicyStatementSummary",
+    "JPSTermSummary",
+    "JPSMatchConditionSummary",
+    "JPSMatchConditionRouteFilterSummary",
+    "JPSMatchConditionPrefixListSummary",
+    "JPSMatchConditionCommunitySummary",
+    "JPSMatchConditionAsPathSummary",
+    "JPSActionSummary",
+    "JPSActionCommunitySummary",
+    "JPSActionAsPathSummary",
+    "JPSActionLoadBalanceSummary",
+    "JPSActionInstallNexthopSummary",
 ]
