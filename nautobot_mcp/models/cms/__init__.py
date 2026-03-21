@@ -7,6 +7,7 @@ Submodules per domain are added in subsequent phases:
 - policies.py (Phase 11)
 - arp.py (Phase 12)
 - composites.py (Phase 12)
+- cms_drift.py (Phase 13)
 """
 
 from nautobot_mcp.models.cms.base import CMSBaseSummary
@@ -57,6 +58,7 @@ from nautobot_mcp.models.cms.routing import (
     StaticRouteSummary,
 )
 from nautobot_mcp.models.cms.arp import ArpEntrySummary
+from nautobot_mcp.models.cms.cms_drift import CMSDriftReport
 from nautobot_mcp.models.cms.composites import (
     BGPSummaryResponse,
     FirewallSummaryResponse,
@@ -115,4 +117,6 @@ __all__ = [
     "RoutingTableResponse",
     "InterfaceDetailResponse",
     "FirewallSummaryResponse",
+    # Drift report model (Phase 13)
+    "CMSDriftReport",
 ]
