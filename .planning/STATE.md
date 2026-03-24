@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-milestone_name: — Generic Resource Engine
+milestone_name: — API Bridge MCP Server
 status: ready-to-plan
-last_updated: "2026-03-24T11:30:00.000Z"
+last_updated: "2026-03-24T09:50:00.000Z"
 progress:
-  total_phases: 4
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,24 +18,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Defining requirements for v1.3 Generic Resource Engine
+**Current focus:** Defining requirements for v1.3 API Bridge MCP Server
 
 ## Current Position
 
-Phase: 15 (resource-registry-foundation) — PENDING
-Plan: 0 of 0
-Status: Roadmap created, ready to plan phases
-Last activity: 2026-03-24 — Requirements (30) and roadmap (4 phases) defined
+Phase: Not started (defining requirements)
+Plan: —
+Status: Milestone v1.3 reset — Generic Resource Engine rejected, API Bridge adopted
+Last activity: 2026-03-24 — Milestone reset; pending new requirements + roadmap
 
 ## Context
 
-**Goal:** Re-architect MCP tool layer from 165 individual tools to ~18 using a Generic Resource Engine pattern. Eliminate context window bloat (33% → ~3.5%) and restore agent accuracy.
+**Goal:** Re-architect MCP server from 165 individual tools to 3 tools (`nautobot_api_catalog`, `call_nautobot`, `run_workflow`) + agent skills. Eliminate context window bloat (50K tokens → ~1.8K tokens) and restore agent accuracy.
+
+**Design:** [API Bridge MCP Architecture Design v2](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 
 **Scope:**
-- Resource Registry module (`registry.py`) with unified catalog
-- 3 generic discovery/CRUD tools replacing ~150 individual wrappers
-- ~15 preserved composite workflow tools
-- Clean break migration (no backwards compatibility)
+- API Catalog engine (static core JSON + dynamic CMS discovery from `CMS_ENDPOINTS`)
+- Universal REST bridge (`call_nautobot`) with endpoint routing, validation, auto-pagination
+- Workflow registry (`run_workflow`) wrapping existing composite domain functions
+- Agent skills distributed as files (device-audit, onboard-config, verify-compliance)
+- Clean break migration (no backwards compatibility aliases)
 - UAT against Nautobot dev server (http://101.96.85.93)
 
 ## Key Decisions
@@ -53,9 +56,11 @@ Last activity: 2026-03-24 — Requirements (30) and roadmap (4 phases) defined
 | netnam-cms-core via plugin API | v1.2 | Plugin exposes 49 DRF endpoints, consume directly |
 | CMS routing nexthop inlining | 9 | Static route nexthops inlined into parent for MCP efficiency |
 | BGP neighbor device-scoping | 9 | Neighbors scoped via group → device chain for device queries |
-| Generic Resource Engine | v1.3 | 165 tools → ~18 via unified dispatcher; 33% → 3.5% context |
+| ~~Generic Resource Engine~~ | ~~v1.3~~ | ~~Rejected — superseded by API Bridge~~ |
+| API Bridge MCP Server | v1.3 | 165 tools → 3 via catalog + REST bridge + workflows; 96% token reduction |
 | Clean break (no aliases) | v1.3 | Long-term clarity over short-term compatibility |
 | CLI unchanged | v1.3 | CLI calls domain modules directly, not MCP tools |
+| Skills as files (not MCP) | v1.3 | Cross-MCP orchestration + user-interactive flows stay agent-side |
 
 ## Accumulated Context
 
@@ -69,6 +74,8 @@ Last activity: 2026-03-24 — Requirements (30) and roadmap (4 phases) defined
 - netnam-cms-core has 40+ Juniper models across routing, interfaces, firewalls, policies, ARP
 - cms/client.py already has CMS_ENDPOINTS registry + generic CRUD helpers (cms_list/get/create/update/delete)
 - Research: AI accuracy drops <2% at 7+ domains (LangChain 2025); 165 tools consume ~66K tokens/request
+- v1.3 Generic Resource Engine (4 phases, 30 requirements) REJECTED 2026-03-24 before implementation
+- API Bridge design approved: 3 tools + agent skills, 96% token reduction
 
 ## Blockers
 
@@ -76,4 +83,4 @@ None.
 
 ---
 *State initialized: 2026-03-17*
-*Last updated: 2026-03-24 — v1.3 milestone started*
+*Last updated: 2026-03-24 — v1.3 reset from Generic Resource Engine to API Bridge MCP Server*

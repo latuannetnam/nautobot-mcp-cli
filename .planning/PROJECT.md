@@ -12,16 +12,19 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 
 **Previous:** v1.2 Juniper CMS Model MCP Tools (shipped 2026-03-21)
 
-## Current Milestone: v1.3 Generic Resource Engine
+## Current Milestone: v1.3 API Bridge MCP Server
 
-**Goal:** Re-architect MCP tool layer from 165 individual tools to ~18 using a Generic Resource Engine pattern, solving context window bloat and agent accuracy degradation.
+**Goal:** Re-architect MCP server from 165 individual tools to 3 tools (`nautobot_api_catalog`, `call_nautobot`, `run_workflow`) + agent skills, solving context window bloat and agent accuracy degradation.
 
 **Target features:**
-- Resource Registry module with unified catalog mapping resource_type → handler
-- 3 generic discovery/CRUD tools replacing ~150 individual wrappers
-- ~15 preserved composite workflow tools for multi-entity operations
+- API Catalog engine (static core + dynamic CMS plugin discovery)
+- Universal REST bridge (`call_nautobot`) with endpoint routing, validation, auto-pagination
+- Workflow registry (`run_workflow`) wrapping existing composite domain functions
+- Agent skills distributed as files (not served via MCP)
 - Clean break migration (no backwards compatibility aliases)
 - Full test coverage with UAT against Nautobot dev server
+
+**Design:** [API Bridge MCP Architecture Design v2](docs/plans/2026-03-24-api-bridge-mcp-design.md)
 
 ## Requirements
 
@@ -50,11 +53,16 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 
 ### Active
 
-- [ ] Generic Resource Engine — unified resource registry + dispatcher
-- [ ] 3 universal MCP tools (list_resources, resource_schema, resource)
-- [ ] Consolidated server.py (~300 lines replacing 3,883)
-- [ ] Resource-level test coverage + UAT against Nautobot dev
-- [ ] Updated agent skills and documentation
+- [ ] API Catalog engine — static core + dynamic CMS plugin discovery
+- [ ] Universal REST bridge — endpoint routing, validation, auto-pagination
+- [ ] Workflow registry — server-side composite workflows
+- [ ] Agent skills — distributed as files, referencing new 3-tool API
+- [ ] Consolidated server.py (~200 lines / 3 tools replacing 3,883 / 165 tools)
+- [ ] Updated tests + UAT against Nautobot dev
+
+### Rejected
+
+- ~~Generic Resource Engine (unified resource registry + dispatcher)~~ — Rejected 2026-03-24; superseded by API Bridge architecture
 
 ### Future
 
@@ -87,7 +95,8 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 | 1:1 Pydantic model per CMS endpoint | Mirrors API shape exactly; avoids impedance mismatch | ✓ 40+ CMS Pydantic models, clean validation |
 | Composite tools as thin aggregators | Single-call UX for common agent workflows | ✓ Reduces agent round-trips from N to 1 |
 | DiffSync for CMS drift (not set comparison) | Field-level change detection vs presence-only | ✓ Reports changed fields, not just missing/extra |
-| Generic Resource Engine (v1.3) | 165 tools → ~18 via unified dispatcher; context overhead drops from 33% to ~3.5% | In progress |
+| ~~Generic Resource Engine (v1.3)~~ | ~~165 tools → ~18 via unified dispatcher~~ | ❌ Rejected — superseded by API Bridge |
+| API Bridge MCP Server (v1.3) | 165 tools → 3 via catalog + REST bridge + workflows; 96% token reduction | In progress |
 
 ## Constraints
 
@@ -99,4 +108,4 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-24 after v1.3 milestone started*
+*Last updated: 2026-03-24 after v1.3 pivot from Generic Resource Engine to API Bridge*
