@@ -1,53 +1,54 @@
-# Research Summary: nautobot-mcp-cli
+# Research Summary
 
-## Stack
+**Domain:** MCP Tool Consolidation / Generic Resource Engine
+**Synthesized:** 2026-03-24
+**Dimensions:** Stack, Features, Architecture, Pitfalls
 
-**FastMCP 3.0 + pynautobot 2.6.x + Typer** — FastMCP is the de facto standard for Python MCP servers (auto-schema from type hints). pynautobot is the official Nautobot SDK (handles auth, pagination, versioning). Typer provides CLI with minimal code. All three share pydantic/type-hint patterns for consistency.
+## Key Findings
 
-**Python 3.11+** required by MCP SDK. **pytest + respx** for testing.
+### Stack Additions
+- **No new external dependencies** — only Python stdlib (`dataclasses`, `inspect`, `enum`)
+- Core stack unchanged: FastMCP 3.x, pynautobot 2.x, Pydantic 2.x, Typer
 
-## Table Stakes
+### Feature Table Stakes
+- Resource catalog discovery (`nautobot_list_resources`)
+- Schema introspection (`nautobot_resource_schema`)
+- Universal CRUD dispatcher (`nautobot_resource`)
+- ~15 preserved composite workflow tools (multi-entity joins)
+- Action validation, filter passthrough, structured errors
 
-- Nautobot CRUD for all core models (devices, interfaces, IPAM, org, circuits)
-- API token authentication with connection validation
-- Golden Config plugin integration (read/write compliance rules, intended configs)
-- MCP server with tool discovery and structured responses
-- CLI with human-readable and scriptable output
+### Architecture Pattern
+- **Toolhost Pattern** — industry-recognized MCP pattern for consolidating 20+ closely related tools
+- Single `registry.py` module with `RESOURCE_REGISTRY` dict
+- Dual handler strategy: CMS uses `cms_list/get/create/update/delete`, core uses explicit domain functions
+- Only 2 files change: `registry.py` (new) and `server.py` (modified)
 
-## Differentiators
+### Watch Out For
+1. **Incomplete registry coverage** — automated test must verify 100% old tool coverage
+2. **Filter parameter mismatch** — CMS uses `device_name`, core uses `name`/`device`
+3. **CMS/Core handler asymmetry** — dual dispatch needed
+4. **Schema explosion** — exclude read-only fields from create/update schemas
+5. **Composite tool breakage** — keep `get_client()` and domain function signatures unchanged
+6. **UAT flakiness** — separate UAT from unit tests, use read-only operations
 
-- **Config onboarding workflow** — Parse JunOS config → create/update Nautobot objects automatically
-- **Compliance verification** — Compare live config (via jmcp) against Golden Config and Nautobot data models
-- **Agent skills** — Pre-built multi-step workflows that chain nautobot-mcp and jmcp tools
+## Architectural Decision Summary
 
-## Watch Out For
+| Decision | Rationale |
+|----------|-----------|
+| Static 3 tools + internal dispatch | Debuggable, IDE-friendly, less FastMCP magic |
+| `filters: dict` and `data: dict` params | Avoids parameter explosion on generic tool |
+| Dual-registry (CMS auto-mapped, Core explicit) | Maximizes code reuse from existing `CMS_ENDPOINTS` |
+| Clean break (no aliases) | Tool count stays at ~18 permanently |
+| CLI unchanged | CLI calls domain modules directly, not MCP tools |
 
-1. **API pagination** — pynautobot handles it, but raw requests will miss data
-2. **MCP tool granularity** — Balance between atomic and composite tools
-3. **Config parsing fragility** — JunOS varies by platform/version; need extensive test fixtures
-4. **Object reference resolution** — Creating Nautobot objects requires resolving foreign keys (device type, location, manufacturer)
-5. **Golden Config plugin API** — Differs from core Nautobot API; test against real server early
-6. **Idempotency** — Onboarding must be safe to run repeatedly without creating duplicates
+## Phase Structure Recommendation
 
-## Architecture
+Based on research, recommend 4 phases:
 
-Shared core library with three thin interface layers:
-- **Core** (`nautobot_mcp/`) — API client, parsers, comparators, data models
-- **MCP Server** (`mcp_server/`) — FastMCP tools wrapping core functions
-- **CLI** (`cli/`) — Typer commands wrapping core functions
-- **Skills** (`skills/`) — Multi-step workflow definitions
+1. **Resource Registry Foundation** — `registry.py` with `ResourceDef`, automated coverage test
+2. **Server Refactor** — Replace 165 tools with 3 generic + ~15 composites in `server.py`
+3. **Test Suite & Coverage** — Update `test_server.py`, new `test_registry.py`, ensure 293+ tests pass
+4. **UAT Verification** — Smoke tests against Nautobot dev server (`http://101.96.85.93`)
 
-## Build Order
-
-1. Core client (auth, connection)
-2. Data model operations (devices, interfaces, IPAM)
-3. MCP server layer
-4. CLI layer
-5. Config parser (JunOS)
-6. Golden Config integration
-7. Comparators + verification workflows
-8. Agent skills
-
-## Existing Implementations
-
-Several Nautobot MCP servers exist (gt732/nautobot-app-mcp, kvncampos/nautobot_mcp). Our approach differs: standalone tool with CLI and skills, not a Nautobot plugin. We complement jmcp for cross-device-and-SoT workflows.
+---
+*Research synthesized: 2026-03-24*

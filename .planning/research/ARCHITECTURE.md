@@ -1,113 +1,169 @@
-# Architecture Research: Nautobot MCP CLI
+# Architecture Research
 
-## System Architecture
+**Domain:** MCP Tool Consolidation / Generic Resource Engine
+**Researched:** 2026-03-24
+**Confidence:** HIGH
+
+## Standard Architecture: Toolhost Pattern
+
+The "Toolhost Pattern" (documented in MCP best practices 2025-2026) is the industry-recognized approach for consolidating many closely related MCP tools into a single dispatcher. Our implementation follows this pattern precisely.
+
+### System Overview
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     AI Agent (Claude, etc.)              │
-│                                                         │
-│  Uses MCP tools from both servers to orchestrate tasks  │
-└──────────────┬─────────────────────┬────────────────────┘
-               │                     │
-               ▼                     ▼
-┌──────────────────────┐  ┌──────────────────────┐
-│  nautobot-mcp-cli    │  │       jmcp            │
-│  (This project)      │  │  (Juniper MCP Server) │
-│                      │  │                       │
-│  MCP Server + CLI    │  │  Direct router access │
-│  + Agent Skills      │  │  via NETCONF/SSH      │
-└──────────┬───────────┘  └──────────┬────────────┘
-           │                         │
-           ▼                         ▼
-┌──────────────────────┐  ┌──────────────────────┐
-│  Nautobot Server     │  │  Network Devices     │
-│  (REST API)          │  │  (Juniper, Cisco)    │
-│  nautobot.netnam.vn  │  │                      │
-└──────────────────────┘  └──────────────────────┘
+│              MCP Tool Layer (~18 tools)                   │
+│  ┌──────────────────┐ ┌──────────────────┐              │
+│  │  Discovery (2)    │ │  Composites (~15) │              │
+│  │  list_resources   │ │  device_summary   │              │
+│  │  resource_schema  │ │  bgp_summary      │              │
+│  └────────┬─────────┘ │  firewall_summary │              │
+│           │            │  compare_device   │              │
+│  ┌────────┴─────────┐ │  ...              │              │
+│  │  Generic CRUD (1) │ └────────┬─────────┘              │
+│  │  resource()       │          │                        │
+│  └────────┬─────────┘          │                        │
+├───────────┴────────────────────┴────────────────────────┤
+│              Resource Registry (registry.py)              │
+│  RESOURCE_REGISTRY: Dict[str, ResourceDef]               │
+│  ~50 entries mapping resource_type → handler config       │
+├─────────────────────────────────────────────────────────┤
+│              Domain Modules (UNCHANGED)                   │
+│  devices.py │ interfaces.py │ ipam.py │ organization.py  │
+│  cms/routing.py │ cms/interfaces.py │ cms/firewalls.py   │
+│  cms/policies.py │ cms/arp.py │ golden_config.py         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Component Architecture
+### Component Responsibilities
+
+| Component | Responsibility | Implementation |
+|-----------|----------------|----------------|
+| `nautobot_list_resources` | Catalog discovery | Iterate `RESOURCE_REGISTRY`, return types + actions |
+| `nautobot_resource_schema` | Field schema for a resource | Introspect Pydantic model fields |
+| `nautobot_resource` | Universal CRUD dispatcher | Route to domain functions via registry |
+| `RESOURCE_REGISTRY` | Resource → handler mapping | Python dict with `ResourceDef` entries |
+| Domain modules | Actual business logic | **Unchanged** — existing functions |
+| Composite tools | Multi-entity joins | **Unchanged** — existing functions |
+
+## Recommended Project Structure
 
 ```
-nautobot-mcp-cli/
-├── nautobot_mcp/              # Shared core library
-│   ├── client/                # Nautobot API client (pynautobot wrapper)
-│   │   ├── base.py            # Connection, auth, base client
-│   │   ├── devices.py         # Device operations
-│   │   ├── interfaces.py      # Interface operations
-│   │   ├── ipam.py            # IPAM operations (prefix, IP, VLAN)
-│   │   ├── organization.py    # Org operations (tenant, location)
-│   │   ├── circuits.py        # Circuit operations
-│   │   └── golden_config.py   # Golden Config plugin API
-│   ├── parsers/               # Config parsers (vendor-specific)
-│   │   ├── base.py            # Abstract parser interface
-│   │   └── junos.py           # JunOS config parser
-│   ├── comparators/           # Config comparison logic
-│   │   ├── config_diff.py     # Config text diff
-│   │   └── model_diff.py      # Data model comparison
-│   └── models/                # Shared data models (pydantic)
-│       ├── device.py
-│       ├── interface.py
-│       └── ipam.py
-├── mcp_server/                # MCP server layer (thin)
-│   ├── server.py              # FastMCP server setup
-│   └── tools/                 # MCP tool definitions
-│       ├── devices.py         # Device tools
-│       ├── interfaces.py      # Interface tools
-│       ├── ipam.py            # IPAM tools
-│       ├── golden_config.py   # Golden Config tools
-│       └── workflows.py       # Workflow/skill tools
-├── cli/                       # CLI layer (thin)
-│   ├── app.py                 # Typer app setup
-│   └── commands/              # CLI command groups
-│       ├── devices.py
-│       ├── interfaces.py
-│       ├── ipam.py
-│       └── golden_config.py
-├── skills/                    # Agent skill definitions
-│   ├── onboard_config.py      # Config onboarding workflow
-│   └── verify_compliance.py   # Compliance verification workflow
-├── pyproject.toml
-└── tests/
+nautobot_mcp/
+├── registry.py           # [NEW] Resource registry + ResourceDef
+├── server.py             # [MODIFIED] ~300 lines: 3 generic + ~15 composite tools
+├── client.py             # [UNCHANGED]
+├── config.py             # [UNCHANGED]
+├── devices.py            # [UNCHANGED]
+├── interfaces.py         # [UNCHANGED]
+├── ipam.py               # [UNCHANGED]
+├── organization.py       # [UNCHANGED]
+├── circuits.py           # [UNCHANGED]
+├── golden_config.py      # [UNCHANGED]
+├── onboarding.py         # [UNCHANGED]
+├── verification.py       # [UNCHANGED]
+├── drift.py              # [UNCHANGED]
+├── cms/
+│   ├── client.py         # [UNCHANGED] — CMS_ENDPOINTS stays here
+│   ├── routing.py        # [UNCHANGED]
+│   ├── interfaces.py     # [UNCHANGED]
+│   ├── firewalls.py      # [UNCHANGED]
+│   ├── policies.py       # [UNCHANGED]
+│   └── arp.py            # [UNCHANGED]
+├── models/               # [UNCHANGED]
+└── cli/                  # [UNCHANGED]
 ```
+
+### Structure Rationale
+
+- **`registry.py` is the only new file** — contains `ResourceDef` dataclass + `RESOURCE_REGISTRY` dict
+- **`server.py` is the only modified file** — reduced from 3,883 to ~300 lines
+- **All domain modules unchanged** — the dispatcher calls them, they don't know about it
+
+## Architectural Patterns
+
+### Pattern 1: Toolhost Dispatcher
+
+**What:** Single MCP tool that routes to different handlers based on `resource_type` + `action` parameters
+**When to use:** >20 closely related CRUD tools in an MCP server
+**Trade-offs:** Slightly less transparent to the agent (needs discovery step), but dramatically reduces context consumption
+
+```python
+@mcp.tool(name="nautobot_resource")
+def nautobot_resource(resource_type: str, action: str, ...) -> dict:
+    resource_def = RESOURCE_REGISTRY.get(resource_type)
+    handler = resource_def.handlers[action]
+    return handler(client, **params)
+```
+
+### Pattern 2: Two-Phase Discovery
+
+**What:** Agent first discovers available resources, then queries schema for a specific resource type before performing operations
+**When to use:** When the generic tool has many possible parameter combinations
+**Trade-offs:** Adds 1-2 tool calls before first CRUD operation, but eliminates hallucinated parameters
+
+### Pattern 3: Dual-Registry (Core + CMS)
+
+**What:** Core Nautobot resources mapped manually (devices, interfaces, IPs); CMS resources auto-mapped from `CMS_ENDPOINTS`
+**When to use:** When one domain has an existing programmatic registry
+**Trade-offs:** Slightly different handling paths, but maximizes code reuse
 
 ## Data Flow
 
-### Config Onboarding Flow
+### Generic CRUD Request Flow
+
 ```
-1. Agent calls jmcp: get_junos_config(router_name)
-2. Agent receives raw JunOS config text
-3. Agent calls nautobot-mcp: parse_junos_config(config_text)
-4. Parser extracts: interfaces, IPs, VLANs, etc.
-5. Agent calls nautobot-mcp: onboard_parsed_config(parsed_data)
-6. Tool creates/updates Nautobot objects via pynautobot
-7. Returns: summary of changes made
+Agent: nautobot_resource(resource_type="cms.static_route", action="list", filters={"device": "core-rtr-01"})
+    ↓
+server.py → RESOURCE_REGISTRY["cms.static_route"]
+    ↓
+ResourceDef(domain="cms", handler=cms_routing.list_static_routes, model=StaticRouteSummary)
+    ↓
+cms_routing.list_static_routes(client, device_name="core-rtr-01")
+    ↓
+cms_client.cms_list("juniper_static_routes", client, StaticRouteSummary, filters)
+    ↓
+Nautobot REST API → pynautobot → Pydantic model → dict response
 ```
 
-### Compliance Verification Flow
-```
-1. Agent calls nautobot-mcp: get_device_intended_config(device_name)
-2. Agent calls jmcp: get_junos_config(router_name)
-3. Agent calls nautobot-mcp: compare_configs(intended, actual)
-4. Comparator returns: structured drift report
-5. Agent presents: human-readable compliance summary
-```
+## Anti-Patterns
 
-### Data Model Verification Flow
-```
-1. Agent calls nautobot-mcp: get_device_interfaces(device_name)
-2. Agent calls jmcp: execute_junos_command("show interfaces")
-3. Agent calls nautobot-mcp: compare_interfaces(nautobot_data, live_data)
-4. Returns: discrepancies between Nautobot records and live state
-```
+### Anti-Pattern 1: Dynamic Tool Generation
 
-## Build Order (Dependencies)
+**What people do:** Generate `@mcp.tool` decorators dynamically from registry at import time
+**Why it's wrong:** IDE can't inspect, harder to debug, test coverage unclear, FastMCP may not handle dynamic names well
+**Do this instead:** Static 3 tool definitions with internal dispatch
 
-1. **Core client** — Authentication, connection, base API client
-2. **Data model operations** — Devices, interfaces, IPAM (depends on client)
-3. **MCP server** — Expose core operations as tools (depends on data model ops)
-4. **CLI** — Same operations via command line (depends on data model ops)
-5. **Config parsers** — JunOS parser (independent of above)
-6. **Comparators** — Diff logic (depends on parsers + data model)
-7. **Golden Config** — Plugin API integration (depends on client)
-8. **Workflow skills** — Chain operations across tools (depends on all above)
+### Anti-Pattern 2: Over-Parameterized Generic Tool
+
+**What people do:** Put ALL possible fields as optional parameters on the generic tool
+**Why it's wrong:** Tool description becomes enormous, defeating the purpose
+**Do this instead:** Accept `filters: dict` and `data: dict` — let `nautobot_resource_schema` guide the agent
+
+### Anti-Pattern 3: Round-Trip for Every Child Entity
+
+**What people do:** Require separate `nautobot_resource` calls for children (nexthops, address families)
+**Why it's wrong:** Multiplies agent round-trips
+**Do this instead:** Keep composite tools for multi-entity operations
+
+## Integration Points
+
+### External Services
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Nautobot REST API | pynautobot client (unchanged) | All CRUD via existing domain functions |
+| Nautobot CMS Plugin | CMS client via CMS_ENDPOINTS (unchanged) | Auto-mapped to registry |
+| jmcp (Juniper MCP) | Via agent workflow only | Not affected by this refactor |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| Registry → Domain modules | Direct Python function calls | No new interfaces needed |
+| Registry → CMS client | Via `cms_list/get/create/update/delete` | Already generic |
+| Server → Registry | Import + dict lookup | O(1) lookup performance |
+
+---
+*Architecture research for: MCP Tool Consolidation*
+*Researched: 2026-03-24*

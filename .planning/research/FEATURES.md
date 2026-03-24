@@ -1,75 +1,71 @@
-# Features Research: Nautobot MCP CLI
+# Feature Research
 
-## Table Stakes (Must Have)
+**Domain:** MCP Tool Consolidation / Generic Resource Engine
+**Researched:** 2026-03-24
+**Confidence:** HIGH
 
-### Nautobot Data Access
-- **Device CRUD** — List, get, create, update, delete devices
-- **Interface management** — List interfaces per device, create/update interface details
-- **IPAM operations** — Manage prefixes, IP addresses, VLANs
-- **Organization data** — Read/write tenants, locations
-- **Circuit management** — CRUD operations for circuit data
-- **Complexity:** Medium — straightforward REST API wrapping via pynautobot
+## Feature Landscape
 
-### Authentication & Connection
-- **API token auth** — Secure connection to Nautobot instance
-- **Connection validation** — Verify Nautobot reachability and API version
-- **Multi-instance support** — Configure different Nautobot servers
-- **Complexity:** Low — pynautobot handles this natively
+### Table Stakes (Must Have for v1.3)
 
-### Golden Config Integration
-- **Read intended configs** — Retrieve golden/intended configurations
-- **Compliance check** — Compare actual vs intended via API
-- **Config backup retrieval** — Get stored device backups
-- **Compliance rule management** — CRUD for compliance rules/features
-- **Complexity:** Medium — Golden Config plugin has its own API endpoints
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Resource catalog discovery | Agent needs to know what resources exist before acting | LOW | `nautobot_list_resources` — returns all resource types |
+| Schema introspection | Agent needs field requirements before create/update | MEDIUM | `nautobot_resource_schema` — dynamic from Pydantic models |
+| Universal CRUD dispatcher | Core value prop — one tool for all entities | HIGH | `nautobot_resource` — dispatch to domain functions |
+| Preserved composite tools | Multi-entity joins can't be expressed as simple CRUD | LOW | Keep ~15 existing tools unchanged |
+| Action validation | Reject invalid actions before hitting API | LOW | Enum-based action checking in dispatcher |
+| Filter passthrough | Agents need to filter resources (e.g., device_name) | MEDIUM | Forward filters dict to domain functions |
+| Structured error handling | Agents need clear errors to recover | LOW | Already have `handle_error` — reuse |
 
-### MCP Server
-- **Tool discovery** — AI agents discover available tools via MCP protocol
-- **Structured responses** — Return data in agent-consumable format
-- **Error handling** — Clear error messages for agent decision-making
-- **Complexity:** Low-Medium — FastMCP handles protocol, need good tool design
+### Differentiators (Competitive Advantage)
 
-### CLI Interface
-- **Human-readable output** — Tables, formatted JSON, colored status
-- **Scriptable output** — JSON/CSV output modes for pipelines
-- **Shell completion** — Tab completion for commands
-- **Complexity:** Low — Typer provides these out of the box
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Domain-grouped catalog | Agent sees resources organized by domain, not a flat list | LOW | `nautobot_list_resources(domain="cms")` |
+| Inline child nesting | Routes include nexthops, interfaces include families | LOW | Already implemented in v1.2 models |
+| Zero-new-dependency growth | Adding domains adds registry entries, not tools | LOW | Architecture guarantee |
+| Auto-generated schema | `nautobot_resource_schema` builds field info from Pydantic model | MEDIUM | Uses `model_fields` introspection |
 
-## Differentiators (Competitive Advantage)
+### Anti-Features (Don't Build)
 
-### Config Onboarding Workflow
-- **Parse JunOS config → Nautobot data model** — Structured extraction of interfaces, IPs, VLANs from router config
-- **Diff before commit** — Show what will change in Nautobot before writing
-- **Idempotent operations** — Run onboarding multiple times safely
-- **Complexity:** High — requires robust config parsing
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Dynamic `@mcp.tool` generation | "Auto-register tools from registry" | Harder to debug, IDE can't inspect | Static 3 tools, internal dispatch |
+| GraphQL dispatcher | "Use Nautobot's GraphQL" | Different query model, parallel complexity | REST API is reliable and consistent |
+| Backwards-compatible aliases | "Keep old tool names" | Doubles tool count, defeats purpose | Clean break + comprehensive testing |
+| LLM-side caching | "Cache responses in context" | Stale data risk, context bloat | Let agent re-query as needed |
 
-### Compliance Verification Workflows
-- **Live vs Golden Config** — Compare live router config (via jmcp) against Nautobot Golden Config
-- **Live vs Data Model** — Verify interfaces/IPs on router match Nautobot records
-- **Drift report** — Structured report of differences
-- **Complexity:** High — cross-MCP-server coordination, diff logic
-
-### Agent Skills
-- **Pre-built multi-step workflows** — "Onboard router", "Verify compliance", "Audit device"
-- **Composable** — Skills chain MCP tools across nautobot-mcp and jmcp
-- **Complexity:** Medium — workflow orchestration
-
-## Anti-Features (Do NOT Build)
-
-| Feature | Why Not |
-|---------|---------|
-| Direct device SSH/NETCONF | jmcp handles this; avoid duplication |
-| Nautobot web UI | Nautobot already has a UI |
-| Config generation/rendering | Golden Config plugin handles this |
-| Multi-tenant Nautobot management | Out of scope for v1 |
-| Automated remediation | Too risky without human confirmation for v1 |
-
-## Dependencies Between Features
+## Feature Dependencies
 
 ```
-Authentication ──→ All Nautobot operations
-Device CRUD ──→ Interface management ──→ IPAM operations
-Golden Config read ──→ Compliance check
-Config parsing (JunOS) ──→ Config onboarding workflow
-Nautobot data access + jmcp ──→ Compliance verification workflows
+[nautobot_list_resources] ← requires ← [Resource Registry]
+[nautobot_resource_schema] ← requires ← [Resource Registry]
+[nautobot_resource] ← requires ← [Resource Registry]
+                    ← requires ← [Domain Modules (unchanged)]
+
+[Resource Registry] ← requires ← [CMS_ENDPOINTS (already exists)]
+                    ← requires ← [Core domain function mapping (new)]
 ```
+
+### Dependency Notes
+
+- **All 3 tools require Resource Registry:** Registry must be built first
+- **Registry requires CMS_ENDPOINTS:** Already exists in `cms/client.py`
+- **Composite tools are independent:** No changes needed
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Cost | Priority |
+|---------|------------|------|----------|
+| Resource Registry module | HIGH | MEDIUM | **P1** |
+| `nautobot_resource` dispatcher | HIGH | HIGH | **P1** |
+| `nautobot_list_resources` | HIGH | LOW | **P1** |
+| `nautobot_resource_schema` | MEDIUM | MEDIUM | **P1** |
+| Preserved composite tools | HIGH | LOW | **P1** |
+| Domain-grouped catalog | MEDIUM | LOW | **P2** |
+| UAT against Nautobot dev | HIGH | MEDIUM | **P1** |
+
+---
+*Feature research for: MCP Tool Consolidation*
+*Researched: 2026-03-24*

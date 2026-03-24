@@ -1,65 +1,168 @@
-# Pitfalls Research: Nautobot MCP CLI
+# Pitfalls Research
+
+**Domain:** MCP Tool Consolidation / Generic Resource Engine
+**Researched:** 2026-03-24
+**Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### 1. Nautobot API Pagination Trap
-**Warning signs:** Queries returning only 50 results, missing devices/interfaces
-**What goes wrong:** Nautobot REST API paginates by default. Raw requests miss subsequent pages.
-**Prevention:** Use pynautobot's `.all()` which handles pagination automatically. Never use raw requests for list operations.
-**Phase:** Phase 1 (Core client)
+### Pitfall 1: Incomplete Registry Coverage
 
-### 2. API Version Mismatch
-**Warning signs:** 404 errors, unexpected field names, missing endpoints
-**What goes wrong:** Nautobot 2.x changed many API endpoints from NetBox heritage. Golden Config plugin API may also differ between versions.
-**Prevention:** Pin pynautobot version compatible with target Nautobot server. Use `api_version` parameter. Test against actual server early.
-**Phase:** Phase 1 (Core client)
+**What goes wrong:**
+Some resource types are missing from the registry, causing agents to get "unknown resource_type" errors for operations that previously worked.
 
-### 3. MCP Tool Design — Too Granular vs Too Coarse
-**Warning signs:** Agent making 50+ calls for one task, or tools returning excessive data
-**What goes wrong:** If tools are too fine-grained (e.g., one tool per CRUD op per model), agents waste tokens on orchestration. If too coarse (e.g., "do everything"), agents can't compose workflows.
-**Prevention:** Design tools at the "task level" — `get_device_with_interfaces` is better than `get_device` + `list_interfaces` for common use cases. Provide both atomic and composite tools.
-**Phase:** Phase 2 (MCP server layer)
+**Why it happens:**
+The current 165 tools were built incrementally over 3 milestones. It's easy to miss some during the mapping, especially edge cases like read-only endpoints or M2M traversals.
 
-### 4. Config Parsing Fragility
-**Warning signs:** Parser breaks on config variants, missing sections
-**What goes wrong:** JunOS configs vary by platform (MX vs EX vs SRX), software version, and config style (set vs hierarchy). Regex/template parsers break on unexpected formats.
-**Prevention:** Start with hierarchical (curly-brace) format parsing. Use JunOS's structured output where possible. Build extensive test fixtures from real configs. Handle missing sections gracefully.
-**Phase:** Phase 3 (Config parsers)
+**How to avoid:**
+- Build an automated test that extracts ALL current tool names from `server.py` (before refactor)
+- Map each to its registry entry
+- Assert 100% coverage (every operation available pre-refactor must be available post-refactor)
 
-### 5. Nautobot Object Reference Resolution
-**Warning signs:** "Device type not found", "Location required", foreign key errors
-**What goes wrong:** Creating objects in Nautobot requires resolving references (device type, location, manufacturer). These must exist before creating dependent objects.
-**Prevention:** Build a resolution layer that looks up or creates prerequisite objects. Use pynautobot's nested object handling. Implement a dry-run mode that validates references before committing.
-**Phase:** Phase 1-2 (Core client + onboarding)
+**Warning signs:**
+Agent errors like "Resource type 'X' not found" for operations that worked before.
 
-### 6. Golden Config Plugin API Assumptions
-**Warning signs:** Endpoints not found, unexpected data formats
-**What goes wrong:** Golden Config is a plugin, not core Nautobot. Its API structure differs from core API. Plugin version may not match docs.
-**Prevention:** Discover actual installed plugin version via API. Test against real Golden Config endpoints on user's server. Don't assume plugin API follows core patterns.
-**Phase:** Phase 3 (Golden Config integration)
+**Phase to address:** Phase 15 (Registry Foundation)
 
-## Moderate Pitfalls
+---
 
-### 7. MCP Server Startup/Registration
-**Warning signs:** Agent can't find tools, connection refused
-**What goes wrong:** MCP servers need proper stdio/SSE transport setup. Misconfigured transport means agents can't discover tools.
-**Prevention:** Use FastMCP's built-in transport handling. Test with a real MCP client (Claude, etc.) early in development. Provide clear setup instructions.
-**Phase:** Phase 2 (MCP server)
+### Pitfall 2: Filter Parameter Mismatch
 
-### 8. Idempotency in Data Operations
-**Warning signs:** Duplicate objects in Nautobot, update vs create confusion
-**What goes wrong:** Running onboarding twice creates duplicate interfaces, IPs, etc.
-**Prevention:** Always check existence before creating. Use natural keys (device name + interface name) for lookups. Implement update-or-create pattern with pynautobot's `get()` + `create()`.
-**Phase:** Phase 1-2 (Core client + onboarding)
+**What goes wrong:**
+The generic `filters: dict` parameter accepts arbitrary keys, but domain functions expect specific parameter names. For example, `list_devices` expects `name`, `location`, `role` — but the agent passes `{"device_name": "..."}` because that's what another endpoint uses.
 
-### 9. Error Handling for AI Agents
-**Warning signs:** Agent gets confused by errors, retries infinitely, makes wrong decisions
-**What goes wrong:** Generic error messages ("request failed") don't help agents decide what to do next. Stack traces are useless to LLMs.
-**Prevention:** Return structured error responses with: what failed, why, what the agent should try instead. Use MCP's error protocol properly.
-**Phase:** Phase 2 (MCP server)
+**Why it happens:**
+Different domain modules use different parameter naming conventions. CMS uses `device_name`, core uses `name` or `device`.
 
-### 10. Testing Without a Real Nautobot
-**Warning signs:** Tests pass but tool breaks in production
-**What goes wrong:** Mocking Nautobot API hides real-world issues (pagination, auth, nested objects).
-**Prevention:** Use a combination of unit tests (mocked) and integration tests (against real/sandbox Nautobot). Maintain test fixtures from actual API responses.
-**Phase:** All phases
+**How to avoid:**
+- Document filter fields per resource type in `nautobot_resource_schema`
+- Normalize common filter names (e.g., map `device_name` → `device` for core endpoints)
+- Add validation in the dispatcher that checks filter keys against allowed fields
+
+**Warning signs:**
+Agents getting empty results when they should get data, because filters silently don't match.
+
+**Phase to address:** Phase 15 (Registry) + Phase 16 (Server Refactor)
+
+---
+
+### Pitfall 3: Breaking Composite Tool Dependencies
+
+**What goes wrong:**
+Composite tools like `nautobot_device_summary` internally call domain functions (e.g., `devices.get_device()`, `devices.list_interfaces()`). If the refactor changes how the client is passed or initialized, composites break silently.
+
+**Why it happens:**
+Composite tools import domain functions directly and use the shared `get_client()` singleton. Changes to client initialization flow affect all tools.
+
+**How to avoid:**
+- Keep `get_client()` function signature unchanged
+- Run all existing composite tool tests before and after refactor
+- Don't change domain function signatures — the dispatcher adapts to them, not vice versa
+
+**Warning signs:**
+Composite tools returning errors or empty results when the underlying data hasn't changed.
+
+**Phase to address:** Phase 16 (Server Refactor)
+
+---
+
+### Pitfall 4: CMS CRUD vs Core CRUD Asymmetry
+
+**What goes wrong:**
+CMS resources use `cms_list/cms_get/cms_create/cms_update/cms_delete` (generic functions from `cms/client.py`), while core resources use individually written functions (`devices.list_devices`, `interfaces.list_interfaces`). The dispatcher must handle both.
+
+**Why it happens:**
+CMS was designed later with a generic pattern; core was built earlier with explicit functions.
+
+**How to avoid:**
+- ResourceDef has a `handler_style` field: `"cms_generic"` vs `"explicit"`
+- CMS dispatches through `cms_list(endpoint_name, client, model_cls, ...)`
+- Core dispatches through `domain_module.function(client, ...)`
+- Both return the same shape: `dict` with `count` and `results` for list, or flat dict for get
+
+**Warning signs:**
+CMS resources work but core resources don't (or vice versa).
+
+**Phase to address:** Phase 15 (Registry Design)
+
+---
+
+### Pitfall 5: Schema Explosion for Create/Update
+
+**What goes wrong:**
+`nautobot_resource_schema("cms.static_route")` returns a massive list of fields because Pydantic models include all optional fields. Agent gets overwhelmed or hallucinates field names.
+
+**Why it happens:**
+Pydantic models were designed for response serialization (read), not for input (create/update). Many fields are read-only (id, display, url) or computed (nexthops, neighbor_count).
+
+**How to avoid:**
+- Separate read fields from write fields in schema response
+- Mark required vs optional clearly
+- Exclude read-only fields (id, display, url, computed)
+- Show only the fields that the create/update API actually accepts
+
+**Warning signs:**
+Agents passing `id`, `display`, or computed fields in create requests and getting errors.
+
+**Phase to address:** Phase 15 (Registry) — schema design
+
+---
+
+### Pitfall 6: UAT Against Live Server Flaky Tests
+
+**What goes wrong:**
+UAT tests against Nautobot dev server are flaky because data changes between runs, server is down, or API rate limits are hit.
+
+**Why it happens:**
+External dependency in test suite. Dev server data is not under test control.
+
+**How to avoid:**
+- Use read-only operations for UAT (list, get) — don't modify dev data
+- Create a specific test device/resource on dev and target it
+- Tag UAT tests separately so they don't fail CI
+- Write a "smoke test" script that's run manually, not in pytest
+
+**Warning signs:**
+Tests pass locally but fail in CI; tests pass one day, fail the next.
+
+**Phase to address:** Phase 18 (UAT Verification)
+
+## Technical Debt Patterns
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Hard-coded resource_type strings | Fast development | Typos cause runtime errors | Never — use constants or enum |
+| Skip schema for some resources | Faster delivery | Agent confusion on those types | Only for read-only resources |
+| Copy-paste filter handling | Works for first 5 types | Inconsistent behavior | Never — extract to helper |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| CMS `cms_create` | Sending full Pydantic model dict | Send only API-accepted fields |
+| Core `list_devices` | Passing `device_name` instead of `name` | Normalize to API field names |
+| `get_client()` | Calling in registry definition | Call lazily in dispatcher |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Registry completeness:** Count resources in registry, compare to old tool count — 100% CRUD ops covered?
+- [ ] **Schema accuracy:** `nautobot_resource_schema` returns correct required/optional fields for each resource?
+- [ ] **Filter fields documented:** Every resource type lists its valid filter fields?
+- [ ] **Error messages useful:** "Resource type 'X' not found" message includes suggestion of similar types?
+- [ ] **Composite tools unchanged:** All ~15 composite tools still pass their original tests?
+- [ ] **Token count verified:** Measure actual token consumption of new tool definitions vs old?
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|-----------------|--------------|
+| Incomplete registry coverage | Phase 15 | Automated test: old tools → new registry 100% |
+| Filter parameter mismatch | Phase 15 + 16 | Schema shows valid filters per type |
+| Composite tool breakage | Phase 16 | Run existing test suite unchanged |
+| CMS/Core asymmetry | Phase 15 | Both CMS and core types pass same dispatcher |
+| Schema explosion | Phase 15 | Schema excludes read-only fields |
+| UAT flakiness | Phase 18 | Separate UAT from unit tests |
+
+---
+*Pitfalls research for: MCP Tool Consolidation*
+*Researched: 2026-03-24*

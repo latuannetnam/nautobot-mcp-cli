@@ -1,61 +1,53 @@
-# Stack Research: Nautobot MCP CLI
+# Stack Research
+
+**Domain:** MCP Tool Consolidation / Generic Resource Engine
+**Researched:** 2026-03-24
+**Confidence:** HIGH
 
 ## Recommended Stack
 
-### Core Framework
-- **Python 3.11+** — Required by MCP SDK, aligns with pynautobot compatibility
-- **FastMCP 3.0** — High-level Python MCP framework, built on official MCP SDK. Uses decorators (`@mcp.tool()`) and type hints for auto-schema generation. Incorporated into official MCP Python SDK.
-- **Confidence:** ★★★★★ (FastMCP is the de facto standard for Python MCP servers)
+### Core Technologies (Already In Place)
 
-### Nautobot Client
-- **pynautobot v2.6.x** — Official Python SDK for Nautobot REST API. Supports multithreaded queries, global/per-request API versioning. Compatible with Nautobot 2.4+.
-- **Confidence:** ★★★★★ (Official SDK, actively maintained by Network to Code)
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| FastMCP | 3.x | MCP server framework with `@mcp.tool` decorators | ✅ Already using |
+| pynautobot | 2.x | Nautobot REST API SDK with pagination/auth | ✅ Already using |
+| Pydantic | 2.x | Model validation, schema generation, `.model_dump()` | ✅ Already using |
+| Typer | 0.x | CLI framework (unchanged in v1.3) | ✅ Already using |
 
-### CLI Framework
-- **Click** or **Typer** — Typer is built on Click with type hints (aligns with FastMCP patterns). Both are well-established.
-- **Recommendation:** Typer — consistent type-hint-driven approach across MCP and CLI layers
-- **Confidence:** ★★★★☆
+### Stack Additions Needed for v1.3
 
-### Config & Auth
-- **python-dotenv** — Environment variable management for API tokens
-- **pydantic** or **pydantic-settings** — Config validation (FastMCP already depends on pydantic)
-- **Confidence:** ★★★★★
+| Library | Version | Purpose | Why Needed |
+|---------|---------|---------|------------|
+| `dataclasses` | stdlib | `ResourceDef` registry entries | Lightweight, no new dependency |
+| `inspect` | stdlib | Dynamic schema extraction from Pydantic models | Needed for `nautobot_resource_schema` |
+| `enum.Enum` | stdlib | Action types (`list/get/create/update/delete`) | Type-safe action dispatch |
 
-### Network Config Parsing
-- **ttp (Template Text Parser)** — Parse semi-structured device configs (JunOS, IOS)
-- **jinja2** — Template rendering for golden config comparison
-- **Confidence:** ★★★★☆
-
-### Testing
-- **pytest** — Standard Python testing
-- **pytest-asyncio** — For async MCP tool tests
-- **responses** or **respx** — Mock HTTP/Nautobot API calls
-- **Confidence:** ★★★★★
+**Key finding: No new external dependencies needed.** The Generic Resource Engine uses only Python stdlib additions on top of the existing stack.
 
 ## What NOT to Use
 
-| Library | Why Not |
-|---------|---------|
-| Raw `requests` for Nautobot | pynautobot handles auth, pagination, versioning |
-| Flask/Django for MCP | FastMCP handles MCP protocol natively |
-| NAPALM | Overlaps with jmcp; this tool doesn't talk to devices directly |
-| netmiko | Same — device interaction is jmcp's job |
-| Ansible modules | Overkill for API client; adds heavyweight dependency |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| FastMCP `mount()` sub-servers | Adds protocol complexity; single server is simpler | Single FastMCP instance with registry dispatch |
+| Dynamic `@mcp.tool` generation | Complex, harder to debug, IDE can't inspect | Static 3 tools + internal registry dispatch |
+| Pydantic `model_json_schema()` for tool params | Over-engineering; FastMCP handles param schema | Return simplified field descriptions in `nautobot_resource_schema` |
+| SQLite/JSON file for registry | Unnecessary persistence layer | In-memory Python dict — registry is code-defined |
 
-## Existing Implementations to Reference
+## Alternatives Considered
 
-- **gt732/nautobot-app-mcp** — Nautobot plugin that integrates MCP server directly into Nautobot
-- **kvncampos/nautobot_mcp** — Standalone MCP server with semantic search across Nautobot APIs
-- **Network to Code's official Nautobot MCP** — Dynamic API request tool, OpenAPI schema discovery
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| Single `nautobot_resource` dispatcher | Semantic Tool Selection (vector-based) | When tool count exceeds 200 and domains are truly unrelated |
+| Python dict registry | Plugin-based auto-discovery | When third parties contribute domain modules |
+| Static composite tools | Programmatic Tool Calling (PTC) | When LLM needs to compose multi-step queries dynamically |
 
-Our approach differs: standalone MCP server + CLI + skills, not a Nautobot plugin.
+## Sources
 
-## Version Matrix
+- MCP Specification 2025-2026 — Toolhost Pattern for consolidation
+- FastMCP docs (gofastmcp.com) — Dynamic registration, async support
+- LangChain Tool Overload Research 2025 — Accuracy degradation curves
 
-| Component | Version | Compatibility |
-|-----------|---------|---------------|
-| Python | 3.11+ | MCP SDK requirement |
-| FastMCP | 3.0.x | Latest, Jan 2026 |
-| pynautobot | 2.6.x | Nautobot 2.4+ |
-| Nautobot server | 2.4.x | User's current version |
-| MCP protocol | 2025-11-05 | Latest stable spec |
+---
+*Stack research for: MCP Tool Consolidation*
+*Researched: 2026-03-24*
