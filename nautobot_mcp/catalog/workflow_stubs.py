@@ -17,7 +17,7 @@ WORKFLOW_STUBS = {
         ],
     },
     "routing_table": {
-        "params": {"device": "str (required)", "routing_table": "str (optional, default inet.0)"},
+        "params": {"device": "str (required)", "detail": "bool (optional, default false)"},
         "description": "Static routes with nexthops for a device",
         "aggregates": [
             "cms:juniper_static_routes",
@@ -26,7 +26,7 @@ WORKFLOW_STUBS = {
         ],
     },
     "firewall_summary": {
-        "params": {"device": "str (required)"},
+        "params": {"device": "str (required)", "detail": "bool (optional, default false)"},
         "description": "Firewall filters, terms, match conditions, and actions",
         "aggregates": [
             "cms:juniper_firewall_filters",
@@ -36,7 +36,10 @@ WORKFLOW_STUBS = {
         ],
     },
     "interface_detail": {
-        "params": {"device": "str (required)", "interface_name": "str (optional)"},
+        "params": {
+            "device": "str (required)",
+            "include_arp": "bool (optional, default false)",
+        },
         "description": "Interface units, families, VRRP groups for a device",
         "aggregates": [
             "cms:juniper_interface_units",
@@ -46,7 +49,7 @@ WORKFLOW_STUBS = {
     },
     "onboard_config": {
         "params": {
-            "config_json": "str (required)",
+            "config_data": "dict (required, ParsedConfig schema)",
             "device_name": "str (required)",
             "dry_run": "bool (optional, default true)",
         },
@@ -54,7 +57,10 @@ WORKFLOW_STUBS = {
         "aggregates": ["cms:*"],
     },
     "compare_device": {
-        "params": {"device_name": "str (required)", "live_data": "dict (required)"},
+        "params": {
+            "device_name": "str (required)",
+            "live_data": "dict (required, {iface_name: {ips: [...], vlans: [...]}})",
+        },
         "description": "Compare live device state against Nautobot records",
         "aggregates": ["/api/dcim/devices/", "/api/dcim/interfaces/", "/api/ipam/ip-addresses/"],
     },
@@ -69,7 +75,7 @@ WORKFLOW_STUBS = {
         "aggregates": ["plugins:golden_config"],
     },
     "compare_bgp": {
-        "params": {"device": "str (required)", "live_neighbors": "list (required)"},
+        "params": {"device_name": "str (required)", "live_neighbors": "list (required)"},
         "description": "Compare live BGP neighbors against CMS records",
         "aggregates": [
             "cms:juniper_bgp_groups",
@@ -77,7 +83,7 @@ WORKFLOW_STUBS = {
         ],
     },
     "compare_routes": {
-        "params": {"device": "str (required)", "live_routes": "list (required)"},
+        "params": {"device_name": "str (required)", "live_routes": "list (required)"},
         "description": "Compare live routes against CMS static route records",
         "aggregates": [
             "cms:juniper_static_routes",
