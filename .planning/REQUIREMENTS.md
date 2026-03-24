@@ -9,12 +9,12 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 
 ### Catalog Engine (CAT)
 
-- [ ] **CAT-01**: `nautobot_api_catalog` tool returns all available endpoints and workflows grouped by domain (dcim, ipam, circuits, tenancy, cms, workflows)
-- [ ] **CAT-02**: Catalog supports optional `domain` filter to return only one domain's entries
-- [ ] **CAT-03**: Core endpoints (dcim, ipam, circuits, tenancy) defined in static JSON with endpoint path, methods, common filters, and description
-- [ ] **CAT-04**: CMS plugin endpoints auto-discovered from `CMS_ENDPOINTS` registry at runtime — zero duplication
-- [ ] **CAT-05**: Workflow entries listed from `WORKFLOW_REGISTRY` with params and description
-- [ ] **CAT-06**: Catalog response stays under 1500 tokens (concise descriptions, no schema/types)
+- [x] **CAT-01**: `nautobot_api_catalog` tool returns all available endpoints and workflows grouped by domain (dcim, ipam, circuits, tenancy, cms, workflows)
+- [x] **CAT-02**: Catalog supports optional `domain` filter to return only one domain's entries
+- [x] **CAT-03**: Core endpoints (dcim, ipam, circuits, tenancy) defined in static JSON with endpoint path, methods, common filters, and description
+- [x] **CAT-04**: CMS plugin endpoints auto-discovered from `CMS_ENDPOINTS` registry at runtime — zero duplication
+- [x] **CAT-05**: Workflow entries listed from `WORKFLOW_REGISTRY` with params and description
+- [x] **CAT-06**: Catalog response stays under 1500 tokens (concise descriptions, no schema/types)
 
 ### REST Bridge (BRG)
 
@@ -53,7 +53,7 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 ### Testing & UAT (TST)
 
 - [ ] **TST-01**: All existing 293+ domain module tests pass unchanged
-- [ ] **TST-02**: New `test_catalog.py` with catalog completeness + domain filter tests
+- [x] **TST-02**: New `test_catalog.py` with catalog completeness + domain filter tests
 - [ ] **TST-03**: New `test_bridge.py` with endpoint routing + validation + error hint tests
 - [ ] **TST-04**: New `test_workflows.py` with workflow dispatch + parameter normalization tests
 - [ ] **TST-05**: Updated `test_server.py` for new 3-tool interface
@@ -89,12 +89,12 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CAT-01 | Phase 15 | Pending |
-| CAT-02 | Phase 15 | Pending |
-| CAT-03 | Phase 15 | Pending |
-| CAT-04 | Phase 15 | Pending |
-| CAT-05 | Phase 15 | Pending |
-| CAT-06 | Phase 15 | Pending |
+| CAT-01 | Phase 15 | Complete |
+| CAT-02 | Phase 15 | Complete |
+| CAT-03 | Phase 15 | Complete |
+| CAT-04 | Phase 15 | Complete |
+| CAT-05 | Phase 15 | Complete |
+| CAT-06 | Phase 15 | Complete |
 | BRG-01 | Phase 16 | Pending |
 | BRG-02 | Phase 16 | Pending |
 | BRG-03 | Phase 16 | Pending |
@@ -118,7 +118,7 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 | SKL-04 | Phase 18 | Pending |
 | SKL-05 | Phase 18 | Pending |
 | TST-01 | Phase 16 | Pending |
-| TST-02 | Phase 15 | Pending |
+| TST-02 | Phase 15 | Complete |
 | TST-03 | Phase 16 | Pending |
 | TST-04 | Phase 17 | Pending |
 | TST-05 | Phase 17 | Pending |
