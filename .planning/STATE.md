@@ -31,12 +31,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Phase 16 — rest-bridge-universal-crud
+**Current focus:** Phase 17 — workflow-registry-server-consolidation
 
 ## Current Position
 
-Phase: 16 (rest-bridge-universal-crud) — EXECUTING
-Plan: 1 of 2
+Phase: 17 (workflow-registry-server-consolidation) — CONTEXT CAPTURED
+Plan: 0 of TBD
 
 ## Context
 
