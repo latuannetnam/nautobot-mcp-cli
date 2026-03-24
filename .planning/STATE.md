@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: — Generic Resource Engine
-status: defining-requirements
-last_updated: "2026-03-24T11:25:00.000Z"
+status: ready-to-plan
+last_updated: "2026-03-24T11:30:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -22,10 +22,10 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-24 — Milestone v1.3 started
+Phase: 15 (resource-registry-foundation) — PENDING
+Plan: 0 of 0
+Status: Roadmap created, ready to plan phases
+Last activity: 2026-03-24 — Requirements (30) and roadmap (4 phases) defined
 
 ## Context
 
