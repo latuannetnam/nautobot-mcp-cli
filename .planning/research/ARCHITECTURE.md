@@ -1,150 +1,218 @@
 # Architecture Research
 
-**Domain:** MCP Tool Consolidation / Generic Resource Engine
+**Domain:** MCP Server API Bridge for Nautobot
 **Researched:** 2026-03-24
 **Confidence:** HIGH
 
-## Standard Architecture: Toolhost Pattern
-
-The "Toolhost Pattern" (documented in MCP best practices 2025-2026) is the industry-recognized approach for consolidating many closely related MCP tools into a single dispatcher. Our implementation follows this pattern precisely.
+## Standard Architecture
 
 ### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│              MCP Tool Layer (~18 tools)                   │
-│  ┌──────────────────┐ ┌──────────────────┐              │
-│  │  Discovery (2)    │ │  Composites (~15) │              │
-│  │  list_resources   │ │  device_summary   │              │
-│  │  resource_schema  │ │  bgp_summary      │              │
-│  └────────┬─────────┘ │  firewall_summary │              │
-│           │            │  compare_device   │              │
-│  ┌────────┴─────────┐ │  ...              │              │
-│  │  Generic CRUD (1) │ └────────┬─────────┘              │
-│  │  resource()       │          │                        │
-│  └────────┬─────────┘          │                        │
-├───────────┴────────────────────┴────────────────────────┤
-│              Resource Registry (registry.py)              │
-│  RESOURCE_REGISTRY: Dict[str, ResourceDef]               │
-│  ~50 entries mapping resource_type → handler config       │
-├─────────────────────────────────────────────────────────┤
-│              Domain Modules (UNCHANGED)                   │
-│  devices.py │ interfaces.py │ ipam.py │ organization.py  │
-│  cms/routing.py │ cms/interfaces.py │ cms/firewalls.py   │
-│  cms/policies.py │ cms/arp.py │ golden_config.py         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  MCP Server Layer (3 tools)                                  │
+│                                                              │
+│  ┌────────────────────┐ ┌───────────────┐ ┌──────────────┐  │
+│  │ nautobot_api_catalog│ │ call_nautobot │ │ run_workflow  │  │
+│  │ Discovery           │ │ Universal CRUD│ │ Composites   │  │
+│  └────────┬───────────┘ └───────┬───────┘ └──────┬───────┘  │
+│           │                     │                 │           │
+├───────────┴─────────────────────┴─────────────────┴──────────┤
+│  Bridge Layer (NEW)                                           │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │ Catalog      │  │ REST Bridge  │  │ Workflow Registry │   │
+│  │ Engine       │  │ (bridge.py)  │  │ (workflows.py)   │   │
+│  │              │  │              │  │                   │   │
+│  │ Static JSON  │  │ Endpoint     │  │ bgp_summary      │   │
+│  │ + Dynamic    │  │ routing +    │  │ routing_table     │   │
+│  │ CMS discovery│  │ validation + │  │ firewall_summary  │   │
+│  │              │  │ pagination   │  │ onboard_config    │   │
+│  │              │  │              │  │ compare_device    │   │
+│  │              │  │              │  │ ...               │   │
+│  └──────┬───────┘  └──────┬───────┘  └────────┬──────────┘  │
+│         │                 │                    │              │
+├─────────┴─────────────────┴────────────────────┴─────────────┤
+│  Domain Layer (UNCHANGED)                                     │
+│                                                              │
+│  devices │ interfaces │ ipam │ org │ circuits │ golden_config │
+│  cms/routing │ cms/interfaces │ cms/firewalls │ cms/policies  │
+│  cms/arp │ drift │ onboarding │ verification                 │
+├──────────────────────────────────────────────────────────────┤
+│  Client Layer (UNCHANGED)                                     │
+│                                                              │
+│  client.py (pynautobot) │ cms/client.py (CMS_ENDPOINTS)      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
 | Component | Responsibility | Implementation |
 |-----------|----------------|----------------|
-| `nautobot_list_resources` | Catalog discovery | Iterate `RESOURCE_REGISTRY`, return types + actions |
-| `nautobot_resource_schema` | Field schema for a resource | Introspect Pydantic model fields |
-| `nautobot_resource` | Universal CRUD dispatcher | Route to domain functions via registry |
-| `RESOURCE_REGISTRY` | Resource → handler mapping | Python dict with `ResourceDef` entries |
-| Domain modules | Actual business logic | **Unchanged** — existing functions |
-| Composite tools | Multi-entity joins | **Unchanged** — existing functions |
+| `server.py` | Register 3 MCP tools, handle transport | FastMCP decorators, ~200 LOC |
+| `catalog/` | Build and serve endpoint catalog | Static JSON (core) + dynamic (CMS_ENDPOINTS) |
+| `bridge.py` | Route + validate + execute API calls | Endpoint routing: `/api/*` → pynautobot, `cms:*` → CMS helpers |
+| `workflows.py` | Registry of composite workflow functions | Dict mapping name → function + params + description |
+| Domain modules | Business logic (UNCHANGED) | Existing `devices.py`, `cms/routing.py`, etc. |
+| `client.py` | Nautobot API client (UNCHANGED) | pynautobot singleton pattern |
+| `cms/client.py` | CMS plugin client (UNCHANGED) | CMS_ENDPOINTS registry + generic CRUD |
 
 ## Recommended Project Structure
 
 ```
 nautobot_mcp/
-├── registry.py           # [NEW] Resource registry + ResourceDef
-├── server.py             # [MODIFIED] ~300 lines: 3 generic + ~15 composite tools
-├── client.py             # [UNCHANGED]
-├── config.py             # [UNCHANGED]
-├── devices.py            # [UNCHANGED]
-├── interfaces.py         # [UNCHANGED]
-├── ipam.py               # [UNCHANGED]
-├── organization.py       # [UNCHANGED]
-├── circuits.py           # [UNCHANGED]
-├── golden_config.py      # [UNCHANGED]
-├── onboarding.py         # [UNCHANGED]
-├── verification.py       # [UNCHANGED]
-├── drift.py              # [UNCHANGED]
-├── cms/
-│   ├── client.py         # [UNCHANGED] — CMS_ENDPOINTS stays here
-│   ├── routing.py        # [UNCHANGED]
-│   ├── interfaces.py     # [UNCHANGED]
-│   ├── firewalls.py      # [UNCHANGED]
-│   ├── policies.py       # [UNCHANGED]
-│   └── arp.py            # [UNCHANGED]
-├── models/               # [UNCHANGED]
-└── cli/                  # [UNCHANGED]
+├── server.py              # 3 MCP tools (~200 LOC) [REWRITTEN]
+├── catalog/               # API catalog engine [NEW]
+│   ├── __init__.py
+│   ├── engine.py          # build_catalog(), filter by domain
+│   └── core_endpoints.json # Static core endpoint definitions
+├── bridge.py              # REST execution bridge [NEW]
+├── workflows.py           # Workflow registry + dispatch [NEW]
+├── client.py              # pynautobot wrapper [UNCHANGED]
+├── devices.py             # Device domain functions [UNCHANGED]
+├── interfaces.py          # Interface domain functions [UNCHANGED]
+├── ipam.py                # IPAM domain functions [UNCHANGED]
+├── organizations.py       # Organization domain functions [UNCHANGED]
+├── circuits.py            # Circuit domain functions [UNCHANGED]
+├── golden_config.py       # Golden Config functions [UNCHANGED]
+├── cms/                   # CMS domain [UNCHANGED]
+│   ├── client.py          # CMS_ENDPOINTS + generic CRUD
+│   ├── routing.py         # Routing composites (bgp_summary, etc.)
+│   ├── interfaces.py      # Interface composites
+│   ├── firewalls.py       # Firewall composites
+│   ├── policies.py        # Policy functions
+│   └── arp.py             # ARP functions
+├── drift/                 # Drift comparison [UNCHANGED]
+├── models/                # Pydantic models [UNCHANGED]
+└── onboarding/            # Config onboarding [UNCHANGED]
 ```
 
 ### Structure Rationale
 
-- **`registry.py` is the only new file** — contains `ResourceDef` dataclass + `RESOURCE_REGISTRY` dict
-- **`server.py` is the only modified file** — reduced from 3,883 to ~300 lines
-- **All domain modules unchanged** — the dispatcher calls them, they don't know about it
+- **`catalog/`:** Isolated from runtime code; can be updated independently
+- **`bridge.py`:** Single file for all endpoint routing logic; keeps dispatch centralized
+- **`workflows.py`:** Flat registry — no class hierarchy, just a dict of name → function
+- **Domain modules unchanged:** Zero-risk refactoring; all tests pass without modification
 
 ## Architectural Patterns
 
-### Pattern 1: Toolhost Dispatcher
+### Pattern 1: Catalog-Discovery Pattern
 
-**What:** Single MCP tool that routes to different handlers based on `resource_type` + `action` parameters
-**When to use:** >20 closely related CRUD tools in an MCP server
-**Trade-offs:** Slightly less transparent to the agent (needs discovery step), but dramatically reduces context consumption
+**What:** Agent calls discovery tool to learn available operations before executing them.
+**When to use:** When the agent has no prior knowledge of available endpoints.
+**Trade-offs:** Extra round-trip vs. agent confidence; catalog is cheap (~400 tokens).
 
+**Example:**
 ```python
-@mcp.tool(name="nautobot_resource")
-def nautobot_resource(resource_type: str, action: str, ...) -> dict:
-    resource_def = RESOURCE_REGISTRY.get(resource_type)
-    handler = resource_def.handlers[action]
-    return handler(client, **params)
+# Agent workflow:
+# 1. Discover: nautobot_api_catalog(domain="dcim")
+# 2. Execute: call_nautobot(endpoint="/api/dcim/devices/", method="GET", params={"name": "router1"})
 ```
 
-### Pattern 2: Two-Phase Discovery
+### Pattern 2: Endpoint Routing Bridge
 
-**What:** Agent first discovers available resources, then queries schema for a specific resource type before performing operations
-**When to use:** When the generic tool has many possible parameter combinations
-**Trade-offs:** Adds 1-2 tool calls before first CRUD operation, but eliminates hallucinated parameters
+**What:** Single dispatcher that routes to different backends based on endpoint prefix.
+**When to use:** When multiple APIs (core, CMS, plugins) share one MCP interface.
+**Trade-offs:** Slightly more complex routing logic vs. massive tool count reduction.
 
-### Pattern 3: Dual-Registry (Core + CMS)
+**Example:**
+```python
+def route_endpoint(endpoint: str):
+    if endpoint.startswith("/api/"):
+        return use_pynautobot(endpoint)
+    elif endpoint.startswith("cms:"):
+        return use_cms_client(endpoint)
+    elif endpoint.startswith("plugins:"):
+        return use_plugin_accessor(endpoint)
+```
 
-**What:** Core Nautobot resources mapped manually (devices, interfaces, IPs); CMS resources auto-mapped from `CMS_ENDPOINTS`
-**When to use:** When one domain has an existing programmatic registry
-**Trade-offs:** Slightly different handling paths, but maximizes code reuse
+### Pattern 3: Workflow Registry Pattern
+
+**What:** Named workflows registered in a dict, dispatched by string name.
+**When to use:** For N+1 query patterns and complex business logic that shouldn't be agent-side.
+**Trade-offs:** Fixed set of workflows vs. flexible agent; new workflow = one dict entry + one function.
+
+**Example:**
+```python
+WORKFLOW_REGISTRY = {
+    "bgp_summary": {
+        "function": cms_routing.get_device_bgp_summary,
+        "params": {"device": "str (required)", "detail": "bool"},
+        "description": "BGP groups, neighbors, address families for a device"
+    }
+}
+```
 
 ## Data Flow
 
-### Generic CRUD Request Flow
+### Request Flow
 
 ```
-Agent: nautobot_resource(resource_type="cms.static_route", action="list", filters={"device": "core-rtr-01"})
+Agent Request (e.g. "list devices")
     ↓
-server.py → RESOURCE_REGISTRY["cms.static_route"]
+nautobot_api_catalog(domain="dcim")  ← Agent discovers available endpoints
     ↓
-ResourceDef(domain="cms", handler=cms_routing.list_static_routes, model=StaticRouteSummary)
+call_nautobot(endpoint="/api/dcim/devices/", method="GET", params={...})
     ↓
-cms_routing.list_static_routes(client, device_name="core-rtr-01")
+bridge.py: validate endpoint + route
     ↓
-cms_client.cms_list("juniper_static_routes", client, StaticRouteSummary, filters)
+pynautobot: nautobot.dcim.devices.filter(**params)  ← Existing client
     ↓
-Nautobot REST API → pynautobot → Pydantic model → dict response
+Nautobot REST API: /api/dcim/devices/?name=...
+    ↓
+Response → serialize → return to agent
 ```
+
+### Workflow Flow
+
+```
+Agent Request (e.g. "show BGP summary for router1")
+    ↓
+run_workflow(workflow="bgp_summary", params={"device": "router1"})
+    ↓
+workflows.py: lookup "bgp_summary" in WORKFLOW_REGISTRY
+    ↓
+cms/routing.py: get_device_bgp_summary(device="router1")
+    ↓
+  ├── CMS API: get BGP groups for device
+  ├── CMS API: get neighbors per group (N calls)
+  └── CMS API: get address families per neighbor (M calls)
+    ↓
+Aggregated response → return to agent (1 tool call instead of N+1)
+```
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1-10 agents | Current 3-tool design handles this trivially |
+| 10-50 agents | Add connection pooling to pynautobot if needed |
+| 50+ agents | Consider Streamable HTTP transport (FastMCP 3.0 supports this) |
+
+### Scaling Priorities
+
+1. **First bottleneck:** Nautobot API rate limiting — solved by pagination limits and caching at agent level
+2. **Second bottleneck:** MCP server throughput — solved by async FastMCP + Streamable HTTP
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Dynamic Tool Generation
+### Anti-Pattern 1: Recreating Tool Proliferation
 
-**What people do:** Generate `@mcp.tool` decorators dynamically from registry at import time
-**Why it's wrong:** IDE can't inspect, harder to debug, test coverage unclear, FastMCP may not handle dynamic names well
-**Do this instead:** Static 3 tool definitions with internal dispatch
+**What people do:** Generate one MCP tool per endpoint from catalog
+**Why it's wrong:** Recreates the 165-tool problem with extra steps
+**Do this instead:** Single `call_nautobot` tool with endpoint as parameter
 
-### Anti-Pattern 2: Over-Parameterized Generic Tool
+### Anti-Pattern 2: Fat Catalog
 
-**What people do:** Put ALL possible fields as optional parameters on the generic tool
-**Why it's wrong:** Tool description becomes enormous, defeating the purpose
-**Do this instead:** Accept `filters: dict` and `data: dict` — let `nautobot_resource_schema` guide the agent
+**What people do:** Include full schema (all fields, types, constraints) in catalog response
+**Why it's wrong:** Bloats catalog response, agent doesn't need schema to make a request
+**Do this instead:** Include only endpoint, methods, common filters, and description
 
-### Anti-Pattern 3: Round-Trip for Every Child Entity
+### Anti-Pattern 3: Workflow Bypass
 
-**What people do:** Require separate `nautobot_resource` calls for children (nexthops, address families)
-**Why it's wrong:** Multiplies agent round-trips
-**Do this instead:** Keep composite tools for multi-entity operations
+**What people do:** Let agents call N individual API calls instead of using `run_workflow`
+**Why it's wrong:** N+1 round-trips are slow and error-prone
+**Do this instead:** Skills guide agents to use `run_workflow` for composite operations
 
 ## Integration Points
 
@@ -152,18 +220,26 @@ Nautobot REST API → pynautobot → Pydantic model → dict response
 
 | Service | Integration Pattern | Notes |
 |---------|---------------------|-------|
-| Nautobot REST API | pynautobot client (unchanged) | All CRUD via existing domain functions |
-| Nautobot CMS Plugin | CMS client via CMS_ENDPOINTS (unchanged) | Auto-mapped to registry |
-| jmcp (Juniper MCP) | Via agent workflow only | Not affected by this refactor |
+| Nautobot REST API | pynautobot (`client.py`) | Core, IPAM, circuits, tenancy, golden config |
+| CMS Plugin API | `cms/client.py` | 49 DRF endpoints under `/api/plugins/netnam-cms-core/` |
+| jmcp (Juniper MCP) | Agent-side skills only | NOT integrated server-side; skills orchestrate cross-MCP |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| Registry → Domain modules | Direct Python function calls | No new interfaces needed |
-| Registry → CMS client | Via `cms_list/get/create/update/delete` | Already generic |
-| Server → Registry | Import + dict lookup | O(1) lookup performance |
+| server.py ↔ catalog/ | Function call | `build_catalog(domain)` returns dict |
+| server.py ↔ bridge.py | Function call | `execute_api_call(endpoint, method, ...)` returns dict |
+| server.py ↔ workflows.py | Function call | `execute_workflow(name, params)` returns dict |
+| bridge.py ↔ domain modules | Function call via pynautobot | Existing patterns unchanged |
+
+## Sources
+
+- API Bridge Design v2 (internal) — architecture diagram, tool classification
+- FastMCP 3.0 documentation — component versioning, Streamable HTTP
+- pynautobot documentation — dynamic endpoint generation, App hierarchy
+- MCP specification — tool primitives, JSON-RPC 2.0 protocol
 
 ---
-*Architecture research for: MCP Tool Consolidation*
+*Architecture research for: MCP Server API Bridge for Nautobot*
 *Researched: 2026-03-24*

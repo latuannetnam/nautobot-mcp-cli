@@ -1,71 +1,116 @@
 # Feature Research
 
-**Domain:** MCP Tool Consolidation / Generic Resource Engine
+**Domain:** MCP Server API Bridge for Nautobot
 **Researched:** 2026-03-24
 **Confidence:** HIGH
 
 ## Feature Landscape
 
-### Table Stakes (Must Have for v1.3)
+### Table Stakes (Users Expect These)
+
+Features agents expect from a Nautobot MCP server. Missing these = agents can't do their job.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Resource catalog discovery | Agent needs to know what resources exist before acting | LOW | `nautobot_list_resources` — returns all resource types |
-| Schema introspection | Agent needs field requirements before create/update | MEDIUM | `nautobot_resource_schema` — dynamic from Pydantic models |
-| Universal CRUD dispatcher | Core value prop — one tool for all entities | HIGH | `nautobot_resource` — dispatch to domain functions |
-| Preserved composite tools | Multi-entity joins can't be expressed as simple CRUD | LOW | Keep ~15 existing tools unchanged |
-| Action validation | Reject invalid actions before hitting API | LOW | Enum-based action checking in dispatcher |
-| Filter passthrough | Agents need to filter resources (e.g., device_name) | MEDIUM | Forward filters dict to domain functions |
-| Structured error handling | Agents need clear errors to recover | LOW | Already have `handle_error` — reuse |
+| API discovery / catalog | Agent needs to know what endpoints exist before calling them | MEDIUM | Hybrid: static core + dynamic CMS plugin discovery |
+| Universal CRUD (list/get/create/update/delete) | Core operations on any Nautobot resource | MEDIUM | Route `/api/*` → pynautobot, `cms:*` → CMS helpers |
+| Endpoint validation | Agent needs clear errors when using wrong endpoint/method | LOW | Check against catalog before dispatching |
+| Auto-pagination | Agent shouldn't manually page through results | LOW | Already handled by pynautobot; expose via `limit` param |
+| Device name → UUID resolution | CMS endpoints require device UUID, agents know names | LOW | Already implemented in existing domain modules |
+| Structured error messages | Agent needs to recover from errors without guessing | LOW | HTTP status → actionable hint mapping |
+| Composite workflows (BGP summary, routing table, etc.) | N+1 query patterns must be server-side for performance | LOW | Already implemented — just wrap in workflow registry |
 
 ### Differentiators (Competitive Advantage)
 
+Features that make this MCP server better than raw API access.
+
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Domain-grouped catalog | Agent sees resources organized by domain, not a flat list | LOW | `nautobot_list_resources(domain="cms")` |
-| Inline child nesting | Routes include nexthops, interfaces include families | LOW | Already implemented in v1.2 models |
-| Zero-new-dependency growth | Adding domains adds registry entries, not tools | LOW | Architecture guarantee |
-| Auto-generated schema | `nautobot_resource_schema` builds field info from Pydantic model | MEDIUM | Uses `model_fields` introspection |
+| Domain-grouped catalog | Agent can discover by domain (dcim, ipam, cms, workflows) | LOW | Better than flat endpoint list |
+| Workflow registry with descriptions | Agent chooses workflows by intent, not function name | LOW | Each workflow has params + description |
+| Hybrid catalog (static + dynamic CMS) | Zero-maintenance when CMS plugin adds endpoints | MEDIUM | Reads `CMS_ENDPOINTS` at runtime |
+| Agent skills as distributed files | Cross-MCP orchestration (nautobot + jmcp) stays agent-side | LOW | Existing skills adapted to 3-tool API |
+| 96% token reduction | 50K → 1.8K tokens per request for tool descriptions | HIGH (impact) | The core value proposition |
 
-### Anti-Features (Don't Build)
+### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Dynamic `@mcp.tool` generation | "Auto-register tools from registry" | Harder to debug, IDE can't inspect | Static 3 tools, internal dispatch |
-| GraphQL dispatcher | "Use Nautobot's GraphQL" | Different query model, parallel complexity | REST API is reliable and consistent |
-| Backwards-compatible aliases | "Keep old tool names" | Doubles tool count, defeats purpose | Clean break + comprehensive testing |
-| LLM-side caching | "Cache responses in context" | Stale data risk, context bloat | Let agent re-query as needed |
+| Dynamic tool generation from catalog | "Auto-create one tool per endpoint" | Recreates the 165-tool problem, harder to debug | Universal `call_nautobot` dispatcher |
+| Real-time schema introspection from Nautobot | "Fetch field names/types live" | Adds latency, stale risk, complexity | Static catalog with curated field lists |
+| Backwards-compatible aliases | "Keep old tool names as aliases" | Doubles tool count, defeats purpose | Clean break + updated skills |
+| Caching API responses | "Cache device lists for speed" | Stale data risk in network context | Fresh queries; agent can re-query cheaply |
+| GraphQL support | "More efficient than REST for nested data" | pynautobot doesn't support it, different paradigm | REST + composite workflows for N+1 patterns |
 
 ## Feature Dependencies
 
 ```
-[nautobot_list_resources] ← requires ← [Resource Registry]
-[nautobot_resource_schema] ← requires ← [Resource Registry]
-[nautobot_resource] ← requires ← [Resource Registry]
-                    ← requires ← [Domain Modules (unchanged)]
+nautobot_api_catalog (discovery)
+    └──required by──> call_nautobot (needs valid endpoints)
+    └──required by──> run_workflow (catalog lists available workflows)
 
-[Resource Registry] ← requires ← [CMS_ENDPOINTS (already exists)]
-                    ← requires ← [Core domain function mapping (new)]
+call_nautobot (CRUD)
+    └──used by──> run_workflow (workflows call domain functions internally)
+
+Domain modules (devices.py, cms/routing.py, etc.)
+    └──unchanged, used by──> run_workflow (wrapper functions)
+    └──unchanged, used by──> call_nautobot (core endpoint routing)
+
+Agent skills (distributed files)
+    └──references──> all 3 MCP tools
+    └──references──> jmcp tools (cross-MCP orchestration)
 ```
 
 ### Dependency Notes
 
-- **All 3 tools require Resource Registry:** Registry must be built first
-- **Registry requires CMS_ENDPOINTS:** Already exists in `cms/client.py`
-- **Composite tools are independent:** No changes needed
+- **`nautobot_api_catalog` required first:** Agent must discover endpoints before calling them
+- **`call_nautobot` depends on catalog:** Validates endpoints against catalog registry
+- **`run_workflow` wraps domain functions:** No changes to domain modules needed
+- **Skills depend on all 3 tools:** Skills must be updated last, after API is stable
+
+## MVP Definition
+
+### Launch With (v1.3)
+
+- [x] `nautobot_api_catalog` — endpoint + workflow discovery with domain filter
+- [x] `call_nautobot` — universal CRUD for core + CMS + plugin endpoints
+- [x] `run_workflow` — server-side composite workflows (10 workflows)
+- [x] Updated agent skills referencing 3-tool API
+- [x] Tests validating tool dispatch
+- [x] UAT against Nautobot dev server
+
+### Add After Validation (v1.x)
+
+- [ ] OpenAPI-based dynamic catalog enrichment — fetch field types from Nautobot spec
+- [ ] Tool usage analytics — track which endpoints agents call most
+- [ ] Streaming responses for large result sets
+
+### Future Consideration (v2+)
+
+- [ ] Multi-server MCP gateway (nautobot + jmcp + future servers as one)
+- [ ] Agent-adaptive catalog (hide endpoints agent hasn't needed)
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Cost | Priority |
-|---------|------------|------|----------|
-| Resource Registry module | HIGH | MEDIUM | **P1** |
-| `nautobot_resource` dispatcher | HIGH | HIGH | **P1** |
-| `nautobot_list_resources` | HIGH | LOW | **P1** |
-| `nautobot_resource_schema` | MEDIUM | MEDIUM | **P1** |
-| Preserved composite tools | HIGH | LOW | **P1** |
-| Domain-grouped catalog | MEDIUM | LOW | **P2** |
-| UAT against Nautobot dev | HIGH | MEDIUM | **P1** |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| API catalog with domain filter | HIGH | LOW | P1 |
+| Universal CRUD dispatcher | HIGH | MEDIUM | P1 |
+| Workflow registry | HIGH | LOW | P1 |
+| Endpoint validation + error hints | HIGH | LOW | P1 |
+| Auto-pagination | HIGH | LOW (exists) | P1 |
+| Device name → UUID resolution | MEDIUM | LOW (exists) | P1 |
+| Updated agent skills | MEDIUM | LOW | P1 |
+| Domain-grouped catalog | MEDIUM | LOW | P2 |
+| Dynamic CMS discovery | MEDIUM | MEDIUM | P1 |
+
+## Sources
+
+- API Bridge Design v2 (internal) — tool classification, workflow analysis
+- LLM tool selection research — accuracy drops >25 tools, context window impact
+- FastMCP 3.0 best practices — tool design for outcomes, not atomic operations
+- pynautobot documentation — dynamic endpoint generation, pagination
 
 ---
-*Feature research for: MCP Tool Consolidation*
+*Feature research for: MCP Server API Bridge for Nautobot*
 *Researched: 2026-03-24*
