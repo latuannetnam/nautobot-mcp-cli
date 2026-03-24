@@ -122,11 +122,11 @@ class TestClientFactory:
     @patch("nautobot_mcp.server.NautobotSettings")
     @patch("nautobot_mcp.server.NautobotClient")
     def test_client_factory_creates_client(self, mock_client_cls, mock_settings_cls):
-        """get_client should create and cache a NautobotClient."""
+        """get_client should create and cache a NautobotClient via NautobotSettings.discover()."""
         from nautobot_mcp.server import get_client
 
         client = get_client()
-        mock_settings_cls.assert_called_once()
+        mock_settings_cls.discover.assert_called_once()
         mock_client_cls.assert_called_once()
         assert client is not None
 
