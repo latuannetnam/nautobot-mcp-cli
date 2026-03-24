@@ -18,13 +18,13 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 
 ### REST Bridge (BRG)
 
-- [ ] **BRG-01**: `call_nautobot` tool executes any CRUD operation by specifying endpoint, method, params/data, and optional id
-- [ ] **BRG-02**: Endpoint routing: `/api/*` → pynautobot core accessor, `cms:*` → CMS plugin helpers, `plugins:*` → plugin accessor
-- [ ] **BRG-03**: Endpoint validated against catalog before dispatch — invalid endpoint returns clear error with "did you mean X?" hint
-- [ ] **BRG-04**: Auto-pagination for GET operations — follows `next` links up to `limit` param (default 50)
-- [ ] **BRG-05**: Device name → UUID auto-resolution for CMS endpoints requiring device filter
-- [ ] **BRG-06**: HTTP error translation: 404/400/401/500 → structured error with actionable hints
-- [ ] **BRG-07**: `id` parameter support for single-object operations (GET by UUID, PATCH, DELETE)
+- [x] **BRG-01**: `call_nautobot` tool executes any CRUD operation by specifying endpoint, method, params/data, and optional id
+- [x] **BRG-02**: Endpoint routing: `/api/*` → pynautobot core accessor, `cms:*` → CMS plugin helpers, `plugins:*` → plugin accessor
+- [x] **BRG-03**: Endpoint validated against catalog before dispatch — invalid endpoint returns clear error with "did you mean X?" hint
+- [x] **BRG-04**: Auto-pagination for GET operations — follows `next` links up to `limit` param (default 50)
+- [x] **BRG-05**: Device name → UUID auto-resolution for CMS endpoints requiring device filter
+- [x] **BRG-06**: HTTP error translation: 404/400/401/500 → structured error with actionable hints
+- [x] **BRG-07**: `id` parameter support for single-object operations (GET by UUID, PATCH, DELETE)
 
 ### Workflow Registry (WFL)
 
@@ -52,9 +52,9 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 
 ### Testing & UAT (TST)
 
-- [ ] **TST-01**: All existing 293+ domain module tests pass unchanged
+- [x] **TST-01**: All existing 293+ domain module tests pass unchanged
 - [x] **TST-02**: New `test_catalog.py` with catalog completeness + domain filter tests
-- [ ] **TST-03**: New `test_bridge.py` with endpoint routing + validation + error hint tests
+- [x] **TST-03**: New `test_bridge.py` with endpoint routing + validation + error hint tests
 - [ ] **TST-04**: New `test_workflows.py` with workflow dispatch + parameter normalization tests
 - [ ] **TST-05**: Updated `test_server.py` for new 3-tool interface
 - [ ] **TST-06**: UAT smoke test against Nautobot dev server (http://101.96.85.93)
@@ -95,13 +95,13 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 | CAT-04 | Phase 15 | Complete |
 | CAT-05 | Phase 15 | Complete |
 | CAT-06 | Phase 15 | Complete |
-| BRG-01 | Phase 16 | Pending |
-| BRG-02 | Phase 16 | Pending |
-| BRG-03 | Phase 16 | Pending |
-| BRG-04 | Phase 16 | Pending |
-| BRG-05 | Phase 16 | Pending |
-| BRG-06 | Phase 16 | Pending |
-| BRG-07 | Phase 16 | Pending |
+| BRG-01 | Phase 16 | Complete |
+| BRG-02 | Phase 16 | Complete |
+| BRG-03 | Phase 16 | Complete |
+| BRG-04 | Phase 16 | Complete |
+| BRG-05 | Phase 16 | Complete |
+| BRG-06 | Phase 16 | Complete |
+| BRG-07 | Phase 16 | Complete |
 | WFL-01 | Phase 17 | Pending |
 | WFL-02 | Phase 17 | Pending |
 | WFL-03 | Phase 17 | Pending |
@@ -117,9 +117,9 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 | SKL-03 | Phase 18 | Pending |
 | SKL-04 | Phase 18 | Pending |
 | SKL-05 | Phase 18 | Pending |
-| TST-01 | Phase 16 | Pending |
+| TST-01 | Phase 16 | Complete |
 | TST-02 | Phase 15 | Complete |
-| TST-03 | Phase 16 | Pending |
+| TST-03 | Phase 16 | Complete |
 | TST-04 | Phase 17 | Pending |
 | TST-05 | Phase 17 | Pending |
 | TST-06 | Phase 18 | Pending |

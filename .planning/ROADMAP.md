@@ -57,7 +57,7 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 ### 🔄 v1.3 API Bridge MCP Server
 
 - [x] Phase 15: Catalog Engine & Core Endpoints (completed 2026-03-24)
-- [ ] Phase 16: REST Bridge & Universal CRUD
+- [x] Phase 16: REST Bridge & Universal CRUD (completed 2026-03-24)
 - [ ] Phase 17: Workflow Registry & Server Consolidation
 - [ ] Phase 18: Agent Skills, Tests & UAT
 
