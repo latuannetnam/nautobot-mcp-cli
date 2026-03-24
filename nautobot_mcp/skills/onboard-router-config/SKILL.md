@@ -10,48 +10,88 @@ Use this skill when you need to take a JunOS router configuration and push its d
 
 ## Prerequisites
 - JunOS config as JSON (`show configuration | display json`)
-- Nautobot API access via environment variables or config file
+- Nautobot API access configured
 - Device name to use in Nautobot
 
 ## Workflow
 
+### Step 0: Discover Available Workflows
+Optional — shows available onboarding workflows:
+
+```
+nautobot_api_catalog(domain="workflows")
+```
+
+---
+
 ### Step 1: Get router config via jmcp
 ```
-Use execute_junos_command to run:
-  command: "show configuration | display json"
-  router_name: <router-name>
+execute_junos_command(
+    router_name="<router-name>",
+    command="show configuration | display json"
+)
 ```
+
+---
 
 ### Step 2: Dry-run onboarding (preview changes)
+Use `nautobot_run_workflow` with `dry_run: true` to preview changes:
+
 ```
-Use nautobot_onboard_config:
-  config_json: <json from step 1>
-  device_name: <device-name>
-  dry_run: true
+nautobot_run_workflow(
+    workflow_id="onboard_config",
+    params={
+        "config_data": <parsed config dict from step 1>,
+        "device_name": "<device-name>",
+        "dry_run": true
+    }
+)
 ```
 
-Review the OnboardResult:
+Required params: `config_data` (dict, ParsedConfig schema), `device_name` (str).
+Optional: `dry_run` (bool, default true).
+
+Example response envelope:
+```json
+{"workflow": "onboard_config", "device": "core-rtr-01", "status": "ok", "data": {"actions": [], "summary": {"created": 5, "updated": 2, "skipped": 10}}, "error": null, "timestamp": "..."}
+```
+
+Review the result:
 - `summary` shows counts (create/update/skip)
 - `actions` lists every planned change
 - `warnings` shows potential issues
 
+---
+
 ### Step 3: Commit if satisfied
+Same call as Step 2 but with `dry_run: false`:
+
 ```
-Use nautobot_onboard_config:
-  config_json: <json from step 1>
-  device_name: <device-name>
-  dry_run: false
-  location: <location-name>
+nautobot_run_workflow(
+    workflow_id="onboard_config",
+    params={
+        "config_data": <parsed config dict from step 1>,
+        "device_name": "<device-name>",
+        "dry_run": false
+    }
+)
 ```
 
+---
+
 ### Step 4: Verify with data model check
+Use `nautobot_run_workflow` to confirm all objects were created correctly:
+
 ```
-Use nautobot_verify_data_model:
-  config_json: <json from step 1>
-  device_name: <device-name>
+nautobot_run_workflow(
+    workflow_id="verify_data_model",
+    params={"device_name": "<device-name>"}
+)
 ```
 
 Expected: `total_drifts: 0` confirms all objects created correctly.
+
+---
 
 ## CLI Alternative
 ```bash
@@ -59,11 +99,21 @@ nautobot-mcp onboard config router-config.json core-rtr-01
 nautobot-mcp onboard config router-config.json core-rtr-01 --commit
 ```
 
-## Key Parameters
+---
+
+## Key MCP Tools Reference
+
+| Tool | Workflow ID | Required Parameters |
+|------|-------------|---------------------|
+| `nautobot_api_catalog` | — | `domain` (optional) |
+| `nautobot_run_workflow` | `onboard_config` | `config_data`, `device_name`, `dry_run` |
+| `nautobot_run_workflow` | `verify_data_model` | `device_name` |
+| `execute_junos_command` (jmcp) | — | `router_name`, `command` |
+
+### Workflow Parameters
+
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `dry_run` | `true` | Preview without committing |
-| `update_existing` | `false` | Update existing objects |
-| `location` | auto | Device location name |
-| `role` | `Router` | Device role |
-| `namespace` | `Global` | IPAM namespace |
+| `config_data` | required | Parsed JunOS config (dict) |
+| `device_name` | required | Device name in Nautobot |
