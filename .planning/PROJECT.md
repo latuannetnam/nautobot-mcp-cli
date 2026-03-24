@@ -8,7 +8,7 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can read and write Nautobot data — including Juniper CMS model records — through standardized MCP tools, enabling automated network configuration management, file-free drift comparison against Nautobot's source of truth, and comprehensive device audits that chain live device state (jmcp) against CMS records.
 
-## Current State: v1.3 In Progress 🔄
+## Current State: v1.3 In Progress 🔄 — Phase 16 complete (REST Bridge)
 
 **Previous:** v1.2 Juniper CMS Model MCP Tools (shipped 2026-03-21)
 
@@ -50,11 +50,11 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 - ✓ CMS drift verification (compare live jmcp data vs Nautobot CMS records) — v1.2
 - ✓ `nautobot-mcp cms` CLI for all CMS model operations — v1.2
 - ✓ `cms-device-audit` agent skill for CMS-aware device audit workflows — v1.2
+- ✓ API Catalog engine — static core + dynamic CMS plugin discovery (v1.3, Phase 15)
+- ✓ Universal REST bridge (`call_nautobot`) — endpoint routing, validation, auto-pagination, fuzzy suggestions (v1.3, Phase 16)
 
 ### Active
 
-- [ ] API Catalog engine — static core + dynamic CMS plugin discovery
-- [ ] Universal REST bridge — endpoint routing, validation, auto-pagination
 - [ ] Workflow registry — server-side composite workflows
 - [ ] Agent skills — distributed as files, referencing new 3-tool API
 - [ ] Consolidated server.py (~200 lines / 3 tools replacing 3,883 / 165 tools)
@@ -108,4 +108,4 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-24 after v1.3 pivot from Generic Resource Engine to API Bridge*
+*Last updated: 2026-03-24 after Phase 16 (REST Bridge) completion*
