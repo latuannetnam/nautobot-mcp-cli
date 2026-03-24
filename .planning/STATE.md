@@ -1,51 +1,42 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: — Juniper CMS Model MCP Tools
-status: unknown
-last_updated: "2026-03-21T11:41:16.046Z"
+milestone: v1.3
+milestone_name: — Generic Resource Engine
+status: defining-requirements
+last_updated: "2026-03-24T11:25:00.000Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 18
-  completed_plans: 18
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State: nautobot-mcp-cli
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-20)
+See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Phase 14 — cli-commands-agent-skill-guides
+**Current focus:** Defining requirements for v1.3 Generic Resource Engine
 
 ## Current Position
 
-Phase: 14 (cli-commands-agent-skill-guides) — PENDING
-Plan: 0 of 0
-
-## Phase 09 Summary
-
-All 3 plans executed:
-
-- **09-01**: 8 Pydantic routing models + 20+ CRUD functions
-- **09-02**: 14 MCP tools in server.py (nautobot_cms_ prefix)
-- **09-03**: 13 CLI commands + 22 unit tests (153 total passing)
-
-Key files added:
-
-- `nautobot_mcp/models/cms/routing.py` — StaticRoute, BGPGroup, BGPNeighbor, etc.
-- `nautobot_mcp/cms/routing.py` — all CRUD + nexthop inlining
-- `nautobot_mcp/cli/cms_routing.py` — routing subcommands
-- `tests/test_cms_routing.py` — 22 unit tests
-- server.py extended with 14 nautobot_cms_* tools
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-24 — Milestone v1.3 started
 
 ## Context
 
-**Goal:** Add full CRUD MCP tools for all Juniper-specific models in the netnam-cms-core Nautobot plugin, plus composite summary tools and live drift verification against CMS model records.
+**Goal:** Re-architect MCP tool layer from 165 individual tools to ~18 using a Generic Resource Engine pattern. Eliminate context window bloat (33% → ~3.5%) and restore agent accuracy.
 
-**Scope:** All 5 Juniper model domains (Routing, Interfaces, Firewalls, Policies, ARP) with 40+ models and 49 REST API endpoints.
+**Scope:**
+- Resource Registry module (`registry.py`) with unified catalog
+- 3 generic discovery/CRUD tools replacing ~150 individual wrappers
+- ~15 preserved composite workflow tools
+- Clean break migration (no backwards compatibility)
+- UAT against Nautobot dev server (http://101.96.85.93)
 
 ## Key Decisions
 
@@ -62,17 +53,22 @@ Key files added:
 | netnam-cms-core via plugin API | v1.2 | Plugin exposes 49 DRF endpoints, consume directly |
 | CMS routing nexthop inlining | 9 | Static route nexthops inlined into parent for MCP efficiency |
 | BGP neighbor device-scoping | 9 | Neighbors scoped via group → device chain for device queries |
+| Generic Resource Engine | v1.3 | 165 tools → ~18 via unified dispatcher; 33% → 3.5% context |
+| Clean break (no aliases) | v1.3 | Long-term clarity over short-term compatibility |
+| CLI unchanged | v1.3 | CLI calls domain modules directly, not MCP tools |
 
 ## Accumulated Context
 
 - v1.0 shipped 2026-03-18 with 44+ MCP tools, CLI, agent skills
 - v1.1 shipped 2026-03-20 with 46 MCP tools, 105 tests, ~11k LOC
-- v1.2 in progress: Phase 8 (CMS foundation) + Phase 9 (routing) done
+- v1.2 shipped 2026-03-21 with 164 MCP tools, 293 tests, ~13k LOC
 - Architecture: shared core library + thin MCP/CLI layers
 - jmcp `show configuration | display json` returns null for large configs
 - pynautobot `ip_addresses.filter(interface_id=...)` not a valid filter
 - Nautobot IPs often have `assigned_object_id=None` (unlinked)
 - netnam-cms-core has 40+ Juniper models across routing, interfaces, firewalls, policies, ARP
+- cms/client.py already has CMS_ENDPOINTS registry + generic CRUD helpers (cms_list/get/create/update/delete)
+- Research: AI accuracy drops <2% at 7+ domains (LangChain 2025); 165 tools consume ~66K tokens/request
 
 ## Blockers
 
@@ -80,4 +76,4 @@ None.
 
 ---
 *State initialized: 2026-03-17*
-*Last updated: 2026-03-20T17:00:00+07:00*
+*Last updated: 2026-03-24 — v1.3 milestone started*

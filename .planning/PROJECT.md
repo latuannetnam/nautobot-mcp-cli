@@ -8,14 +8,20 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can read and write Nautobot data — including Juniper CMS model records — through standardized MCP tools, enabling automated network configuration management, file-free drift comparison against Nautobot's source of truth, and comprehensive device audits that chain live device state (jmcp) against CMS records.
 
-## Current State: v1.2 Complete ✅
+## Current State: v1.3 In Progress 🔄
 
-**Shipped 2026-03-21** — v1.2 Juniper CMS Model MCP Tools
+**Previous:** v1.2 Juniper CMS Model MCP Tools (shipped 2026-03-21)
 
-- **164 MCP tools** across 5 Juniper CMS model domains + 4 composite summaries + 2 drift tools
-- **293 unit tests** | ~13k LOC Python | 6 phases, 18 plans
-- `nautobot-mcp cms` CLI covering all CMS model operations
-- `cms-device-audit` agent skill for full jmcp → CMS audit workflows
+## Current Milestone: v1.3 Generic Resource Engine
+
+**Goal:** Re-architect MCP tool layer from 165 individual tools to ~18 using a Generic Resource Engine pattern, solving context window bloat and agent accuracy degradation.
+
+**Target features:**
+- Resource Registry module with unified catalog mapping resource_type → handler
+- 3 generic discovery/CRUD tools replacing ~150 individual wrappers
+- ~15 preserved composite workflow tools for multi-entity operations
+- Clean break migration (no backwards compatibility aliases)
+- Full test coverage with UAT against Nautobot dev server
 
 ## Requirements
 
@@ -43,6 +49,14 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 - ✓ `cms-device-audit` agent skill for CMS-aware device audit workflows — v1.2
 
 ### Active
+
+- [ ] Generic Resource Engine — unified resource registry + dispatcher
+- [ ] 3 universal MCP tools (list_resources, resource_schema, resource)
+- [ ] Consolidated server.py (~300 lines replacing 3,883)
+- [ ] Resource-level test coverage + UAT against Nautobot dev
+- [ ] Updated agent skills and documentation
+
+### Future
 
 - [ ] Multi-vendor config parsers (Cisco IOS/IOS-XE, Arista EOS)
 - [ ] Bulk device onboarding (batch config files)
@@ -73,6 +87,7 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 | 1:1 Pydantic model per CMS endpoint | Mirrors API shape exactly; avoids impedance mismatch | ✓ 40+ CMS Pydantic models, clean validation |
 | Composite tools as thin aggregators | Single-call UX for common agent workflows | ✓ Reduces agent round-trips from N to 1 |
 | DiffSync for CMS drift (not set comparison) | Field-level change detection vs presence-only | ✓ Reports changed fields, not just missing/extra |
+| Generic Resource Engine (v1.3) | 165 tools → ~18 via unified dispatcher; context overhead drops from 33% to ~3.5% | In progress |
 
 ## Constraints
 
@@ -84,4 +99,4 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-21 after v1.2 milestone complete*
+*Last updated: 2026-03-24 after v1.3 milestone started*
