@@ -59,7 +59,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/nautobot-mcp-cli.git
+git clone https://github.com/latuannetnam/nautobot-mcp-cli.git
 cd nautobot-mcp-cli
 
 # Create virtual environment and install
