@@ -1,65 +1,49 @@
-# Requirements: nautobot-mcp-cli v1.3
+# Requirements: nautobot-mcp-cli v1.4
 
-**Defined:** 2026-03-24
-**Core Value:** AI agents can read and write Nautobot data through 3 universal MCP tools — with 96% less context window overhead and dramatically improved tool selection accuracy.
+**Defined:** 2026-03-25
+**Core Value:** AI agents get reliable, accurate, and actionable responses from the Nautobot MCP bridge — with graceful partial failures, correct filter contracts, and enriched error diagnostics.
 
-## v1.3 Requirements
+## v1.4 Requirements
 
-Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
+Requirements derived from verified user-reported pain points (see analysis report). Each maps to roadmap phases.
 
-### Catalog Engine (CAT)
+### Partial Failure Resilience (PFR)
 
-- [x] **CAT-01**: `nautobot_api_catalog` tool returns all available endpoints and workflows grouped by domain (dcim, ipam, circuits, tenancy, cms, workflows)
-- [x] **CAT-02**: Catalog supports optional `domain` filter to return only one domain's entries
-- [x] **CAT-03**: Core endpoints (dcim, ipam, circuits, tenancy) defined in static JSON with endpoint path, methods, common filters, and description
-- [x] **CAT-04**: CMS plugin endpoints auto-discovered from `CMS_ENDPOINTS` registry at runtime — zero duplication
-- [x] **CAT-05**: Workflow entries listed from `WORKFLOW_REGISTRY` with params and description
-- [x] **CAT-06**: Catalog response stays under 1500 tokens (concise descriptions, no schema/types)
+- [ ] **PFR-01**: Composite workflows return partial data with `status: "partial"` when child queries fail, instead of all-or-nothing `status: "error"`
+- [ ] **PFR-02**: `bgp_summary` workflow returns groups and neighbors even if policy association or address family queries fail
+- [ ] **PFR-03**: Response envelope includes `warnings` list with per-child-call failure details when partial
+- [ ] **PFR-04**: `routing_table`, `firewall_summary`, and `interface_detail` composite functions implement same graceful degradation pattern
 
-### REST Bridge (BRG)
+### Catalog Accuracy (CAT)
 
-- [x] **BRG-01**: `call_nautobot` tool executes any CRUD operation by specifying endpoint, method, params/data, and optional id
-- [x] **BRG-02**: Endpoint routing: `/api/*` → pynautobot core accessor, `cms:*` → CMS plugin helpers, `plugins:*` → plugin accessor
-- [x] **BRG-03**: Endpoint validated against catalog before dispatch — invalid endpoint returns clear error with "did you mean X?" hint
-- [x] **BRG-04**: Auto-pagination for GET operations — follows `next` links up to `limit` param (default 50)
-- [x] **BRG-05**: Device name → UUID auto-resolution for CMS endpoints requiring device filter
-- [x] **BRG-06**: HTTP error translation: 404/400/401/500 → structured error with actionable hints
-- [x] **BRG-07**: `id` parameter support for single-object operations (GET by UUID, PATCH, DELETE)
+- [ ] **CAT-07**: Per-endpoint filter registry in `cms_discovery.py` replaces domain-level `CMS_DOMAIN_FILTERS`
+- [ ] **CAT-08**: Catalog advertises only filters actually supported at runtime for each CMS endpoint (e.g., `group` for `juniper_bgp_neighbors`, not `device`)
+- [ ] **CAT-09**: Existing unit tests updated to validate per-endpoint filter accuracy
 
-### Workflow Registry (WFL)
+### Endpoint Dereference (DRF)
 
-- [x] **WFL-01**: `run_workflow` tool dispatches named workflows with params dict
-- [x] **WFL-02**: Workflow registry maps workflow name → function + params schema + description
-- [x] **WFL-03**: All N+1 query patterns preserved as workflows: `bgp_summary`, `routing_table`, `firewall_summary`, `interface_detail`
-- [x] **WFL-04**: All complex business logic preserved as workflows: `onboard_config`, `compare_device`, `verify_data_model`, `verify_compliance`, `compare_bgp`, `compare_routes`
-- [x] **WFL-05**: Parameter normalization handles domain function inconsistencies (e.g., `device` vs `device_name`)
-- [x] **WFL-06**: Invalid workflow name returns clear error listing available workflows
+- [ ] **DRF-01**: REST bridge strips UUID path segments from endpoints before validation (e.g., `/api/dcim/device-types/<uuid>/` → `/api/dcim/device-types/` + `id=<uuid>`)
+- [ ] **DRF-02**: Agent can follow linked object URLs from response payloads directly through `call_nautobot`
+- [ ] **DRF-03**: Existing bridge unit tests extended with dereference scenarios
 
-### Server Consolidation (SVR)
+### Workflow Contracts (WFC)
 
-- [x] **SVR-01**: `server.py` reduced from 3,883 lines / 165 tools to ~200 lines / 3 tools
-- [x] **SVR-02**: All 165 individual `@mcp.tool` CRUD wrappers removed (clean break, no aliases)
-- [x] **SVR-03**: Error handling via existing `handle_error` function unchanged
-- [x] **SVR-04**: `get_client()` singleton pattern unchanged
+- [ ] **WFC-01**: `verify_data_model` workflow entry lists `parsed_config` as required parameter
+- [ ] **WFC-02**: `verify_data_model` workflow entry includes `ParsedConfig.model_validate` transform for `parsed_config`
+- [ ] **WFC-03**: Workflow registry validation catches required-param mismatches at import time (startup self-check)
 
-### Agent Skills (SKL)
+### Error Diagnostics (ERR)
 
-- [x] **SKL-01**: All agent skills updated to reference new 3-tool API (`call_nautobot`, `run_workflow`, `nautobot_api_catalog`)
-- [x] **SKL-02**: Skills embed relevant endpoint references inline (not requiring catalog lookup)
-- [x] **SKL-03**: `cms-device-audit` skill updated for cross-MCP orchestration via new API
-- [x] **SKL-04**: `onboard-router-config` skill updated to use `run_workflow("onboard_config", ...)`
-- [x] **SKL-05**: `verify-compliance` skill updated to use `run_workflow("verify_compliance", ...)`
+- [ ] **ERR-01**: 400 (validation) errors parse response body and include field-level error details in `NautobotValidationError.errors`
+- [ ] **ERR-02**: Error hints are contextual to the specific endpoint and filter being used (not generic "check server logs")
+- [ ] **ERR-03**: Composite workflow errors include `origin` field showing which child operation failed
+- [ ] **ERR-04**: `NautobotAPIError` default hint replaced with operation-specific guidance
 
-### Testing & UAT (TST)
+### Response Ergonomics (RSP)
 
-- [x] **TST-01**: All existing 293+ domain module tests pass unchanged
-- [x] **TST-02**: New `test_catalog.py` with catalog completeness + domain filter tests
-- [x] **TST-03**: New `test_bridge.py` with endpoint routing + validation + error hint tests
-- [x] **TST-04**: New `test_workflows.py` with workflow dispatch + parameter normalization tests
-- [x] **TST-05**: Updated `test_server.py` for new 3-tool interface
-- [x] **TST-06**: UAT smoke test against Nautobot dev server (http://101.96.85.93)
-- [x] **TST-07**: Verify `nautobot_api_catalog()` returns expected domains from live server
-- [x] **TST-08**: Verify `call_nautobot("/api/dcim/devices/", "GET")` returns real device data
+- [ ] **RSP-01**: `interface_detail` workflow supports `detail` toggle (summary mode strips unit/family/filter details, keeps counts)
+- [ ] **RSP-02**: Composite workflow envelopes include `response_size_bytes` metadata
+- [ ] **RSP-03**: Composite workflows support optional `limit` parameter to cap items in response
 
 ## Future Requirements
 
@@ -78,59 +62,41 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 
 | Feature | Reason |
 |---------|--------|
-| CLI refactoring | CLI calls domain modules directly — unaffected by MCP layer changes |
-| Backwards-compatible tool aliases | Defeats purpose; would double tool count |
-| Dynamic tool generation from catalog | Harder to debug, IDE unfriendly |
-| GraphQL integration | Different query paradigm, not needed |
-| Real-time LLM caching | Stale data risk, context bloat |
-| Field-level schema in catalog | Bloats response; agents learn params from skills |
+| CMS plugin server-side filter changes | We consume REST API as-is; fix is on our catalog metadata |
+| Response streaming / chunked transfer | MCP protocol limitation; use summary mode + limit instead |
+| Schema validation at catalog level | Bloats catalog response; agents learn params from skills |
+| Retry logic for failed child queries | Partial data is sufficient; retries add latency |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CAT-01 | Phase 15 | Complete |
-| CAT-02 | Phase 15 | Complete |
-| CAT-03 | Phase 15 | Complete |
-| CAT-04 | Phase 15 | Complete |
-| CAT-05 | Phase 15 | Complete |
-| CAT-06 | Phase 15 | Complete |
-| BRG-01 | Phase 16 | Complete |
-| BRG-02 | Phase 16 | Complete |
-| BRG-03 | Phase 16 | Complete |
-| BRG-04 | Phase 16 | Complete |
-| BRG-05 | Phase 16 | Complete |
-| BRG-06 | Phase 16 | Complete |
-| BRG-07 | Phase 16 | Complete |
-| WFL-01 | Phase 17 | Pending |
-| WFL-02 | Phase 17 | Pending |
-| WFL-03 | Phase 17 | Pending |
-| WFL-04 | Phase 17 | Pending |
-| WFL-05 | Phase 17 | Pending |
-| WFL-06 | Phase 17 | Pending |
-| SVR-01 | Phase 17 | Pending |
-| SVR-02 | Phase 17 | Pending |
-| SVR-03 | Phase 17 | Pending |
-| SVR-04 | Phase 17 | Pending |
-| SKL-01 | Phase 18 | Complete |
-| SKL-02 | Phase 18 | Complete |
-| SKL-03 | Phase 18 | Complete |
-| SKL-04 | Phase 18 | Complete |
-| SKL-05 | Phase 18 | Complete |
-| TST-01 | Phase 16 | Complete |
-| TST-02 | Phase 15 | Complete |
-| TST-03 | Phase 16 | Complete |
-| TST-04 | Phase 17 | Pending |
-| TST-05 | Phase 17 | Pending |
-| TST-06 | Phase 18 | Complete |
-| TST-07 | Phase 18 | Complete |
-| TST-08 | Phase 18 | Complete |
+| PFR-01 | Phase 19 | Pending |
+| PFR-02 | Phase 19 | Pending |
+| PFR-03 | Phase 19 | Pending |
+| PFR-04 | Phase 19 | Pending |
+| CAT-07 | Phase 20 | Pending |
+| CAT-08 | Phase 20 | Pending |
+| CAT-09 | Phase 20 | Pending |
+| DRF-01 | Phase 20 | Pending |
+| DRF-02 | Phase 20 | Pending |
+| DRF-03 | Phase 20 | Pending |
+| WFC-01 | Phase 21 | Pending |
+| WFC-02 | Phase 21 | Pending |
+| WFC-03 | Phase 21 | Pending |
+| ERR-01 | Phase 21 | Pending |
+| ERR-02 | Phase 21 | Pending |
+| ERR-03 | Phase 21 | Pending |
+| ERR-04 | Phase 21 | Pending |
+| RSP-01 | Phase 22 | Pending |
+| RSP-02 | Phase 22 | Pending |
+| RSP-03 | Phase 22 | Pending |
 
 **Coverage:**
-- v1.3 requirements: 36 total
-- Mapped to phases: 36
+- v1.4 requirements: 20 total
+- Mapped to phases: 20
 - Unmapped: 0 ✓
 
 ---
-*Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after API Bridge milestone definition*
+*Requirements defined: 2026-03-25*
+*Last updated: 2026-03-25 after v1.4 Operational Robustness milestone definition*
