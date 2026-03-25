@@ -9,13 +9,81 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-> Changes targeting the next milestone (v1.3) will appear here.
+> Changes targeting the next milestone (v1.4) will appear here.
 
 Candidates:
 - Multi-vendor config parsers (Cisco IOS/IOS-XE, Arista EOS)
 - Bulk device onboarding (batch config files)
 - Config remediation suggestions based on drift reports
 - Extended drift coverage (interfaces, firewalls)
+
+---
+
+## [v1.3] — 2026-03-25
+
+### API Bridge Architecture
+
+Replaced the 164-tool MCP server with a **3-tool API Bridge** — eliminating per-resource tool sprawl and reducing agent token overhead by ~90%.
+
+| Tool | Purpose |
+|---|---|
+| `nautobot_api_catalog` | Discover all available endpoints and workflows, optionally filtered by domain (`dcim`, `ipam`, `cms`, `workflows`, …) |
+| `nautobot_call_nautobot` | Universal REST dispatcher — GET, POST, PATCH, DELETE against any endpoint; routes automatically to pynautobot core or CMS plugin |
+| `nautobot_run_workflow` | Execute composite server-side workflows by ID; returns a standard response envelope |
+
+### Catalog Engine
+
+- `get_catalog(domain=None)` assembles a unified endpoint + workflow catalog from three sources: static core endpoints, dynamic CMS discovery, and workflow stubs
+- Domain filtering: `dcim`, `ipam`, `circuits`, `tenancy`, `cms`, `workflows`
+- CMS endpoints auto-discovered from `CMS_ENDPOINTS` — adding a new CMS model automatically appears in the catalog without code changes
+- Catalog response designed to stay under 1,500 tokens
+
+### REST Bridge
+
+- Routes `/api/*` endpoints to pynautobot core accessors
+- Routes `cms:*` endpoints to CMS plugin helpers (auto-resolves device name → UUID)
+- Fuzzy-match error hints via `difflib` for invalid endpoint names
+- Hard cap at 200 results per GET; default 50; response includes `truncated` + `total_available` metadata when capped
+- Validates endpoints against catalog; raises `NautobotValidationError` with suggestion before hitting the server
+
+### Workflow Registry
+
+10 composite workflows registered in `nautobot_mcp/workflows.py`:
+
+| Workflow ID | Description |
+|---|---|
+| `bgp_summary` | All BGP groups + neighbor counts for a device |
+| `routing_table` | Static routes with inlined next-hops |
+| `firewall_summary` | Firewall filters with term counts |
+| `interface_detail` | Interface units with families, filters, VRRP, ARP |
+| `onboard_config` | Parse + onboard config to Nautobot (dry-run safe) |
+| `compare_device` | File-free drift — live interfaces vs Nautobot |
+| `verify_data_model` | DiffSync data model drift report |
+| `verify_compliance` | Golden Config compliance check |
+| `compare_bgp` | Live BGP neighbors vs CMS records |
+| `compare_routes` | Live static routes vs CMS records |
+
+All workflows return a standard envelope: `{workflow, device, status, data, error, timestamp}`.
+
+### Agent Skills
+
+All 3 agent skill guides rewritten for the 3-tool API:
+
+- `cms-device-audit` — consolidated 8-step audit into 6 steps; multi-step collect+compare patterns replaced with single `nautobot_run_workflow` calls; added Step 0 discovery
+- `onboard-router-config` — replaces `nautobot_onboard_config` → `nautobot_run_workflow("onboard_config", ...)` with correct `config_data` param
+- `verify-compliance` — replaces all legacy tool calls; adds device IP lookup via `nautobot_call_nautobot`
+
+### UAT Test Suite
+
+- `tests/test_uat.py` — 11 tests in 4 classes with `@pytest.mark.live`; excluded from normal `pytest` runs (requires `NAUTOBOT_UAT_URL` + `NAUTOBOT_TOKEN`)
+- `scripts/uat_smoke_test.py` — standalone 9-check script with ✓/✗ output; exits 0 on all-pass, 1 on any failure
+- `pyproject.toml` — `live` marker registered; `addopts = "-m 'not live'"` keeps UAT out of CI
+
+### Stats
+
+- MCP tools: 164 → **3**
+- Unit tests: 293 → **397**
+- Phases: 15-18 (Catalog Engine, REST Bridge, Workflow Registry, Skills & UAT)
 
 ---
 
