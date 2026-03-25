@@ -25,15 +25,23 @@ def _get_cms_catalog() -> dict:
     return _cms_cache
 
 
-def get_catalog(domain: Optional[str] = None) -> dict:
+def get_catalog(
+    client=None,
+    domain: Optional[str] = None,
+    include_workflows: bool = True,
+    include_cms: bool = True,
+) -> dict:
     """Assemble the full API catalog or filter by domain.
 
     Args:
+        client: NautobotClient instance (reserved for future dynamic discovery).
         domain: Optional domain filter. Valid values:
             "dcim", "ipam", "circuits", "tenancy" — core endpoints
             "cms" — CMS plugin endpoints (all sub-domains)
             "workflows" — available server-side workflows
             None — returns all domains
+        include_workflows: Include composite workflow entries (default: True).
+        include_cms: Include CMS plugin endpoints (default: True).
 
     Returns:
         Dict of catalog entries grouped by domain.
@@ -55,9 +63,9 @@ def get_catalog(domain: Optional[str] = None) -> dict:
             )
 
         if domain == "cms":
-            return {"cms": cms_catalog}
+            return {"cms": cms_catalog} if include_cms else {}
         elif domain == "workflows":
-            return {"workflows": WORKFLOW_STUBS}
+            return {"workflows": WORKFLOW_STUBS} if include_workflows else {}
         else:
             return {domain: CORE_ENDPOINTS[domain]}
 
@@ -69,9 +77,11 @@ def get_catalog(domain: Optional[str] = None) -> dict:
         catalog[dom] = entries
 
     # CMS endpoints (full listing)
-    catalog["cms"] = cms_catalog
+    if include_cms:
+        catalog["cms"] = cms_catalog
 
     # Workflows
-    catalog["workflows"] = WORKFLOW_STUBS
+    if include_workflows:
+        catalog["workflows"] = WORKFLOW_STUBS
 
     return catalog

@@ -275,6 +275,7 @@ def call_nautobot(
     endpoint: str,
     method: str = "GET",
     params: Optional[dict] = None,
+    body: Optional[dict] = None,
     data: Optional[dict] = None,
     id: Optional[str] = None,
     limit: int = DEFAULT_LIMIT,
@@ -290,13 +291,16 @@ def call_nautobot(
         endpoint: API endpoint path ("/api/dcim/devices/") or CMS key ("cms:juniper_static_routes").
         method: HTTP method — GET, POST, PATCH, DELETE.
         params: Query filters for GET operations.
-        data: Request body for POST/PATCH operations.
+        body: Request body for POST/PATCH operations (alias for `data`).
+        data: Request body for POST/PATCH operations (legacy name; `body` takes precedence).
         id: Object UUID for single-object operations.
         limit: Max results for GET list operations (default 50, hard cap 200).
 
     Returns:
         Wrapped response dict with count, results, endpoint, method, and optional truncation metadata.
     """
+    # Resolve body/data alias — body takes precedence if both provided
+    effective_data = body if body is not None else data
     # Validate endpoint exists in catalog
     _validate_endpoint(endpoint)
 
@@ -311,11 +315,11 @@ def call_nautobot(
         if endpoint.startswith("/api/"):
             app_name, ep_name = _parse_core_endpoint(endpoint)
             result = _execute_core(client, app_name, ep_name, method,
-                                   params, data, id, effective_limit)
+                                   params, effective_data, id, effective_limit)
         elif endpoint.startswith("cms:"):
             cms_key = endpoint[4:]  # Strip "cms:" prefix
             result = _execute_cms(client, cms_key, method,
-                                  params, data, id, effective_limit)
+                                  params, effective_data, id, effective_limit)
         else:
             raise NautobotValidationError(
                 message=f"Unsupported endpoint prefix: '{endpoint}'",
