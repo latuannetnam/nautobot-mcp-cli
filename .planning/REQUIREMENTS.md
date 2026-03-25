@@ -44,11 +44,11 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 
 ### Agent Skills (SKL)
 
-- [ ] **SKL-01**: All agent skills updated to reference new 3-tool API (`call_nautobot`, `run_workflow`, `nautobot_api_catalog`)
-- [ ] **SKL-02**: Skills embed relevant endpoint references inline (not requiring catalog lookup)
-- [ ] **SKL-03**: `cms-device-audit` skill updated for cross-MCP orchestration via new API
-- [ ] **SKL-04**: `onboard-router-config` skill updated to use `run_workflow("onboard_config", ...)`
-- [ ] **SKL-05**: `verify-compliance` skill updated to use `run_workflow("verify_compliance", ...)`
+- [x] **SKL-01**: All agent skills updated to reference new 3-tool API (`call_nautobot`, `run_workflow`, `nautobot_api_catalog`)
+- [x] **SKL-02**: Skills embed relevant endpoint references inline (not requiring catalog lookup)
+- [x] **SKL-03**: `cms-device-audit` skill updated for cross-MCP orchestration via new API
+- [x] **SKL-04**: `onboard-router-config` skill updated to use `run_workflow("onboard_config", ...)`
+- [x] **SKL-05**: `verify-compliance` skill updated to use `run_workflow("verify_compliance", ...)`
 
 ### Testing & UAT (TST)
 
@@ -57,9 +57,9 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 - [x] **TST-03**: New `test_bridge.py` with endpoint routing + validation + error hint tests
 - [ ] **TST-04**: New `test_workflows.py` with workflow dispatch + parameter normalization tests
 - [ ] **TST-05**: Updated `test_server.py` for new 3-tool interface
-- [ ] **TST-06**: UAT smoke test against Nautobot dev server (http://101.96.85.93)
-- [ ] **TST-07**: Verify `nautobot_api_catalog()` returns expected domains from live server
-- [ ] **TST-08**: Verify `call_nautobot("/api/dcim/devices/", "GET")` returns real device data
+- [x] **TST-06**: UAT smoke test against Nautobot dev server (http://101.96.85.93)
+- [x] **TST-07**: Verify `nautobot_api_catalog()` returns expected domains from live server
+- [x] **TST-08**: Verify `call_nautobot("/api/dcim/devices/", "GET")` returns real device data
 
 ## Future Requirements
 
@@ -112,19 +112,19 @@ Requirements for v1.3 API Bridge MCP Server. Each maps to roadmap phases.
 | SVR-02 | Phase 17 | Pending |
 | SVR-03 | Phase 17 | Pending |
 | SVR-04 | Phase 17 | Pending |
-| SKL-01 | Phase 18 | Pending |
-| SKL-02 | Phase 18 | Pending |
-| SKL-03 | Phase 18 | Pending |
-| SKL-04 | Phase 18 | Pending |
-| SKL-05 | Phase 18 | Pending |
+| SKL-01 | Phase 18 | Complete |
+| SKL-02 | Phase 18 | Complete |
+| SKL-03 | Phase 18 | Complete |
+| SKL-04 | Phase 18 | Complete |
+| SKL-05 | Phase 18 | Complete |
 | TST-01 | Phase 16 | Complete |
 | TST-02 | Phase 15 | Complete |
 | TST-03 | Phase 16 | Complete |
 | TST-04 | Phase 17 | Pending |
 | TST-05 | Phase 17 | Pending |
-| TST-06 | Phase 18 | Pending |
-| TST-07 | Phase 18 | Pending |
-| TST-08 | Phase 18 | Pending |
+| TST-06 | Phase 18 | Complete |
+| TST-07 | Phase 18 | Complete |
+| TST-08 | Phase 18 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 36 total
