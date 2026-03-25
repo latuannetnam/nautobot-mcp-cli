@@ -16,15 +16,15 @@ Requirements derived from verified user-reported pain points (see analysis repor
 
 ### Catalog Accuracy (CAT)
 
-- [ ] **CAT-07**: Per-endpoint filter registry in `cms_discovery.py` replaces domain-level `CMS_DOMAIN_FILTERS`
-- [ ] **CAT-08**: Catalog advertises only filters actually supported at runtime for each CMS endpoint (e.g., `group` for `juniper_bgp_neighbors`, not `device`)
-- [ ] **CAT-09**: Existing unit tests updated to validate per-endpoint filter accuracy
+- [x] **CAT-07**: Per-endpoint filter registry in `cms_discovery.py` replaces domain-level `CMS_DOMAIN_FILTERS`
+- [x] **CAT-08**: Catalog advertises only filters actually supported at runtime for each CMS endpoint (e.g., `group` for `juniper_bgp_neighbors`, not `device`)
+- [x] **CAT-09**: Existing unit tests updated to validate per-endpoint filter accuracy
 
 ### Endpoint Dereference (DRF)
 
-- [ ] **DRF-01**: REST bridge strips UUID path segments from endpoints before validation (e.g., `/api/dcim/device-types/<uuid>/` → `/api/dcim/device-types/` + `id=<uuid>`)
-- [ ] **DRF-02**: Agent can follow linked object URLs from response payloads directly through `call_nautobot`
-- [ ] **DRF-03**: Existing bridge unit tests extended with dereference scenarios
+- [x] **DRF-01**: REST bridge strips UUID path segments from endpoints before validation (e.g., `/api/dcim/device-types/<uuid>/` → `/api/dcim/device-types/` + `id=<uuid>`)
+- [x] **DRF-02**: Agent can follow linked object URLs from response payloads directly through `call_nautobot`
+- [x] **DRF-03**: Existing bridge unit tests extended with dereference scenarios
 
 ### Workflow Contracts (WFC)
 
@@ -75,12 +75,12 @@ Requirements derived from verified user-reported pain points (see analysis repor
 | PFR-02 | Phase 19 | Pending |
 | PFR-03 | Phase 19 | Pending |
 | PFR-04 | Phase 19 | Pending |
-| CAT-07 | Phase 20 | Pending |
-| CAT-08 | Phase 20 | Pending |
-| CAT-09 | Phase 20 | Pending |
-| DRF-01 | Phase 20 | Pending |
-| DRF-02 | Phase 20 | Pending |
-| DRF-03 | Phase 20 | Pending |
+| CAT-07 | Phase 20 | Complete |
+| CAT-08 | Phase 20 | Complete |
+| CAT-09 | Phase 20 | Complete |
+| DRF-01 | Phase 20 | Complete |
+| DRF-02 | Phase 20 | Complete |
+| DRF-03 | Phase 20 | Complete |
 | WFC-01 | Phase 21 | Pending |
 | WFC-02 | Phase 21 | Pending |
 | WFC-03 | Phase 21 | Pending |
