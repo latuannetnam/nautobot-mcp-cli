@@ -186,7 +186,7 @@ get-shit-done/
 
 **Documentation:**
 - `README.md` - User-facing installation and usage guide
-- `CLAUDE.md` - Instructions for Claude Code when working in this repo
+- `GEMINI.md` - Instructions for Claude Code when working in this repo
 
 ## Naming Conventions
 

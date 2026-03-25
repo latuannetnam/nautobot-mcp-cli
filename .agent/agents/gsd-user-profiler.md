@@ -31,7 +31,7 @@ Each message has the following structure:
 ```
 
 Key characteristics of the input:
-- Messages are already filtered to genuine user messages only (system messages, tool results, and Claude responses are excluded)
+- Messages are already filtered to genuine user messages only (system messages, tool results, and the agent responses are excluded)
 - Each message is truncated to 500 characters for profiling purposes
 - Messages are project-proportionally sampled -- no single project dominates
 - Recency weighting has been applied during sampling (recent sessions are overrepresented)
@@ -99,9 +99,9 @@ For each of the 8 dimensions defined in the reference document:
 
 6. **Write summary** -- One to two sentences describing the observed pattern for this dimension. Include context-dependent notes if applicable.
 
-7. **Write claude_instruction** -- An imperative directive for Claude's consumption. This tells Claude how to behave based on the profile finding:
+7. **Write claude_instruction** -- An imperative directive for the agent's consumption. This tells the agent how to behave based on the profile finding:
    - MUST be imperative: "Provide concise explanations with code" not "You tend to prefer brief explanations"
-   - MUST be actionable: Claude should be able to follow this instruction directly
+   - MUST be actionable: the agent should be able to follow this instruction directly
    - For LOW confidence dimensions: include a hedging instruction: "Try X -- ask if this matches their preference"
    - For UNSCORED dimensions: use a neutral fallback: "No strong preference detected. Ask the developer when this dimension is relevant."
 </step>
@@ -166,7 +166,7 @@ Do NOT return markdown commentary, explanations, or caveats outside the `<analys
 - Never invent dimensions beyond the 8 defined in the reference document
 - Weight recent messages approximately 3x (last 30 days) per reference doc guidelines
 - Report context-dependent splits rather than forcing a single rating when contradictory signals exist across projects
-- claude_instruction fields must be imperative directives, not descriptions -- the profile is an instruction document for Claude's consumption
+- claude_instruction fields must be imperative directives, not descriptions -- the profile is an instruction document for the agent's consumption
 - Deprioritize log pastes, session context dumps, and large code blocks when selecting evidence
 - When evidence is genuinely insufficient, report UNSCORED with "insufficient data" -- do not guess
 </constraints>

@@ -136,7 +136,79 @@ Phase ${PHASE_NUM}: Context exists — skipping discuss.
 
 Proceed to 3b.
 
-**If has_context is false:** Execute the smart_discuss step for this phase.
+**If has_context is false:** Check if discuss is disabled via settings:
+
+```bash
+SKIP_DISCUSS=$(node ".agent/get-shit-done/bin/gsd-tools.cjs" config-get workflow.skip_discuss 2>/dev/null || echo "false")
+```
+
+**If SKIP_DISCUSS is `true`:** Skip discuss entirely — the ROADMAP phase description is the spec. Display:
+
+```
+Phase ${PHASE_NUM}: Discuss skipped (workflow.skip_discuss=true) — using ROADMAP phase goal as spec.
+```
+
+Write a minimal CONTEXT.md so downstream plan-phase has valid input. Get phase details:
+
+```bash
+DETAIL=$(node ".agent/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase ${PHASE_NUM})
+```
+
+Extract `goal` and `requirements` from JSON. Write `${phase_dir}/${padded_phase}-CONTEXT.md` with:
+
+```markdown
+# Phase {PHASE_NUM}: {Phase Name} - Context
+
+**Gathered:** {date}
+**Status:** Ready for planning
+**Mode:** Auto-generated (discuss skipped via workflow.skip_discuss)
+
+<domain>
+## Phase Boundary
+
+{goal from ROADMAP phase description}
+
+</domain>
+
+<decisions>
+## Implementation Decisions
+
+### the agent's Discretion
+All implementation choices are at the agent's discretion — discuss phase was skipped per user setting. Use ROADMAP phase goal, success criteria, and codebase conventions to guide decisions.
+
+</decisions>
+
+<code_context>
+## Existing Code Insights
+
+Codebase context will be gathered during plan-phase research.
+
+</code_context>
+
+<specifics>
+## Specific Ideas
+
+No specific requirements — discuss phase skipped. Refer to ROADMAP phase description and success criteria.
+
+</specifics>
+
+<deferred>
+## Deferred Ideas
+
+None — discuss phase skipped.
+
+</deferred>
+```
+
+Commit the minimal context:
+
+```bash
+node ".agent/get-shit-done/bin/gsd-tools.cjs" commit "docs(${PADDED_PHASE}): auto-generated context (discuss skipped)" --files "${phase_dir}/${padded_phase}-CONTEXT.md"
+```
+
+Proceed to 3b.
+
+**If SKIP_DISCUSS is `false` (or unset):** Execute the smart_discuss step for this phase.
 
 After smart_discuss completes, verify context was written:
 
@@ -374,7 +446,7 @@ Phase ${PHASE_NUM}: Infrastructure phase — skipping discuss, writing minimal c
 
 Use these defaults for the CONTEXT.md:
 - `<domain>`: Phase boundary from ROADMAP goal
-- `<decisions>`: Single "### Claude's Discretion" subsection — "All implementation choices are at Claude's discretion — pure infrastructure phase"
+- `<decisions>`: Single "### the agent's Discretion" subsection — "All implementation choices are at the agent's discretion — pure infrastructure phase"
 - `<code_context>`: Whatever the codebase scout found
 - `<specifics>`: "No specific requirements — infrastructure phase"
 - `<deferred>`: "None"
@@ -424,7 +496,7 @@ Then prompt the user via **AskUserQuestion**:
 **On "Change QN":** Use AskUserQuestion with the alternatives for that specific question:
 - **header:** "{Area Name}"
 - **question:** "Q{N}: {question text}"
-- **options:** List the 1-2 alternatives plus "You decide" (maps to Claude's Discretion)
+- **options:** List the 1-2 alternatives plus "You decide" (maps to the agent's Discretion)
 
 Record the user's choice. Re-display the updated table with the change reflected. Re-present the full acceptance prompt so the user can make additional changes or accept.
 
@@ -485,8 +557,8 @@ Use **exactly** this structure (identical to discuss-phase output):
 - {Accepted/chosen answer for Q2}
 ...
 
-### Claude's Discretion
-{Any "You decide" answers collected — note Claude has flexibility here}
+### the agent's Discretion
+{Any "You decide" answers collected — note the agent has flexibility here}
 
 </decisions>
 

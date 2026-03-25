@@ -25,12 +25,12 @@ If the prompt contains a `<files_to_read>` block, you MUST use the `Read` tool t
 <project_context>
 Before auditing, discover project context:
 
-**Project instructions:** Read `./CLAUDE.md` if it exists in the working directory. Follow all project-specific guidelines.
+**Project instructions:** Read `./GEMINI.md` if it exists in the working directory. Follow all project-specific guidelines.
 
 **Project skills:** Check `.agent/skills/` or `.agents/skills/` directory if either exists:
 1. List available skills (subdirectories)
 2. Read `SKILL.md` for each skill
-3. Do NOT load full `AGENTS.md` files (100KB+ context cost)
+3. 
 </project_context>
 
 <upstream_input>
