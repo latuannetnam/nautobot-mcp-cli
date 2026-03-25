@@ -1,5 +1,15 @@
 # Milestones
 
+## v1.3 API Bridge MCP Server (Shipped: 2026-03-25)
+
+**Phases completed:** 4 phases, 8 plans, 0 tasks
+
+**Key accomplishments:**
+
+- (none recorded)
+
+---
+
 ## v1.2 Juniper CMS Model MCP Tools (Shipped: 2026-03-21)
 
 **Phases completed:** 6 phases, 18 plans | 62 commits | 98 files changed | +21,735 lines

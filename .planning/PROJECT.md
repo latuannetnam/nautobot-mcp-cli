@@ -2,29 +2,19 @@
 
 ## What This Is
 
-An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. It provides 164 structured tools for managing network infrastructure data in Nautobot — devices, interfaces, IP addresses, VLANs, circuits, Golden Config, and full Juniper CMS model coverage (BGP, routing, interfaces, firewalls, policies, ARP) — and integrates with vendor-specific MCP servers (Juniper jmcp) to bridge the gap between live network state and Nautobot as the source of truth.
+An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. The v1.3 API Bridge consolidates 165 individual tools into 3 universal tools (`nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`) plus distributed agent skills — covering devices, interfaces, IP addresses, VLANs, circuits, and full Juniper CMS model coverage (BGP, routing, interfaces, firewalls, policies, ARP). Integrates with vendor-specific MCP servers (Juniper jmcp) to bridge live network state with Nautobot as the source of truth.
 
 ## Core Value
 
-AI agents can read and write Nautobot data — including Juniper CMS model records — through standardized MCP tools, enabling automated network configuration management, file-free drift comparison against Nautobot's source of truth, and comprehensive device audits that chain live device state (jmcp) against CMS records.
+AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current State: v1.3 In Progress 🔄
+## Current State: v1.3 Shipped ✅ — API Bridge MCP Server (2026-03-25)
 
-**Previous:** v1.2 Juniper CMS Model MCP Tools (shipped 2026-03-21)
+**Shipped:** 3-tool API Bridge replacing 165 individual MCP tools. 397 unit tests + 11 live UAT tests verified against Nautobot dev server. Agent skills rewritten for `nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`.
 
-## Current Milestone: v1.3 API Bridge MCP Server
+**Codebase:** ~3,200 LOC Python (server reduced from 3,883 → ~200 lines). Tech stack: Python, FastMCP, pynautobot, DiffSync, Pydantic v2, pytest.
 
-**Goal:** Re-architect MCP server from 165 individual tools to 3 tools (`nautobot_api_catalog`, `call_nautobot`, `run_workflow`) + agent skills, solving context window bloat and agent accuracy degradation.
-
-**Target features:**
-- API Catalog engine (static core + dynamic CMS plugin discovery)
-- Universal REST bridge (`call_nautobot`) with endpoint routing, validation, auto-pagination
-- Workflow registry (`run_workflow`) wrapping existing composite domain functions
-- Agent skills distributed as files (not served via MCP)
-- Clean break migration (no backwards compatibility aliases)
-- Full test coverage with UAT against Nautobot dev server
-
-**Design:** [API Bridge MCP Architecture Design v2](docs/plans/2026-03-24-api-bridge-mcp-design.md)
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25)
 
 ## Requirements
 
@@ -50,15 +40,16 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 - ✓ CMS drift verification (compare live jmcp data vs Nautobot CMS records) — v1.2
 - ✓ `nautobot-mcp cms` CLI for all CMS model operations — v1.2
 - ✓ `cms-device-audit` agent skill for CMS-aware device audit workflows — v1.2
+- ✓ API Catalog engine — static core + dynamic CMS plugin discovery — v1.3
+- ✓ Universal REST bridge (`nautobot_call_nautobot`) — endpoint routing, validation, auto-pagination, fuzzy suggestions — v1.3
+- ✓ Workflow registry (`nautobot_run_workflow`) — 10 composite workflows, parameter normalization, response envelopes — v1.3
+- ✓ Consolidated server.py — 3 tools replacing 165 individual tool wrappers — v1.3
+- ✓ Agent skills rewritten for 3-tool API (`cms-device-audit`, `onboard-router-config`, `verify-compliance`) — v1.3
+- ✓ UAT pytest suite (11 live tests) + standalone smoke script (9 checks) against dev server — v1.3
 
 ### Active
 
-- [ ] API Catalog engine — static core + dynamic CMS plugin discovery
-- [ ] Universal REST bridge — endpoint routing, validation, auto-pagination
-- [ ] Workflow registry — server-side composite workflows
-- [ ] Agent skills — distributed as files, referencing new 3-tool API
-- [ ] Consolidated server.py (~200 lines / 3 tools replacing 3,883 / 165 tools)
-- [ ] Updated tests + UAT against Nautobot dev
+*(Planning next milestone)*
 
 ### Rejected
 
@@ -82,7 +73,7 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
-|----------|-----------|---------| 
+|----------|-----------|---------|
 | Shared core library with thin MCP/CLI layers | Single source of truth | ✓ Clean separation, easy to add tools |
 | MCP + CLI + Skills as three interfaces | MCP for agents, CLI for humans, Skills for workflows | ✓ All three patterns work |
 | Juniper-first, extensible vendor architecture | jmcp exists; VendorParser ABC for future | ✓ ParserRegistry ready for Cisco/Arista |
@@ -96,7 +87,9 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 | Composite tools as thin aggregators | Single-call UX for common agent workflows | ✓ Reduces agent round-trips from N to 1 |
 | DiffSync for CMS drift (not set comparison) | Field-level change detection vs presence-only | ✓ Reports changed fields, not just missing/extra |
 | ~~Generic Resource Engine (v1.3)~~ | ~~165 tools → ~18 via unified dispatcher~~ | ❌ Rejected — superseded by API Bridge |
-| API Bridge MCP Server (v1.3) | 165 tools → 3 via catalog + REST bridge + workflows; 96% token reduction | In progress |
+| API Bridge MCP Server (v1.3) | 165 tools → 3 via catalog + REST bridge + workflows; ~96% token reduction | ✓ Shipped v1.3 |
+| `live` pytest marker for UAT | UAT tests hit real server; excluded from CI by `addopts = "-m 'not live'"` | ✓ Clean CI/CD isolation |
+| Smoke script as Windows-safe ASCII output | Replaced ✓/✗ Unicode with [PASS]/[FAIL] for CP1252 compatibility | ✓ Portable on Windows terminals |
 
 ## Constraints
 
@@ -108,4 +101,4 @@ AI agents can read and write Nautobot data — including Juniper CMS model recor
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-24 after v1.3 pivot from Generic Resource Engine to API Bridge*
+*Last updated: 2026-03-25 after v1.3 API Bridge milestone completion*
