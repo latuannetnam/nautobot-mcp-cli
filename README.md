@@ -317,214 +317,7 @@ nautobot_run_workflow(workflow_id="compare_bgp", params={
 
 </details>
 
-<details>
-<summary><strong>Devices</strong> (CLI-only, also accessible via nautobot_call_nautobot)</summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_list_devices` | List devices with optional filters (location, tenant, role, platform, search) |
-| `nautobot_get_device` | Get a single device by name or UUID |
-| `nautobot_create_device` | Create a new device |
-| `nautobot_update_device` | Update device name, status, or role |
-| `nautobot_delete_device` | Delete a device by UUID |
-
-</details>
-
-<details>
-<summary><strong>Interfaces</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_list_interfaces` | List interfaces, optionally filtered by device |
-| `nautobot_get_interface` | Get interface by ID or device_name + name |
-| `nautobot_create_interface` | Create a new interface on a device |
-| `nautobot_update_interface` | Update interface name, enabled state, or description |
-| `nautobot_assign_ip_to_interface` | Assign an IP address to an interface (M2M) |
-
-</details>
-
-<details>
-<summary><strong>IPAM</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_list_prefixes` | List IP prefixes |
-| `nautobot_create_prefix` | Create a prefix in CIDR notation |
-| `nautobot_list_ip_addresses` | List IP addresses |
-| `nautobot_create_ip_address` | Create an IP address |
-| `nautobot_list_vlans` | List VLANs |
-| `nautobot_create_vlan` | Create a VLAN |
-
-</details>
-
-<details>
-<summary><strong>Organization</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_list_tenants` | List tenants |
-| `nautobot_get_tenant` | Get a single tenant |
-| `nautobot_create_tenant` | Create a tenant |
-| `nautobot_update_tenant` | Update a tenant |
-| `nautobot_list_locations` | List locations |
-| `nautobot_get_location` | Get a single location |
-| `nautobot_create_location` | Create a location |
-| `nautobot_update_location` | Update a location |
-
-</details>
-
-<details>
-<summary><strong>Circuits</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_list_circuits` | List circuits |
-| `nautobot_get_circuit` | Get a circuit by CID or UUID |
-| `nautobot_create_circuit` | Create a circuit |
-| `nautobot_update_circuit` | Update a circuit |
-
-</details>
-
-<details>
-<summary><strong>Golden Config &amp; Compliance</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_get_intended_config` | Retrieve the intended (golden) config for a device |
-| `nautobot_get_backup_config` | Retrieve the last collected backup config |
-| `nautobot_list_compliance_features` | List compliance features |
-| `nautobot_create_compliance_feature` | Create a compliance feature |
-| `nautobot_delete_compliance_feature` | Delete a compliance feature |
-| `nautobot_list_compliance_rules` | List compliance rules |
-| `nautobot_create_compliance_rule` | Create a compliance rule |
-| `nautobot_update_compliance_rule` | Update a compliance rule |
-| `nautobot_delete_compliance_rule` | Delete a compliance rule |
-| `nautobot_get_compliance_results` | Get compliance results for a device |
-| `nautobot_quick_diff_config` | Quick intended vs. backup diff |
-
-</details>
-
-<details>
-<summary><strong>Device Queries</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_get_device_summary` | Interface count, IP count, VLAN count, link-state stats — one call |
-| `nautobot_get_device_ips` | All IP addresses on all interfaces for a device (M2M traversal) |
-| `nautobot_list_interfaces` | List interfaces; pass `include_ips=True` to embed IPs inline (batch query) |
-| `nautobot_list_ip_addresses` | List IPs with optional `device` filter |
-| `nautobot_list_vlans` | List VLANs with optional `device` filter |
-
-</details>
-
-<details>
-<summary><strong>Onboarding, Verification & Drift</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_parse_config` | Parse a JunOS JSON config into structured data |
-| `nautobot_onboard_config` | Onboard parsed config to Nautobot (supports dry-run) |
-| `nautobot_verify_compliance` | Check config compliance via Golden Config |
-| `nautobot_verify_data_model` | Run DiffSync drift report (interfaces, IPs, VLANs) |
-| `nautobot_compare_device` | **File-free drift** — compare structured interface data vs Nautobot, no config file needed |
-
-</details>
-
-<details>
-<summary><strong>CMS Routing (v1.2 ✨)</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_cms_list_static_routes` | List static routes for a device (inlines next-hops) |
-| `nautobot_cms_get_static_route` | Get a single static route by ID |
-| `nautobot_cms_create_static_route` | Create a static route with next-hops |
-| `nautobot_cms_delete_static_route` | Delete a static route |
-| `nautobot_cms_list_bgp_groups` | List BGP groups for a device |
-| `nautobot_cms_get_bgp_group` | Get a single BGP group |
-| `nautobot_cms_create_bgp_group` | Create a BGP group |
-| `nautobot_cms_delete_bgp_group` | Delete a BGP group |
-| `nautobot_cms_list_bgp_neighbors` | List BGP neighbors for a device or group |
-| `nautobot_cms_get_bgp_neighbor` | Get a single BGP neighbor |
-| `nautobot_cms_create_bgp_neighbor` | Create a BGP neighbor |
-| `nautobot_cms_delete_bgp_neighbor` | Delete a BGP neighbor |
-| `nautobot_cms_list_bgp_address_families` | List address families for a BGP neighbor |
-| `nautobot_cms_list_bgp_policy_associations` | List policy associations for a group or neighbor |
-| `nautobot_cms_list_bgp_received_routes` | List received routes for a BGP neighbor |
-| `nautobot_cms_list_routing_instances` | List routing instances for a device |
-| `nautobot_cms_list_static_route_nexthops` | List next-hops for a static route |
-
-</details>
-
-<details>
-<summary><strong>CMS Interfaces (v1.2 ✨)</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_cms_list_interface_units` | List interface units for a device |
-| `nautobot_cms_get_interface_unit` | Get a single interface unit |
-| `nautobot_cms_create_interface_unit` | Create an interface unit |
-| `nautobot_cms_delete_interface_unit` | Delete an interface unit |
-| `nautobot_cms_list_interface_families` | List address families for an interface unit |
-| `nautobot_cms_get_interface_family` | Get a single interface family |
-| `nautobot_cms_list_ff_associations` | List filter-family associations (input/output filters) |
-| `nautobot_cms_create_ff_association` | Add a filter to an interface family |
-| `nautobot_cms_delete_ff_association` | Remove a filter from an interface family |
-| `nautobot_cms_list_fp_associations` | List policer-family associations |
-| `nautobot_cms_create_fp_association` | Add a policer to an interface family |
-| `nautobot_cms_delete_fp_association` | Remove a policer from an interface family |
-| `nautobot_cms_list_vrrp_groups` | List VRRP groups for an interface unit |
-| `nautobot_cms_get_vrrp_group` | Get a single VRRP group |
-| `nautobot_cms_create_vrrp_group` | Create a VRRP group |
-| `nautobot_cms_delete_vrrp_group` | Delete a VRRP group |
-| `nautobot_cms_list_arp_entries` | List ARP entries for a device or interface |
-| `nautobot_cms_get_arp_entry` | Get a single ARP entry |
-| `nautobot_cms_create_arp_entry` | Create an ARP entry |
-| `nautobot_cms_delete_arp_entry` | Delete an ARP entry |
-
-</details>
-
-<details>
-<summary><strong>CMS Firewalls & Policies (v1.2 ✨)</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_cms_list_firewall_filters` | List firewall filters for a device |
-| `nautobot_cms_get_firewall_filter` | Get a single firewall filter |
-| `nautobot_cms_create_firewall_filter` | Create a firewall filter |
-| `nautobot_cms_delete_firewall_filter` | Delete a firewall filter |
-| `nautobot_cms_list_firewall_terms` | List terms for a firewall filter |
-| `nautobot_cms_create_firewall_term` | Create a term in a firewall filter |
-| `nautobot_cms_delete_firewall_term` | Delete a firewall term |
-| `nautobot_cms_list_firewall_policers` | List firewall policers for a device |
-| `nautobot_cms_create_firewall_policer` | Create a firewall policer |
-| `nautobot_cms_delete_firewall_policer` | Delete a firewall policer |
-| `nautobot_cms_list_policy_statements` | List policy statements for a device |
-| `nautobot_cms_create_policy_statement` | Create a policy statement |
-| `nautobot_cms_delete_policy_statement` | Delete a policy statement |
-
-</details>
-
-<details>
-<summary><strong>CMS Composite Summaries (v1.2 ✨)</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_cms_get_device_bgp_summary` | All BGP groups + neighbors in one call; `detail=True` expands address families and policy associations |
-| `nautobot_cms_get_device_routing_table` | All static routes with inlined next-hops and routing instances |
-| `nautobot_cms_get_interface_detail` | Full interface unit view: families, filters, policers, VRRP groups, ARP entries |
-| `nautobot_cms_get_device_firewall_summary` | All firewall filters with term counts and policer associations |
-
-</details>
-
-<details>
-<summary><strong>CMS Drift Verification (v1.2 ✨)</strong></summary>
-
-| Tool | Description |
-|---|---|
-| `nautobot_cms_compare_bgp_neighbors` | Compare live BGP neighbors (from jmcp) against Nautobot CMS records — returns `CMSDriftReport` with missing, extra, changed |
-| `nautobot_cms_compare_static_routes` | Compare live static routes against Nautobot CMS records — nexthop comparison is order-independent |
-
-</details>
+> **Endpoint reference:** Use `nautobot_api_catalog(domain="dcim")` (or `ipam`, `cms`, `workflows`) to discover the exact endpoint strings and workflow IDs accepted by the two dispatcher tools. All CRUD operations that were previously individual MCP tools are now routed through `nautobot_call_nautobot` or `nautobot_run_workflow`.
 
 ---
 
@@ -601,21 +394,21 @@ uv run nautobot-mcp verify quick-drift core-rtr-01 --interface ae0.0 --ip 10.1.1
 uv run nautobot-mcp verify quick-drift core-rtr-01 -d '{"ae0.0": {"ips": ["10.1.1.1/30"]}}'
 uv run nautobot-mcp verify quick-drift core-rtr-01 -f drift-input.json --json
 
-# CMS Routing (v1.2)
+# CMS Routing
 uv run nautobot-mcp cms routing list-static-routes --device core-rtr-01
 uv run nautobot-mcp cms routing bgp-summary --device core-rtr-01
 uv run nautobot-mcp cms routing routing-table --device core-rtr-01
 
-# CMS Interfaces (v1.2)
+# CMS Interfaces
 uv run nautobot-mcp cms interfaces list-units --device core-rtr-01
 uv run nautobot-mcp cms interfaces detail --device core-rtr-01
 uv run nautobot-mcp cms interfaces list-arp-entries --device core-rtr-01
 
-# CMS Firewalls (v1.2)
+# CMS Firewalls
 uv run nautobot-mcp cms firewalls list-filters --device core-rtr-01
 uv run nautobot-mcp cms firewalls firewall-summary --device core-rtr-01
 
-# CMS Drift (v1.2) — compare live device data against Nautobot CMS records
+# CMS Drift — compare live device data against Nautobot CMS records
 uv run nautobot-mcp cms drift bgp --device core-rtr-01 --from-file live-bgp.json
 uv run nautobot-mcp cms drift routes --device core-rtr-01 --from-file live-routes.json
 ```
@@ -632,7 +425,7 @@ The onboarding engine parses a JunOS device config and creates/updates the corre
 |---|---|
 | `juniper_junos` | Juniper JunOS (JSON output) |
 
-### Steps
+### Via CLI
 
 1. Export the device config as JSON from the router:
 
@@ -662,9 +455,24 @@ The onboarding engine parses a JunOS device config and creates/updates the corre
 
 Objects created: **Device → Interfaces → IP Addresses → VLANs**
 
+### Via MCP Agent
+
+AI agents use the `onboard_config` workflow (no filesystem required):
+
+```
+nautobot_run_workflow(workflow_id="onboard_config", params={
+    "config_data": <ParsedConfig dict>,
+    "device_name": "core-rtr-01",
+    "dry_run": True    # set False to commit
+})
+→ {"workflow": "onboard_config", "status": "ok", "data": {...}}
+```
+
+See the `onboard-router-config` skill (`.agent/skills/onboard-router-config/SKILL.md`) for the full step-by-step agent workflow.
+
 ---
 
-## CMS Drift Detection (v1.2)
+## CMS Drift Detection
 
 Compare live Juniper device state (collected via jmcp) against Nautobot CMS model records.
 No config files required — data flows directly between tools.
