@@ -384,3 +384,118 @@ class TestBuildEnvelope:
         """Envelope should extract device_name if device param not present."""
         env = _build_envelope("compare_device", {"device_name": "rtr-01"}, data={})
         assert env["device"] == "rtr-01"
+
+
+# ---------------------------------------------------------------------------
+# WarningCollector
+# ---------------------------------------------------------------------------
+
+
+from nautobot_mcp.warnings import WarningCollector  # noqa: E402
+
+
+class TestWarningCollector:
+    """Test WarningCollector accumulation and summary."""
+
+    def test_empty_collector_has_no_warnings(self):
+        c = WarningCollector()
+        assert c.warnings == []
+        assert c.has_warnings is False
+
+    def test_add_warning(self):
+        c = WarningCollector()
+        c.add("list_bgp_address_families", "404 Not Found")
+        assert len(c.warnings) == 1
+        assert c.warnings[0] == {"operation": "list_bgp_address_families", "error": "404 Not Found"}
+        assert c.has_warnings is True
+
+    def test_multiple_warnings_accumulated(self):
+        c = WarningCollector()
+        c.add("op1", "err1")
+        c.add("op2", "err2")
+        assert len(c.warnings) == 2
+
+    def test_summary_message(self):
+        c = WarningCollector()
+        c.add("op1", "err1")
+        c.add("op2", "err2")
+        assert c.summary(4) == "2 of 4 enrichment queries failed"
+
+    def test_warnings_returns_copy(self):
+        c = WarningCollector()
+        c.add("op1", "err1")
+        copy = c.warnings
+        copy.append({"operation": "fake", "error": "injected"})
+        assert len(c.warnings) == 1  # original unchanged
+
+
+# ---------------------------------------------------------------------------
+# _build_envelope -- three-tier status (partial)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildEnvelopePartial:
+    """Test three-tier status in _build_envelope."""
+
+    def test_ok_envelope_has_empty_warnings(self):
+        env = _build_envelope("bgp_summary", {"device": "rtr-01"}, data={"x": 1})
+        assert env["status"] == "ok"
+        assert env["warnings"] == []
+        assert env["error"] is None
+
+    def test_partial_envelope_with_warnings(self):
+        warnings = [{"operation": "list_af", "error": "timeout"}]
+        env = _build_envelope(
+            "bgp_summary",
+            {"device": "rtr-01"},
+            data={"x": 1},
+            warnings=warnings,
+            error="1 enrichment queries failed",
+        )
+        assert env["status"] == "partial"
+        assert env["warnings"] == warnings
+        assert "1 enrichment" in env["error"]
+
+    def test_error_envelope_has_empty_warnings(self):
+        err = RuntimeError("connection refused")
+        env = _build_envelope("bgp_summary", {"device": "rtr-01"}, error=err)
+        assert env["status"] == "error"
+        assert env["warnings"] == []
+
+
+# ---------------------------------------------------------------------------
+# run_workflow -- partial failure tuple unpacking
+# ---------------------------------------------------------------------------
+
+
+class TestRunWorkflowPartial:
+    """Test run_workflow with partial failure tuples."""
+
+    def test_tuple_result_with_no_warnings_returns_ok(self):
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": []}
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, [])):
+            client = MagicMock()
+            result = run_workflow(client, workflow_id="bgp_summary", params={"device": "rtr-01"})
+            assert result["status"] == "ok"
+            assert result["warnings"] == []
+
+    def test_tuple_result_with_warnings_returns_partial(self):
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": []}
+        w = [{"operation": "list_af", "error": "timeout"}]
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, w)):
+            client = MagicMock()
+            result = run_workflow(client, workflow_id="bgp_summary", params={"device": "rtr-01"})
+            assert result["status"] == "partial"
+            assert result["warnings"] == w
+            assert "enrichment" in result["error"]
+
+    def test_bare_result_backward_compatible(self):
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": []}
+        with workflow_func_mock("bgp_summary", return_value=mock_result):
+            client = MagicMock()
+            result = run_workflow(client, workflow_id="bgp_summary", params={"device": "rtr-01"})
+            assert result["status"] == "ok"
+            assert result["warnings"] == []

@@ -147,20 +147,51 @@ def _build_envelope(
     workflow_id: str,
     params: dict,
     data: Any = None,
-    error: Exception | None = None,
+    error: Exception | str | None = None,
+    warnings: list[dict[str, str]] | None = None,
 ) -> dict:
     """Wrap a workflow result in a standard response envelope.
 
+    Supports three-tier status:
+    - ``"error"``  — workflow function raised an exception (data is None)
+    - ``"partial"`` — function returned data but some enrichment queries failed (warnings present)
+    - ``"ok"``     — full success, no warnings
+
+    Args:
+        workflow_id: Workflow name.
+        params: Agent-facing parameter dict (used to extract device name).
+        data: Serialized result data, or None on hard error.
+        error: Exception (hard error) or summary string (partial error). None when ok.
+        warnings: List of warning dicts from WarningCollector, or None.
+
     Returns:
-        dict with keys: workflow, device, status, data, error, timestamp
+        dict with keys: workflow, device, status, data, error, warnings, timestamp
     """
     device = params.get("device") or params.get("device_name")
+
+    # Three-tier status: error > partial > ok
+    if error and data is None:
+        status = "error"
+    elif warnings:
+        status = "partial"
+    else:
+        status = "ok"
+
+    # error field: exception string when error, summary string when partial, None when ok
+    if error and data is None:
+        error_str = str(error)
+    elif isinstance(error, str):
+        error_str = error  # summary string for partial
+    else:
+        error_str = None
+
     return {
         "workflow": workflow_id,
         "device": device,
-        "status": "error" if error else "ok",
+        "status": status,
         "data": data,
-        "error": str(error) if error else None,
+        "error": error_str,
+        "warnings": warnings if warnings is not None else [],
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -228,8 +259,27 @@ def run_workflow(
 
     # 5. Call function with client as first positional arg
     try:
-        result = func(client, **kwargs)
+        raw_result = func(client, **kwargs)
+
+        # Composite functions return (result, warnings) tuples
+        if isinstance(raw_result, tuple) and len(raw_result) == 2:
+            result, warnings_list = raw_result
+        else:
+            result = raw_result
+            warnings_list = []
+
         serialized = _serialize_result(result)
+
+        # Build envelope with warnings if present
+        if warnings_list:
+            failed = len(warnings_list)
+            error_summary = f"{failed} enrichment queries failed"
+            return _build_envelope(
+                workflow_id, params,
+                data=serialized,
+                error=error_summary,
+                warnings=warnings_list,
+            )
         return _build_envelope(workflow_id, params, data=serialized)
     except Exception as e:
         return _build_envelope(workflow_id, params, error=e)
