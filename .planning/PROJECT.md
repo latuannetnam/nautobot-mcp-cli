@@ -55,7 +55,10 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 
 ### Active
 
-*(See REQUIREMENTS.md for v1.4 requirements)*
+- ✓ Per-endpoint CMS filter registry — correct FK filters for all 33 CMS endpoints (replaces false `["device"]` for child endpoints) — v1.4 Phase 20
+- ✓ UUID path dereference in REST bridge — agents can pass `/api/{app}/{endpoint}/<uuid>/` URLs directly — v1.4 Phase 20
+
+*(See REQUIREMENTS.md for remaining v1.4 requirements)*
 
 ### Rejected
 
@@ -107,4 +110,4 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-25 after v1.3 API Bridge milestone completion*
+*Last updated: 2026-03-25 after Phase 20 Catalog Accuracy & Endpoint Dereference completion*
