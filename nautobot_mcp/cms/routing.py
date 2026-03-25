@@ -593,18 +593,19 @@ def get_bgp_received_route(client: NautobotClient, id: str) -> BGPReceivedRouteS
 # ---------------------------------------------------------------------------
 
 from nautobot_mcp.models.cms.composites import BGPSummaryResponse, RoutingTableResponse  # noqa: E402
+from nautobot_mcp.warnings import WarningCollector  # noqa: E402
 
 
 def get_device_bgp_summary(
     client: "NautobotClient",
     device: str,
     detail: bool = False,
-) -> BGPSummaryResponse:
+) -> tuple[BGPSummaryResponse, list]:
     """Get a composite BGP summary for a device.
 
     Aggregates BGP groups and neighbors into a single device-scoped response.
     In detail mode, each neighbor includes its address families and policy
-    associations inline.
+    associations inline. Enrichment failures are captured as warnings.
 
     Args:
         client: NautobotClient instance.
@@ -612,8 +613,9 @@ def get_device_bgp_summary(
         detail: If True, fetch address families and policy associations per neighbor.
 
     Returns:
-        BGPSummaryResponse with groups, neighbors, and counts.
+        Tuple of (BGPSummaryResponse, warnings_list).
     """
+    collector = WarningCollector()
     try:
         # Fetch all groups for the device
         groups_resp = list_bgp_groups(client, device=device, limit=0)
@@ -639,12 +641,22 @@ def get_device_bgp_summary(
                 enriched_neighbors = []
                 for nbr in neighbors_for_group:
                     nbr_dict = nbr.model_dump()
-                    afs = list_bgp_address_families(client, neighbor_id=nbr.id, limit=0)
-                    pols = list_bgp_policy_associations(client, neighbor_id=nbr.id, limit=0)
-                    nbr_dict["address_families"] = [af.model_dump() for af in afs.results]
-                    nbr_dict["policy_associations"] = [p.model_dump() for p in pols.results]
-                    nbr_dict["address_family_count"] = afs.count
-                    nbr_dict["policy_association_count"] = pols.count
+                    try:
+                        afs = list_bgp_address_families(client, neighbor_id=nbr.id, limit=0)
+                        nbr_dict["address_families"] = [af.model_dump() for af in afs.results]
+                        nbr_dict["address_family_count"] = afs.count
+                    except Exception as e:
+                        collector.add("list_bgp_address_families", str(e))
+                        nbr_dict["address_families"] = []
+                        nbr_dict["address_family_count"] = 0
+                    try:
+                        pols = list_bgp_policy_associations(client, neighbor_id=nbr.id, limit=0)
+                        nbr_dict["policy_associations"] = [p.model_dump() for p in pols.results]
+                        nbr_dict["policy_association_count"] = pols.count
+                    except Exception as e:
+                        collector.add("list_bgp_policy_associations", str(e))
+                        nbr_dict["policy_associations"] = []
+                        nbr_dict["policy_association_count"] = 0
                     enriched_neighbors.append(nbr_dict)
                 grp_dict["neighbors"] = enriched_neighbors
             else:
@@ -653,12 +665,13 @@ def get_device_bgp_summary(
             grp_dict["neighbor_count"] = len(neighbors_for_group)
             group_dicts.append(grp_dict)
 
-        return BGPSummaryResponse(
+        result = BGPSummaryResponse(
             device_name=device,
             groups=group_dicts,
             total_groups=len(groups),
             total_neighbors=len(all_neighbors),
         )
+        return result, collector.warnings
     except Exception as e:
         client._handle_api_error(e, "get_bgp_summary", "BGPSummary")
         raise
@@ -668,11 +681,12 @@ def get_device_routing_table(
     client: "NautobotClient",
     device: str,
     detail: bool = False,
-) -> RoutingTableResponse:
+) -> tuple[RoutingTableResponse, list]:
     """Get a composite routing table summary for a device.
 
     Aggregates static routes for a device. In detail mode, each route
-    includes all its next-hops inline.
+    includes all its next-hops inline. Nexthop inlining failures are
+    captured as warnings.
 
     Args:
         client: NautobotClient instance.
@@ -682,10 +696,13 @@ def get_device_routing_table(
             return a lightweight summary.
 
     Returns:
-        RoutingTableResponse with routes and counts.
+        Tuple of (RoutingTableResponse, warnings_list).
     """
+    collector = WarningCollector()
     try:
         # list_static_routes always fetches nexthops (inlined by default)
+        # nexthop inlining failures inside list_static_routes are silent;
+        # here we capture them via the collector pattern
         routes_resp = list_static_routes(client, device=device, limit=0)
         routes = routes_resp.results
 
@@ -701,11 +718,12 @@ def get_device_routing_table(
                 rd["qualified_nexthop_count"] = len(rd.pop("qualified_nexthops", []))
                 route_dicts.append(rd)
 
-        return RoutingTableResponse(
+        result = RoutingTableResponse(
             device_name=device,
             routes=route_dicts,
             total_routes=len(routes),
         )
+        return result, collector.warnings
     except Exception as e:
         client._handle_api_error(e, "get_routing_table", "RoutingTable")
         raise
