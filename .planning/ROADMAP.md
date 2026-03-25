@@ -67,7 +67,7 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 
 ### v1.4 Operational Robustness (Phases 19-22)
 
-- [ ] **Phase 19: Partial Failure Resilience** — Composite workflows gracefully degrade
+- [x] **Phase 19: Partial Failure Resilience** — Composite workflows gracefully degrade — completed 2026-03-25
 - [ ] **Phase 20: Catalog Accuracy & Endpoint Dereference** — Fix filter contracts + URL follow
 - [ ] **Phase 21: Workflow Contracts & Error Diagnostics** — Fix param contracts + enrich errors
 - [ ] **Phase 22: Response Ergonomics & UAT** — Summary modes, size metadata, live validation
