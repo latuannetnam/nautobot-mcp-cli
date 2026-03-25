@@ -1,0 +1,34 @@
+{
+  "servers": {
+    "nautobot": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "D:/latuan/Programming/nautobot-mcp-cli",
+        "run",
+        "python",
+        "main.py",
+        "--config",
+        "D:/latuan/Programming/nautobot-mcp-cli/.nautobot-mcp.yaml"
+      ]
+    },
+    "nautobot-dev": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "D:/latuan/Programming/nautobot-mcp-cli",
+        "run",
+        "fastmcp",
+        "dev",
+        "inspector",
+        "main.py",
+        "--reload"
+      ],
+      "env": {
+        "NAUTOBOT_CONFIG_FILE": "D:/latuan/Programming/nautobot-mcp-cli/.nautobot-mcp.yaml"
+      }
+    }
+  }
+}
