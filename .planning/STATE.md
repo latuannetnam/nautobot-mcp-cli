@@ -1,44 +1,44 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: API Bridge MCP Server
-status: unknown
-last_updated: "2026-03-25T01:11:23.570Z"
+milestone: v1.4
+milestone_name: Operational Robustness
+status: defining-requirements
+last_updated: "2026-03-25T06:52:00.000Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State: nautobot-mcp-cli
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-24)
+See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Phase 18 — agent-skills-tests-uat
+**Current focus:** Defining requirements for v1.4 Operational Robustness
 
 ## Current Position
 
-Phase: 18 (agent-skills-tests-uat) — EXECUTING
-Plan: 1 of 2
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-25 — Milestone v1.4 started
 
 ## Context
 
-**Goal:** Re-architect MCP server from 165 individual tools to 3 tools (`nautobot_api_catalog`, `call_nautobot`, `run_workflow`) + agent skills. Eliminate context window bloat (50K tokens → ~1.8K tokens) and restore agent accuracy.
+**Goal:** Fix confirmed pain points in the MCP bridge: partial failure resilience, catalog accuracy, error diagnostics, response ergonomics, endpoint dereference, and workflow parameter contracts.
 
-**Design:** [API Bridge MCP Architecture Design v2](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
+**Pain points from user reports (verified against v1.3 codebase):**
 
-**Scope:**
-
-- API Catalog engine (static core JSON + dynamic CMS discovery from `CMS_ENDPOINTS`)
-- Universal REST bridge (`call_nautobot`) with endpoint routing, validation, auto-pagination
-- Workflow registry (`run_workflow`) wrapping existing composite domain functions
-- Agent skills distributed as files (device-audit, onboard-config, verify-compliance)
-- Clean break migration (no backwards compatibility aliases)
-- UAT against Nautobot dev server (http://101.96.85.93)
+- P1: Composite workflow all-or-nothing failure (routing.py get_device_bgp_summary)
+- P2: Catalog/runtime filter mismatch (cms_discovery.py CMS_DOMAIN_FILTERS)
+- P3: Linked object dereference gap (bridge.py _validate_endpoint)
+- P4: Workflow parameter contract ambiguity (workflows.py verify_data_model)
+- P5: Generic error feedback (client.py _handle_api_error)
+- P6: Large response payloads (composite workflows lack summary/limit)
 
 ## Key Decisions
 
@@ -55,7 +55,6 @@ Plan: 1 of 2
 | netnam-cms-core via plugin API | v1.2 | Plugin exposes 49 DRF endpoints, consume directly |
 | CMS routing nexthop inlining | 9 | Static route nexthops inlined into parent for MCP efficiency |
 | BGP neighbor device-scoping | 9 | Neighbors scoped via group → device chain for device queries |
-| ~~Generic Resource Engine~~ | ~~v1.3~~ | ~~Rejected — superseded by API Bridge~~ |
 | API Bridge MCP Server | v1.3 | 165 tools → 3 via catalog + REST bridge + workflows; 96% token reduction |
 | Clean break (no aliases) | v1.3 | Long-term clarity over short-term compatibility |
 | CLI unchanged | v1.3 | CLI calls domain modules directly, not MCP tools |
@@ -66,15 +65,14 @@ Plan: 1 of 2
 - v1.0 shipped 2026-03-18 with 44+ MCP tools, CLI, agent skills
 - v1.1 shipped 2026-03-20 with 46 MCP tools, 105 tests, ~11k LOC
 - v1.2 shipped 2026-03-21 with 164 MCP tools, 293 tests, ~13k LOC
+- v1.3 shipped 2026-03-25 with 3 MCP tools, 397 tests, ~3.2k LOC
 - Architecture: shared core library + thin MCP/CLI layers
 - jmcp `show configuration | display json` returns null for large configs
 - pynautobot `ip_addresses.filter(interface_id=...)` not a valid filter
 - Nautobot IPs often have `assigned_object_id=None` (unlinked)
 - netnam-cms-core has 40+ Juniper models across routing, interfaces, firewalls, policies, ARP
-- cms/client.py already has CMS_ENDPOINTS registry + generic CRUD helpers (cms_list/get/create/update/delete)
-- Research: AI accuracy drops <2% at 7+ domains (LangChain 2025); 165 tools consume ~66K tokens/request
-- v1.3 Generic Resource Engine (4 phases, 30 requirements) REJECTED 2026-03-24 before implementation
-- API Bridge design approved: 3 tools + agent skills, 96% token reduction
+- cms/client.py already has CMS_ENDPOINTS registry + generic CRUD helpers
+- User-reported pain points verified against codebase (6/6 confirmed or partially confirmed)
 
 ## Blockers
 
@@ -82,4 +80,4 @@ None.
 
 ---
 *State initialized: 2026-03-17*
-*Last updated: 2026-03-24 — v1.3 reset from Generic Resource Engine to API Bridge MCP Server*
+*Last updated: 2026-03-25 — Milestone v1.4 Operational Robustness started*

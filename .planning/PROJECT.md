@@ -8,11 +8,17 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current State: v1.3 Shipped ✅ — API Bridge MCP Server (2026-03-25)
+## Current Milestone: v1.4 Operational Robustness
 
-**Shipped:** 3-tool API Bridge replacing 165 individual MCP tools. 397 unit tests + 11 live UAT tests verified against Nautobot dev server. Agent skills rewritten for `nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`.
+**Goal:** Fix confirmed pain points in the MCP bridge to improve partial failure resilience, catalog accuracy, error diagnostics, and response ergonomics.
 
-**Codebase:** ~3,200 LOC Python (server reduced from 3,883 → ~200 lines). Tech stack: Python, FastMCP, pynautobot, DiffSync, Pydantic v2, pytest.
+**Target features:**
+- Graceful degradation for composite workflows (partial results + warnings)
+- Per-endpoint filter registry replacing incorrect domain-level filter advertisement
+- URL dereference support in the REST bridge (linked object follow)
+- Fix `verify_data_model` workflow contract (`parsed_config` required + transform)
+- Enriched error diagnostics (parse 400 bodies, contextual hints, error provenance)
+- Summary mode for large-payload workflows (response size metadata, `limit` param)
 
 **Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25)
 
@@ -49,7 +55,7 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 
 ### Active
 
-*(Planning next milestone)*
+*(See REQUIREMENTS.md for v1.4 requirements)*
 
 ### Rejected
 
