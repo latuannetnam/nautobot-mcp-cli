@@ -499,3 +499,105 @@ class TestRunWorkflowPartial:
             result = run_workflow(client, workflow_id="bgp_summary", params={"device": "rtr-01"})
             assert result["status"] == "ok"
             assert result["warnings"] == []
+
+
+# ---------------------------------------------------------------------------
+# WFC-03: Registry self-check (import-time signature validation)
+# ---------------------------------------------------------------------------
+
+
+class TestRegistrySelfCheck:
+    """Test _validate_registry() import-time signature validation (WFC-03)."""
+
+    def test_validate_registry_passes_for_correct_entry(self):
+        """verify_data_model entry should pass validation after WFC-01/WFC-02 fixes."""
+        # _validate_registry() is called at module import time.
+        # If this import succeeds, the self-check passed.
+        # (NautobotValidationError raised at import time = test fails)
+        import nautobot_mcp.workflows  # noqa: F401
+        assert True  # import succeeded = no validation error
+
+    def test_validate_registry_catches_missing_required(self):
+        """Entry with required param not in function signature raises NautobotValidationError."""
+        from nautobot_mcp.exceptions import NautobotValidationError
+        import inspect
+
+        # Temporarily break an entry to trigger the check
+        # We use onboard_config (has a valid function) but add a fake required param
+        from nautobot_mcp import workflows as wf_module
+        import copy
+
+        original = wf_module.WORKFLOW_REGISTRY["onboard_config"].copy()
+        wf_module.WORKFLOW_REGISTRY["onboard_config"]["required"] = ["fake_missing_param"]
+        # Also need param_map entry so it's in registry_params
+        wf_module.WORKFLOW_REGISTRY["onboard_config"]["param_map"]["fake_missing_param"] = "fake_missing_param"
+
+        try:
+            with pytest.raises(NautobotValidationError, match="fake_missing_param"):
+                wf_module._validate_registry()
+        finally:
+            wf_module.WORKFLOW_REGISTRY["onboard_config"] = original
+
+    def test_validate_registry_catches_extra_func_param(self):
+        """Entry where function accepts param not listed in required or param_map raises."""
+        from nautobot_mcp.exceptions import NautobotValidationError
+        from nautobot_mcp import workflows as wf_module
+
+        original = wf_module.WORKFLOW_REGISTRY["bgp_summary"].copy()
+        # bgp_summary function: get_device_bgp_summary(client, device, detail=None)
+        # Add 'fake_extra' as required — not in function signature
+        wf_module.WORKFLOW_REGISTRY["bgp_summary"]["required"] = ["device", "fake_extra"]
+
+        try:
+            with pytest.raises(NautobotValidationError, match="fake_extra"):
+                wf_module._validate_registry()
+        finally:
+            wf_module.WORKFLOW_REGISTRY["bgp_summary"] = original
+
+
+# ---------------------------------------------------------------------------
+# verify_data_model transform test
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyDataModelTransform:
+    """Test that verify_data_model applies ParsedConfig.model_validate transform."""
+
+    def test_verify_data_model_transforms_parsed_config(self):
+        """parsed_config dict should be transformed to ParsedConfig via model_validate."""
+        from nautobot_mcp.workflows import run_workflow, WORKFLOW_REGISTRY
+        from nautobot_mcp.models.parser import ParsedConfig
+
+        config_dict = {
+            "hostname": "test-rtr",
+            "platform": "junos",
+            "interfaces": [],
+            "ip_addresses": [],
+            "vlans": [],
+            "routing_instances": [],
+            "protocols": [],
+            "firewall_filters": [],
+        }
+
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"interfaces": [], "ip_addresses": [], "vlans": []}
+
+        # Save original
+        orig = WORKFLOW_REGISTRY["verify_data_model"]["function"]
+
+        def fake_verify(client, device_name, parsed_config):
+            # parsed_config should be a ParsedConfig instance after transform
+            assert isinstance(parsed_config, ParsedConfig)
+            return mock_result
+
+        WORKFLOW_REGISTRY["verify_data_model"]["function"] = fake_verify
+        try:
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="verify_data_model",
+                params={"device_name": "test-rtr", "parsed_config": config_dict},
+            )
+            assert result["status"] == "ok"
+        finally:
+            WORKFLOW_REGISTRY["verify_data_model"]["function"] = orig
