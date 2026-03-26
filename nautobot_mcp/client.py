@@ -27,6 +27,44 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Per-endpoint hint map for ERR-02: actionable hints keyed by URL path prefix.
+# Longest-match wins (sorted by key length descending at lookup time).
+ERROR_HINTS: dict[str, str] = {
+    "/api/dcim/devices/": "Device filter accepts 'name', 'slug', or 'id' (UUID). "
+        "Avoid partial name matches — use exact name or UUID.",
+    "/api/dcim/interfaces/": "Interface filter requires 'device' set to device UUID, "
+        "not device name. Use /api/dcim/devices/ to look up the UUID first.",
+    "/api/dcim/locations/": "Location filter: use 'name' for exact match, "
+        "'slug' for URL-safe match, or 'id' for UUID.",
+    "/api/dcim/devices/<uuid>/interfaces/": "Device interfaces: filter by 'device' UUID only. "
+        "Interface names are not valid filter values at this endpoint.",
+    "/api/ipam/ip-addresses/": "IP address filter: use 'address' for exact, "
+        "'family' for inet/inet6, 'device' for device UUID. "
+        "Interface name is not a valid filter — use interface_id instead.",
+    "/api/ipam/vlans/": "VLAN filter: use 'vid' (integer) or 'name'. "
+        "Scope to a location with 'location' UUID for accuracy.",
+    "/api/ipam/prefixes/": "Prefix filter: use 'prefix' for CIDR, "
+        "'vlan_vid' for VLAN number, 'location' UUID to scope results.",
+    "/api/tenancy/tenants/": "Tenant filter: use 'name' or 'slug'. "
+        "Tenant groups are filtered via 'group' name, not group UUID.",
+    "/api/extras/jobs/": "Job filter: use 'name' or 'slug'. "
+        "Jobs may require appropriate permissions to appear in results.",
+    "/api/plugins/golden_config/": "Golden Config plugin endpoints: ensure the "
+        "plugin is installed and the service account has plugin permissions.",
+}
+
+# Status-code fallback hints for ERR-04: unknown endpoints get generic guidance
+# keyed by HTTP status code.
+STATUS_CODE_HINTS: dict[int, str] = {
+    429: "Rate limited — retry after exponential backoff or check Nautobot task schedule",
+    500: "Nautobot server error — check Nautobot service health and application logs",
+    502: "Nautobot gateway error — check Nautobot service health and reverse proxy logs",
+    503: "Nautobot unavailable — check service status and network connectivity",
+    504: "Nautobot request timed out — try a narrower filter or smaller query",
+    422: "Unprocessable entity — field values don't match Nautobot API schema; check data types",
+}
+
+
 class NautobotClient:
     """Nautobot API client with connection management and error handling.
 
