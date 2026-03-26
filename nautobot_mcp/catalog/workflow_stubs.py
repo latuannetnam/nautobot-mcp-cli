@@ -7,7 +7,7 @@ Phase 17 (Workflow Registry).
 
 WORKFLOW_STUBS = {
     "bgp_summary": {
-        "params": {"device": "str (required)", "detail": "bool (optional)"},
+        "params": {"device": "str (required)", "detail": "bool (optional)", "limit": "int (optional, default 0)"},
         "description": "BGP groups, neighbors, address families for a device",
         "aggregates": [
             "cms:juniper_bgp_groups",
@@ -17,7 +17,7 @@ WORKFLOW_STUBS = {
         ],
     },
     "routing_table": {
-        "params": {"device": "str (required)", "detail": "bool (optional, default false)"},
+        "params": {"device": "str (required)", "detail": "bool (optional, default false)", "limit": "int (optional, default 0)"},
         "description": "Static routes with nexthops for a device",
         "aggregates": [
             "cms:juniper_static_routes",
@@ -26,7 +26,7 @@ WORKFLOW_STUBS = {
         ],
     },
     "firewall_summary": {
-        "params": {"device": "str (required)", "detail": "bool (optional, default false)"},
+        "params": {"device": "str (required)", "detail": "bool (optional, default false)", "limit": "int (optional, default 0)"},
         "description": "Firewall filters, terms, match conditions, and actions",
         "aggregates": [
             "cms:juniper_firewall_filters",
@@ -39,6 +39,8 @@ WORKFLOW_STUBS = {
         "params": {
             "device": "str (required)",
             "include_arp": "bool (optional, default false)",
+            "detail": "bool (optional, default true)",
+            "limit": "int (optional, default 0)",
         },
         "description": "Interface units, families, VRRP groups for a device",
         "aggregates": [
