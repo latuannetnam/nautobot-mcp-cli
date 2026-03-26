@@ -663,7 +663,8 @@ def get_device_bgp_summary(
                 enriched_neighbors = enriched_neighbors[:limit] if limit > 0 else enriched_neighbors
                 grp_dict["neighbors"] = enriched_neighbors
             else:
-                grp_dict["neighbors"] = [nbr.model_dump() for nbr in neighbors_for_group]
+                neighbors_capped = neighbors_for_group[:limit] if limit > 0 else neighbors_for_group
+                grp_dict["neighbors"] = [nbr.model_dump() for nbr in neighbors_capped]
 
             grp_dict["neighbor_count"] = len(neighbors_for_group)
             group_dicts.append(grp_dict)
