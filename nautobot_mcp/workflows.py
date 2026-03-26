@@ -341,4 +341,20 @@ def run_workflow(
             )
         return _build_envelope(workflow_id, params, data=serialized)
     except Exception as e:
-        return _build_envelope(workflow_id, params, error=e)
+        # ERR-03: Composite workflow exceptions are captured as warnings in the
+        # envelope rather than a bare error string. This gives agents visibility
+        # into which child operation failed without losing the error status.
+        #
+        # Composite workflows are identified by the fact they live in WORKFLOW_REGISTRY
+        # with the same workflow_id. We record the workflow_id as the "operation"
+        # so the agent knows which top-level workflow encountered the failure.
+        exception_warning = {
+            "operation": workflow_id,
+            "error": str(e),
+        }
+        return _build_envelope(
+            workflow_id,
+            params,
+            error=e,
+            warnings=[exception_warning],
+        )
