@@ -249,7 +249,7 @@ class TestRunWorkflowTransforms:
 
     @patch("nautobot_mcp.workflows.ParsedConfig")
     def test_onboard_config_transforms_config_data(self, mock_parsed_cls):
-        """config_data dict should be transformed to ParsedConfig before dispatch."""
+        """parsed_config dict should be transformed to ParsedConfig before dispatch."""
         config_dict = {
             "hostname": "test-rtr",
             "platform": "junos",
@@ -268,7 +268,7 @@ class TestRunWorkflowTransforms:
                 client,
                 workflow_id="onboard_config",
                 params={
-                    "config_data": config_dict,
+                    "parsed_config": config_dict,
                     "device_name": "test-rtr",
                     "dry_run": True,
                 },
