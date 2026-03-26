@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Operational Robustness
 status: Executing Phase 21
-last_updated: "2026-03-26T03:27:25.341Z"
+last_updated: "2026-03-26T04:02:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State: nautobot-mcp-cli
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 21 (workflow-contracts-error-diagnostics) — EXECUTING
-Plan: 1 of 2
+Plan: 2 of 2
 
 ## Context
 
@@ -57,6 +57,7 @@ Plan: 1 of 2
 | Clean break (no aliases) | v1.3 | Long-term clarity over short-term compatibility |
 | CLI unchanged | v1.3 | CLI calls domain modules directly, not MCP tools |
 | Skills as files (not MCP) | v1.3 | Cross-MCP orchestration + user-interactive flows stay agent-side |
+| Exception-as-warning envelope | 21 | ERR-03: exceptions in composite workflows captured as {operation, error} warning dicts; backward-compat preserved via error field |
 
 ## Accumulated Context
 
@@ -71,6 +72,7 @@ Plan: 1 of 2
 - netnam-cms-core has 40+ Juniper models across routing, interfaces, firewalls, policies, ARP
 - cms/client.py already has CMS_ENDPOINTS registry + generic CRUD helpers
 - User-reported pain points verified against codebase (6/6 confirmed or partially confirmed)
+- ERR-03: composite workflow exceptions now include {operation, error} warning entries in error envelope
 
 ## Blockers
 

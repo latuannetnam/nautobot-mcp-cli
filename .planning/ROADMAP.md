@@ -114,6 +114,10 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 3. 400 errors surface field-level validation details (not generic "check server logs")
 4. Composite workflow errors show which child operation failed via `origin` field
 
+**Plans:**
+- [x] Plan 01: WFC-01/WFC-02/WFC-03 (verify_data_model contract fixes) + ERR-01/ERR-02 (error body parsing) — completed 2026-03-26
+- [x] Plan 02: ERR-03 (composite workflow exception → warning entry) — completed 2026-03-26
+
 #### Phase 22: Response Ergonomics & UAT
 
 **Goal:** Add summary modes for large-payload workflows and validate all fixes end-to-end.
