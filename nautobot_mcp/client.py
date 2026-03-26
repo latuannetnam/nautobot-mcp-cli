@@ -237,14 +237,48 @@ class NautobotClient:
                 ) from error
 
             if status_code == 400:
+                # ERR-01: Parse DRF 400 body for field-level errors
+                import json as _json
+
+                field_errors: list[dict[str, str]] = []
+                req_obj = getattr(error, "req", None)
+                raw_body = getattr(req_obj, "text", None) if req_obj else None
+
+                if raw_body:
+                    try:
+                        body = _json.loads(raw_body)
+                        # Handle DRF error shapes:
+                        # {"field": ["msg"]}  or  {"field": "msg"}  or  {"detail": "string"}
+                        if isinstance(body, dict):
+                            for field, messages in body.items():
+                                if isinstance(messages, list):
+                                    for msg in messages:
+                                        field_errors.append({"field": field, "error": str(msg)})
+                                elif isinstance(messages, str):
+                                    field_errors.append({"field": field, "error": messages})
+                                else:
+                                    field_errors.append({"field": field, "error": str(messages)})
+                        elif isinstance(body, str):
+                            # Non-dict body (e.g. plain "Invalid input.") — treat as detail
+                            field_errors.append({"field": "_detail", "error": body})
+                    except (ValueError, TypeError):
+                        pass  # Non-JSON body — fall through to generic message
+
+                hint = _get_hint_for_request(req_obj, operation, model_name, status_code)
+
                 raise NautobotValidationError(
                     message=f"Validation error during {operation} on {model_name}: {error}",
-                    hint=f"Check required fields for {model_name}",
+                    hint=hint,
+                    errors=field_errors if field_errors else None,
                 ) from error
+
+            req_obj = getattr(error, "req", None)
+            hint = _get_hint_for_request(req_obj, operation, model_name, status_code)
 
             raise NautobotAPIError(
                 message=f"API error during {operation} on {model_name}: {error}",
                 status_code=status_code,
+                hint=hint,
             ) from error
 
         if isinstance(error, RequestsConnectionError):
