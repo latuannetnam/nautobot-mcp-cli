@@ -85,6 +85,9 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
             "parsed_config": "parsed_config",
         },
         "required": ["device_name", "parsed_config"],
+        "transforms": {
+            "parsed_config": lambda d: ParsedConfig.model_validate(d),
+        },
     },
     "verify_compliance": {
         "function": verify_config_compliance,
