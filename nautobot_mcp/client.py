@@ -7,7 +7,7 @@ Connection is lazy — validated on first API call, not on initialization.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import pynautobot
 from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -25,6 +25,93 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+# Per-endpoint hint map for ERR-02: actionable hints keyed by URL path prefix.
+# Longest-match wins (sorted by key length descending at lookup time).
+ERROR_HINTS: dict[str, str] = {
+    "/api/dcim/devices/": "Device filter accepts 'name', 'slug', or 'id' (UUID). "
+        "Avoid partial name matches — use exact name or UUID.",
+    "/api/dcim/interfaces/": "Interface filter requires 'device' set to device UUID, "
+        "not device name. Use /api/dcim/devices/ to look up the UUID first.",
+    "/api/dcim/locations/": "Location filter: use 'name' for exact match, "
+        "'slug' for URL-safe match, or 'id' for UUID.",
+    "/api/dcim/devices/<uuid>/interfaces/": "Device interfaces: filter by 'device' UUID only. "
+        "Interface names are not valid filter values at this endpoint.",
+    "/api/ipam/ip-addresses/": "IP address filter: use 'address' for exact, "
+        "'family' for inet/inet6, 'device' for device UUID. "
+        "Interface name is not a valid filter — use interface_id instead.",
+    "/api/ipam/vlans/": "VLAN filter: use 'vid' (integer) or 'name'. "
+        "Scope to a location with 'location' UUID for accuracy.",
+    "/api/ipam/prefixes/": "Prefix filter: use 'prefix' for CIDR, "
+        "'vlan_vid' for VLAN number, 'location' UUID to scope results.",
+    "/api/tenancy/tenants/": "Tenant filter: use 'name' or 'slug'. "
+        "Tenant groups are filtered via 'group' name, not group UUID.",
+    "/api/extras/jobs/": "Job filter: use 'name' or 'slug'. "
+        "Jobs may require appropriate permissions to appear in results.",
+    "/api/plugins/golden_config/": "Golden Config plugin endpoints: ensure the "
+        "plugin is installed and the service account has plugin permissions.",
+}
+
+# Status-code fallback hints for ERR-04: unknown endpoints get generic guidance
+# keyed by HTTP status code.
+STATUS_CODE_HINTS: dict[int, str] = {
+    429: "Rate limited — retry after exponential backoff or check Nautobot task schedule",
+    500: "Nautobot server error — check Nautobot service health and application logs",
+    502: "Nautobot gateway error — check Nautobot service health and reverse proxy logs",
+    503: "Nautobot unavailable — check service status and network connectivity",
+    504: "Nautobot request timed out — try a narrower filter or smaller query",
+    422: "Unprocessable entity — field values don't match Nautobot API schema; check data types",
+}
+
+
+def _get_hint_for_request(
+    req: Any,
+    operation: str,
+    model_name: str,
+    status_code: int,
+) -> str:
+    """Resolve the best available hint for a failed API request.
+
+    Strategy (in priority order):
+    1. Longest-match ERROR_HINTS entry for the request URL path
+    2. STATUS_CODE_HINTS entry for the HTTP status code
+    3. Generic fallback string
+
+    Args:
+        req: requests.Response object (or Any from pynautobot RequestError.req).
+             May be None if the error has no associated response.
+        operation: Operation name (e.g., "list", "create", "filter").
+        model_name: Model name (e.g., "Device", "Interface").
+        status_code: HTTP status code integer.
+
+    Returns:
+        A hint string — always non-empty.
+    """
+    # 1. Try endpoint-specific hint from ERROR_HINTS
+    if req is not None and hasattr(req, "url"):
+        url = getattr(req, "url", "") or ""
+        # Longest-match: sort keys by length descending, pick first match
+        for hint_key in sorted(ERROR_HINTS.keys(), key=len, reverse=True):
+            if hint_key in url:
+                return ERROR_HINTS[hint_key]
+
+    # 2. Try status-code fallback
+    if status_code in STATUS_CODE_HINTS:
+        return STATUS_CODE_HINTS[status_code]
+
+    # 3. Generic fallback derived from operation + model
+    fallbacks = {
+        "list": f"Check that {model_name.lower()} objects exist in Nautobot and the filter parameters are valid",
+        "get": f"Verify the {model_name.lower()} ID or name is correct",
+        "create": f"Check required fields for {model_name.lower()} match the Nautobot API schema",
+        "update": f"Verify the {model_name.lower()} exists and the update data is valid",
+        "delete": f"Verify the {model_name.lower()} exists and is not protected",
+    }
+    return fallbacks.get(
+        operation,
+        f"Check {model_name.lower()} data and Nautobot server health",
+    )
 
 
 class NautobotClient:
@@ -136,7 +223,8 @@ class NautobotClient:
             NautobotAPIError: For all other API errors.
         """
         if isinstance(error, pynautobot.core.query.RequestError):
-            status_code = getattr(getattr(error, "req", None), "status_code", 0)
+            req_obj = getattr(error, "req", None)
+            status_code = getattr(req_obj, "status_code", 0) if req_obj else 0
 
             if status_code == 404:
                 raise NautobotNotFoundError(
@@ -149,15 +237,52 @@ class NautobotClient:
                     message=f"Authentication failed during {operation} on {model_name}",
                 ) from error
 
-            if status_code == 400:
+            # ERR-01: Parse DRF 400 body — handle None req by using effective_status=400
+            if status_code == 400 or (req_obj is None and not isinstance(error, RequestsConnectionError)):
+                # When req_obj is None, we can't definitively determine the status.
+                # Treat as 400 (validation error) since that's the most common case.
+                effective_status = status_code if status_code == 400 else 400
+
+                field_errors: list[dict[str, str]] = []
+
+                if req_obj is not None:
+                    raw_body = getattr(req_obj, "text", None)
+                    if raw_body:
+                        import json as _json
+                        try:
+                            body = _json.loads(raw_body)
+                            # Handle DRF error shapes:
+                            # {"field": ["msg"]}  or  {"field": "msg"}  or  {"detail": "string"}
+                            # Normalize non_field_errors and detail to _detail for uniform handling
+                            if isinstance(body, dict):
+                                for field, messages in body.items():
+                                    normalized_field = "_detail" if field in ("detail", "non_field_errors") else field
+                                    if isinstance(messages, list):
+                                        for msg in messages:
+                                            field_errors.append({"field": normalized_field, "error": str(msg)})
+                                    elif isinstance(messages, str):
+                                        field_errors.append({"field": normalized_field, "error": messages})
+                                    else:
+                                        field_errors.append({"field": normalized_field, "error": str(messages)})
+                            elif isinstance(body, str):
+                                field_errors.append({"field": "_detail", "error": body})
+                        except (ValueError, TypeError):
+                            pass  # Non-JSON body — fall through to generic message
+
+                hint = _get_hint_for_request(req_obj, operation, model_name, effective_status)
+
                 raise NautobotValidationError(
                     message=f"Validation error during {operation} on {model_name}: {error}",
-                    hint=f"Check required fields for {model_name}",
+                    hint=hint,
+                    errors=field_errors if field_errors else None,
                 ) from error
+
+            hint = _get_hint_for_request(req_obj, operation, model_name, status_code)
 
             raise NautobotAPIError(
                 message=f"API error during {operation} on {model_name}: {error}",
                 status_code=status_code,
+                hint=hint,
             ) from error
 
         if isinstance(error, RequestsConnectionError):

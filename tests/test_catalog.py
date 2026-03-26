@@ -195,3 +195,67 @@ class TestWorkflowStubs:
             assert isinstance(entry["aggregates"], list), (
                 f"Workflow '{name}' aggregates should be list"
             )
+
+
+class TestCMSFilterAccuracy:
+    """Test that CMS endpoints advertise correct per-endpoint filters."""
+
+    def test_filter_registry_covers_all_endpoints(self):
+        """CMS_ENDPOINT_FILTERS has entry for every CMS_ENDPOINTS key."""
+        from nautobot_mcp.catalog.cms_discovery import CMS_ENDPOINT_FILTERS
+        for endpoint_name in CMS_ENDPOINTS:
+            assert endpoint_name in CMS_ENDPOINT_FILTERS, (
+                f"CMS_ENDPOINT_FILTERS missing entry for '{endpoint_name}'"
+            )
+
+    def test_bgp_neighbors_filter_is_group(self):
+        """BGP neighbors should filter by group, not device."""
+        cms_catalog = discover_cms_endpoints()
+        bgp_neighbors = cms_catalog["routing"]["bgp_neighbors"]
+        assert bgp_neighbors["filters"] == ["group"], (
+            f"BGP neighbors should have ['group'] filter, got {bgp_neighbors['filters']}"
+        )
+
+    def test_firewall_terms_filter_is_firewall_filter(self):
+        """Firewall terms should filter by firewall_filter, not device."""
+        cms_catalog = discover_cms_endpoints()
+        fw_terms = cms_catalog["firewalls"]["firewall_terms"]
+        assert fw_terms["filters"] == ["firewall_filter"]
+
+    def test_device_scoped_endpoints_have_device_filter(self):
+        """Top-level endpoints that are device-scoped must have device filter."""
+        from nautobot_mcp.catalog.cms_discovery import CMS_ENDPOINT_FILTERS
+        device_scoped = [
+            "juniper_static_routes", "juniper_bgp_groups",
+            "juniper_interface_units", "juniper_firewall_filters",
+            "juniper_firewall_policers", "juniper_policy_statements",
+            "juniper_policy_as_paths", "juniper_policy_communities",
+            "juniper_policy_prefix_lists", "juniper_arp_entries",
+        ]
+        for ep in device_scoped:
+            assert CMS_ENDPOINT_FILTERS[ep] == ["device"], (
+                f"{ep} should have ['device'] filter, got {CMS_ENDPOINT_FILTERS[ep]}"
+            )
+
+    def test_child_endpoints_do_not_have_device_filter(self):
+        """Child endpoints (FK to parent) should NOT have device as filter."""
+        from nautobot_mcp.catalog.cms_discovery import CMS_ENDPOINT_FILTERS
+        child_endpoints = [
+            "juniper_bgp_neighbors", "juniper_firewall_terms",
+            "jps_terms", "juniper_policy_prefixes",
+            "juniper_static_route_nexthops",
+        ]
+        for ep in child_endpoints:
+            assert "device" not in CMS_ENDPOINT_FILTERS[ep], (
+                f"{ep} should NOT have 'device' filter, got {CMS_ENDPOINT_FILTERS[ep]}"
+            )
+
+    def test_catalog_entries_have_non_empty_filters(self):
+        """Every CMS catalog entry should have at least one filter."""
+        cms_catalog = discover_cms_endpoints()
+        for domain, entries in cms_catalog.items():
+            for name, entry in entries.items():
+                assert len(entry.get("filters", [])) > 0, (
+                    f"cms.{domain}.{name} has empty filters list"
+                )
+

@@ -642,20 +642,24 @@ def get_firewall_policer_action(client: NautobotClient, id: str) -> FirewallPoli
 # ---------------------------------------------------------------------------
 
 from nautobot_mcp.models.cms.composites import FirewallSummaryResponse  # noqa: E402
+from nautobot_mcp.warnings import WarningCollector  # noqa: E402
 
 
 def get_device_firewall_summary(
     client: "NautobotClient",
     device: str,
     detail: bool = False,
-) -> FirewallSummaryResponse:
+    limit: int = 0,
+) -> tuple[FirewallSummaryResponse, list]:
     """Get a composite firewall summary for a Juniper device.
 
     Aggregates all firewall filters (with term counts) and firewall policers
     (with action counts) into a single device-scoped response.
+    Filters and policers are treated as independent co-primaries: if only one
+    fails, the other's data is returned with a warning.
 
     In detail mode, each filter includes its terms inlined, and each policer
-    includes its actions.
+    includes its actions. Enrichment failures are captured as warnings.
 
     Args:
         client: NautobotClient instance.
@@ -663,54 +667,80 @@ def get_device_firewall_summary(
         detail: If True, fetch inlined terms per filter and actions per policer.
 
     Returns:
-        FirewallSummaryResponse with filters, policers, and counts.
+        Tuple of (FirewallSummaryResponse, warnings_list).
     """
+    collector = WarningCollector()
+    filters_data: list = []
+    policers_data: list = []
+    filters_ok = False
+    policers_ok = False
+
+    # Co-primary 1: Filters (independent — failure here does not block policers)
     try:
-        # Fetch filters (list_firewall_filters populates term_count per filter)
         filters_resp = list_firewall_filters(client, device=device, limit=0)
-        filters = filters_resp.results
-
-        # Fetch policers (list_firewall_policers populates action_count per policer)
-        policers_resp = list_firewall_policers(client, device=device, limit=0)
-        policers = policers_resp.results
-
-        if detail:
-            # For each filter, fetch full term data
-            filter_dicts = []
-            for fw_filter in filters:
-                fd = fw_filter.model_dump()
-                try:
-                    terms_resp = list_firewall_terms(client, filter_id=fw_filter.id, limit=0)
-                    fd["terms"] = [t.model_dump() for t in terms_resp.results]
-                    fd["term_count"] = terms_resp.count
-                except Exception:
-                    fd["terms"] = []
-                filter_dicts.append(fd)
-
-            # For each policer, fetch full action data
-            policer_dicts = []
-            for policer in policers:
-                pd = policer.model_dump()
-                try:
-                    actions_resp = list_firewall_policer_actions(client, policer_id=policer.id, limit=0)
-                    pd["actions"] = [a.model_dump() for a in actions_resp.results]
-                    pd["action_count"] = actions_resp.count
-                except Exception:
-                    pd["actions"] = []
-                policer_dicts.append(pd)
-        else:
-            # Shallow — term_count and action_count already populated by list_ calls
-            filter_dicts = [f.model_dump() for f in filters]
-            policer_dicts = [p.model_dump() for p in policers]
-
-        return FirewallSummaryResponse(
-            device_name=device,
-            filters=filter_dicts,
-            policers=policer_dicts,
-            total_filters=len(filters),
-            total_policers=len(policers),
-        )
+        filters_data = filters_resp.results
+        filters_ok = True
     except Exception as e:
-        client._handle_api_error(e, "get_device_firewall_summary", "FirewallSummary")
-        raise
+        collector.add("list_firewall_filters", str(e))
+
+    # Co-primary 2: Policers (independent — failure here does not block filters)
+    try:
+        policers_resp = list_firewall_policers(client, device=device, limit=0)
+        policers_data = policers_resp.results
+        policers_ok = True
+    except Exception as e:
+        collector.add("list_firewall_policers", str(e))
+
+    # If BOTH co-primaries fail → raise to produce error envelope
+    if not filters_ok and not policers_ok:
+        raise RuntimeError("Both primary queries failed: filters and policers")
+
+    if detail:
+        # For each filter, fetch full term data
+        filter_dicts = []
+        for fw_filter in filters_data:
+            fd = fw_filter.model_dump()
+            try:
+                terms_resp = list_firewall_terms(client, filter_id=fw_filter.id, limit=0)
+                terms_capped = terms_resp.results[:limit] if limit > 0 else terms_resp.results
+                fd["terms"] = [t.model_dump() for t in terms_capped]
+                fd["term_count"] = terms_resp.count
+            except Exception as e:
+                collector.add(f"list_firewall_terms(filter={fw_filter.id})", str(e))
+                fd["terms"] = []
+            filter_dicts.append(fd)
+        # Cap filters[] at limit (per-array independent cap)
+        filter_dicts = filter_dicts[:limit] if limit > 0 else filter_dicts
+
+        # For each policer, fetch full action data
+        policer_dicts = []
+        for policer in policers_data:
+            pd = policer.model_dump()
+            try:
+                actions_resp = list_firewall_policer_actions(client, policer_id=policer.id, limit=0)
+                actions_capped = actions_resp.results[:limit] if limit > 0 else actions_resp.results
+                pd["actions"] = [a.model_dump() for a in actions_capped]
+                pd["action_count"] = actions_resp.count
+            except Exception as e:
+                collector.add(f"list_firewall_policer_actions(policer={policer.id})", str(e))
+                pd["actions"] = []
+            policer_dicts.append(pd)
+        # Cap policers[] at limit (per-array independent cap)
+        policer_dicts = policer_dicts[:limit] if limit > 0 else policer_dicts
+    else:
+        # Shallow — term_count and action_count already populated by list_ calls
+        filters_capped = filters_data[:limit] if limit > 0 else filters_data
+        policers_capped = policers_data[:limit] if limit > 0 else policers_data
+        filter_dicts = [f.model_dump() for f in filters_capped]
+        policer_dicts = [p.model_dump() for p in policers_capped]
+
+    result = FirewallSummaryResponse(
+        device_name=device,
+        filters=filter_dicts,
+        policers=policer_dicts,
+        total_filters=len(filters_data),
+        total_policers=len(policers_data),
+    )
+    return result, collector.warnings
+
 

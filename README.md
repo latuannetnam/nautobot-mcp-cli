@@ -6,7 +6,7 @@
 
 ## Features
 
-### MCP Tools (v1.3 API Bridge — 3 tools)
+### MCP Tools (v1.4 API Bridge — 3 tools)
 
 | Tool | Purpose |
 |---|---|
@@ -16,18 +16,18 @@
 
 ### Available Workflows
 
-| Workflow ID | Covers |
-|---|---|
-| `bgp_summary` | BGP groups + neighbor counts |
-| `routing_table` | Static routes with next-hops |
-| `firewall_summary` | Firewall filters + term counts |
-| `interface_detail` | Interface units with families, VRRP, ARP |
-| `onboard_config` | Parse + push config to Nautobot (dry-run safe) |
-| `compare_device` | File-free drift: live interfaces vs Nautobot |
-| `verify_data_model` | DiffSync model drift report |
-| `verify_compliance` | Golden Config compliance check |
-| `compare_bgp` | Live BGP neighbors vs CMS records |
-| `compare_routes` | Live static routes vs CMS records |
+| Workflow ID | Covers | Optional Params |
+|---|---|---|
+| `bgp_summary` | BGP groups + neighbor counts | `detail` (expand neighbors), `limit` (cap arrays) |
+| `routing_table` | Static routes with next-hops | `detail`, `limit` |
+| `firewall_summary` | Firewall filters + term counts | `detail`, `limit` |
+| `interface_detail` | Interface units with families, VRRP, ARP | `detail` (summary mode), `limit` |
+| `onboard_config` | Parse + push config to Nautobot (dry-run safe) | — |
+| `compare_device` | File-free drift: live interfaces vs Nautobot | — |
+| `verify_data_model` | DiffSync model drift report | — |
+| `verify_compliance` | Golden Config compliance check | — |
+| `compare_bgp` | Live BGP neighbors vs CMS records | — |
+| `compare_routes` | Live static routes vs CMS records | — |
 
 ### CLI Commands
 
@@ -235,7 +235,7 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-### Available MCP tools (v1.3)
+### Available MCP tools (v1.4)
 
 The server exposes **3 tools**. Use `nautobot_api_catalog` to discover all endpoints and workflow IDs before calling the other two.
 
@@ -397,16 +397,21 @@ uv run nautobot-mcp verify quick-drift core-rtr-01 -f drift-input.json --json
 # CMS Routing
 uv run nautobot-mcp cms routing list-static-routes --device core-rtr-01
 uv run nautobot-mcp cms routing bgp-summary --device core-rtr-01
+uv run nautobot-mcp cms routing bgp-summary --device core-rtr-01 --limit 3   # cap at 3 groups + 3 neighbors/group
 uv run nautobot-mcp cms routing routing-table --device core-rtr-01
+uv run nautobot-mcp cms routing routing-table --device core-rtr-01 --limit 10  # cap at 10 routes
 
 # CMS Interfaces
 uv run nautobot-mcp cms interfaces list-units --device core-rtr-01
 uv run nautobot-mcp cms interfaces detail --device core-rtr-01
+uv run nautobot-mcp cms interfaces detail --device core-rtr-01 --detail=false  # summary: no nested families/VRRP
+uv run nautobot-mcp cms interfaces detail --device core-rtr-01 --limit 5        # cap at 5 units + 5 families/unit
 uv run nautobot-mcp cms interfaces list-arp-entries --device core-rtr-01
 
 # CMS Firewalls
 uv run nautobot-mcp cms firewalls list-filters --device core-rtr-01
 uv run nautobot-mcp cms firewalls firewall-summary --device core-rtr-01
+uv run nautobot-mcp cms firewalls firewall-summary --device core-rtr-01 --limit 2  # cap filters + policers at 2 each
 
 # CMS Drift — compare live device data against Nautobot CMS records
 uv run nautobot-mcp cms drift bgp --device core-rtr-01 --from-file live-bgp.json

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Operational Robustness
-status: ready
-last_updated: "2026-03-25T06:55:00.000Z"
+status: v1.4 milestone complete
+last_updated: "2026-03-26T11:06:51.025Z"
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 3
+  total_plans: 7
+  completed_plans: 6
 ---
 
 # Project State: nautobot-mcp-cli
@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Defining requirements for v1.4 Operational Robustness
+**Current focus:** Phase 22 — response-ergonomics-uat
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-25 — Milestone v1.4 started
+Phase: 22
+Plan: Not started
+
+Milestone v1.4 Operational Robustness: ALL 4 PHASES COMPLETE
 
 ## Context
 
@@ -59,6 +59,7 @@ Last activity: 2026-03-25 — Milestone v1.4 started
 | Clean break (no aliases) | v1.3 | Long-term clarity over short-term compatibility |
 | CLI unchanged | v1.3 | CLI calls domain modules directly, not MCP tools |
 | Skills as files (not MCP) | v1.3 | Cross-MCP orchestration + user-interactive flows stay agent-side |
+| Exception-as-warning envelope | 21 | ERR-03: exceptions in composite workflows captured as {operation, error} warning dicts; backward-compat preserved via error field |
 
 ## Accumulated Context
 
@@ -73,6 +74,10 @@ Last activity: 2026-03-25 — Milestone v1.4 started
 - netnam-cms-core has 40+ Juniper models across routing, interfaces, firewalls, policies, ARP
 - cms/client.py already has CMS_ENDPOINTS registry + generic CRUD helpers
 - User-reported pain points verified against codebase (6/6 confirmed or partially confirmed)
+- ERR-03: composite workflow exceptions now include {operation, error} warning entries in error envelope
+- RSP-01: `interface_detail(detail=False)` summary mode strips nested arrays, keeps counts
+- RSP-02: `response_size_bytes` added to all workflow envelopes (measured as `len(json.dumps(data))`)
+- RSP-03: `limit=N` added to all 4 composite functions with per-array independent caps
 
 ## Blockers
 
@@ -80,4 +85,6 @@ None.
 
 ---
 *State initialized: 2026-03-17*
-*Last updated: 2026-03-25 — Milestone v1.4 Operational Robustness started*
+*Last updated: 2026-03-25 — Phase 19 (Partial Failure Resilience) completed: WarningCollector, envelope three-tier status, 4 composite function refactors, 415 tests pass*
+
+```

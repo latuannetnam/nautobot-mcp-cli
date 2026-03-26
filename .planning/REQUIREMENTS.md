@@ -16,34 +16,34 @@ Requirements derived from verified user-reported pain points (see analysis repor
 
 ### Catalog Accuracy (CAT)
 
-- [ ] **CAT-07**: Per-endpoint filter registry in `cms_discovery.py` replaces domain-level `CMS_DOMAIN_FILTERS`
-- [ ] **CAT-08**: Catalog advertises only filters actually supported at runtime for each CMS endpoint (e.g., `group` for `juniper_bgp_neighbors`, not `device`)
-- [ ] **CAT-09**: Existing unit tests updated to validate per-endpoint filter accuracy
+- [x] **CAT-07**: Per-endpoint filter registry in `cms_discovery.py` replaces domain-level `CMS_DOMAIN_FILTERS`
+- [x] **CAT-08**: Catalog advertises only filters actually supported at runtime for each CMS endpoint (e.g., `group` for `juniper_bgp_neighbors`, not `device`)
+- [x] **CAT-09**: Existing unit tests updated to validate per-endpoint filter accuracy
 
 ### Endpoint Dereference (DRF)
 
-- [ ] **DRF-01**: REST bridge strips UUID path segments from endpoints before validation (e.g., `/api/dcim/device-types/<uuid>/` → `/api/dcim/device-types/` + `id=<uuid>`)
-- [ ] **DRF-02**: Agent can follow linked object URLs from response payloads directly through `call_nautobot`
-- [ ] **DRF-03**: Existing bridge unit tests extended with dereference scenarios
+- [x] **DRF-01**: REST bridge strips UUID path segments from endpoints before validation (e.g., `/api/dcim/device-types/<uuid>/` → `/api/dcim/device-types/` + `id=<uuid>`)
+- [x] **DRF-02**: Agent can follow linked object URLs from response payloads directly through `call_nautobot`
+- [x] **DRF-03**: Existing bridge unit tests extended with dereference scenarios
 
 ### Workflow Contracts (WFC)
 
-- [ ] **WFC-01**: `verify_data_model` workflow entry lists `parsed_config` as required parameter
-- [ ] **WFC-02**: `verify_data_model` workflow entry includes `ParsedConfig.model_validate` transform for `parsed_config`
-- [ ] **WFC-03**: Workflow registry validation catches required-param mismatches at import time (startup self-check)
+- [x] **WFC-01**: `verify_data_model` workflow entry lists `parsed_config` as required parameter
+- [x] **WFC-02**: `verify_data_model` workflow entry includes `ParsedConfig.model_validate` transform for `parsed_config`
+- [x] **WFC-03**: Workflow registry validation catches required-param mismatches at import time (startup self-check)
 
 ### Error Diagnostics (ERR)
 
-- [ ] **ERR-01**: 400 (validation) errors parse response body and include field-level error details in `NautobotValidationError.errors`
-- [ ] **ERR-02**: Error hints are contextual to the specific endpoint and filter being used (not generic "check server logs")
-- [ ] **ERR-03**: Composite workflow errors include `origin` field showing which child operation failed
-- [ ] **ERR-04**: `NautobotAPIError` default hint replaced with operation-specific guidance
+- [x] **ERR-01**: 400 (validation) errors parse response body and include field-level error details in `NautobotValidationError.errors`
+- [x] **ERR-02**: Error hints are contextual to the specific endpoint and filter being used (not generic "check server logs")
+- [x] **ERR-03**: Composite workflow errors include `origin` field showing which child operation failed
+- [x] **ERR-04**: `NautobotAPIError` default hint replaced with operation-specific guidance
 
 ### Response Ergonomics (RSP)
 
-- [ ] **RSP-01**: `interface_detail` workflow supports `detail` toggle (summary mode strips unit/family/filter details, keeps counts)
-- [ ] **RSP-02**: Composite workflow envelopes include `response_size_bytes` metadata
-- [ ] **RSP-03**: Composite workflows support optional `limit` parameter to cap items in response
+- [x] **RSP-01**: `interface_detail` workflow supports `detail` toggle (summary mode strips unit/family/filter details, keeps counts)
+- [x] **RSP-02**: Composite workflow envelopes include `response_size_bytes` metadata
+- [x] **RSP-03**: Composite workflows support optional `limit` parameter to cap items in response
 
 ## Future Requirements
 
@@ -75,22 +75,22 @@ Requirements derived from verified user-reported pain points (see analysis repor
 | PFR-02 | Phase 19 | Pending |
 | PFR-03 | Phase 19 | Pending |
 | PFR-04 | Phase 19 | Pending |
-| CAT-07 | Phase 20 | Pending |
-| CAT-08 | Phase 20 | Pending |
-| CAT-09 | Phase 20 | Pending |
-| DRF-01 | Phase 20 | Pending |
-| DRF-02 | Phase 20 | Pending |
-| DRF-03 | Phase 20 | Pending |
-| WFC-01 | Phase 21 | Pending |
-| WFC-02 | Phase 21 | Pending |
-| WFC-03 | Phase 21 | Pending |
-| ERR-01 | Phase 21 | Pending |
-| ERR-02 | Phase 21 | Pending |
-| ERR-03 | Phase 21 | Pending |
-| ERR-04 | Phase 21 | Pending |
-| RSP-01 | Phase 22 | Pending |
-| RSP-02 | Phase 22 | Pending |
-| RSP-03 | Phase 22 | Pending |
+| CAT-07 | Phase 20 | Complete |
+| CAT-08 | Phase 20 | Complete |
+| CAT-09 | Phase 20 | Complete |
+| DRF-01 | Phase 20 | Complete |
+| DRF-02 | Phase 20 | Complete |
+| DRF-03 | Phase 20 | Complete |
+| WFC-01 | Phase 21 | Complete |
+| WFC-02 | Phase 21 | Complete |
+| WFC-03 | Phase 21 | Complete |
+| ERR-01 | Phase 21 | Complete |
+| ERR-02 | Phase 21 | Complete |
+| ERR-03 | Phase 21 | Complete |
+| ERR-04 | Phase 21 | Complete |
+| RSP-01 | Phase 22 | Complete |
+| RSP-02 | Phase 22 | Complete |
+| RSP-03 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 20 total

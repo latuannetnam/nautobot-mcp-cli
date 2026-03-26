@@ -249,7 +249,7 @@ class TestRunWorkflowTransforms:
 
     @patch("nautobot_mcp.workflows.ParsedConfig")
     def test_onboard_config_transforms_config_data(self, mock_parsed_cls):
-        """config_data dict should be transformed to ParsedConfig before dispatch."""
+        """parsed_config dict should be transformed to ParsedConfig before dispatch."""
         config_dict = {
             "hostname": "test-rtr",
             "platform": "junos",
@@ -268,7 +268,7 @@ class TestRunWorkflowTransforms:
                 client,
                 workflow_id="onboard_config",
                 params={
-                    "config_data": config_dict,
+                    "parsed_config": config_dict,
                     "device_name": "test-rtr",
                     "dry_run": True,
                 },
@@ -384,3 +384,457 @@ class TestBuildEnvelope:
         """Envelope should extract device_name if device param not present."""
         env = _build_envelope("compare_device", {"device_name": "rtr-01"}, data={})
         assert env["device"] == "rtr-01"
+
+
+# ---------------------------------------------------------------------------
+# WarningCollector
+# ---------------------------------------------------------------------------
+
+
+from nautobot_mcp.warnings import WarningCollector  # noqa: E402
+
+
+class TestWarningCollector:
+    """Test WarningCollector accumulation and summary."""
+
+    def test_empty_collector_has_no_warnings(self):
+        c = WarningCollector()
+        assert c.warnings == []
+        assert c.has_warnings is False
+
+    def test_add_warning(self):
+        c = WarningCollector()
+        c.add("list_bgp_address_families", "404 Not Found")
+        assert len(c.warnings) == 1
+        assert c.warnings[0] == {"operation": "list_bgp_address_families", "error": "404 Not Found"}
+        assert c.has_warnings is True
+
+    def test_multiple_warnings_accumulated(self):
+        c = WarningCollector()
+        c.add("op1", "err1")
+        c.add("op2", "err2")
+        assert len(c.warnings) == 2
+
+    def test_summary_message(self):
+        c = WarningCollector()
+        c.add("op1", "err1")
+        c.add("op2", "err2")
+        assert c.summary(4) == "2 of 4 enrichment queries failed"
+
+    def test_warnings_returns_copy(self):
+        c = WarningCollector()
+        c.add("op1", "err1")
+        copy = c.warnings
+        copy.append({"operation": "fake", "error": "injected"})
+        assert len(c.warnings) == 1  # original unchanged
+
+
+# ---------------------------------------------------------------------------
+# _build_envelope -- three-tier status (partial)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildEnvelopePartial:
+    """Test three-tier status in _build_envelope."""
+
+    def test_ok_envelope_has_empty_warnings(self):
+        env = _build_envelope("bgp_summary", {"device": "rtr-01"}, data={"x": 1})
+        assert env["status"] == "ok"
+        assert env["warnings"] == []
+        assert env["error"] is None
+
+    def test_partial_envelope_with_warnings(self):
+        warnings = [{"operation": "list_af", "error": "timeout"}]
+        env = _build_envelope(
+            "bgp_summary",
+            {"device": "rtr-01"},
+            data={"x": 1},
+            warnings=warnings,
+            error="1 enrichment queries failed",
+        )
+        assert env["status"] == "partial"
+        assert env["warnings"] == warnings
+        assert "1 enrichment" in env["error"]
+
+    def test_error_envelope_has_empty_warnings(self):
+        err = RuntimeError("connection refused")
+        env = _build_envelope("bgp_summary", {"device": "rtr-01"}, error=err)
+        assert env["status"] == "error"
+        assert env["warnings"] == []
+
+
+# ---------------------------------------------------------------------------
+# run_workflow -- partial failure tuple unpacking
+# ---------------------------------------------------------------------------
+
+
+class TestRunWorkflowPartial:
+    """Test run_workflow with partial failure tuples."""
+
+    def test_tuple_result_with_no_warnings_returns_ok(self):
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": []}
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, [])):
+            client = MagicMock()
+            result = run_workflow(client, workflow_id="bgp_summary", params={"device": "rtr-01"})
+            assert result["status"] == "ok"
+            assert result["warnings"] == []
+
+    def test_tuple_result_with_warnings_returns_partial(self):
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": []}
+        w = [{"operation": "list_af", "error": "timeout"}]
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, w)):
+            client = MagicMock()
+            result = run_workflow(client, workflow_id="bgp_summary", params={"device": "rtr-01"})
+            assert result["status"] == "partial"
+            assert result["warnings"] == w
+            assert "enrichment" in result["error"]
+
+    def test_bare_result_backward_compatible(self):
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": []}
+        with workflow_func_mock("bgp_summary", return_value=mock_result):
+            client = MagicMock()
+            result = run_workflow(client, workflow_id="bgp_summary", params={"device": "rtr-01"})
+            assert result["status"] == "ok"
+            assert result["warnings"] == []
+
+
+# ---------------------------------------------------------------------------
+# WFC-03: Registry self-check (import-time signature validation)
+# ---------------------------------------------------------------------------
+
+
+class TestRegistrySelfCheck:
+    """Test _validate_registry() import-time signature validation (WFC-03)."""
+
+    def test_validate_registry_passes_for_correct_entry(self):
+        """verify_data_model entry should pass validation after WFC-01/WFC-02 fixes."""
+        # _validate_registry() is called at module import time.
+        # If this import succeeds, the self-check passed.
+        # (NautobotValidationError raised at import time = test fails)
+        import nautobot_mcp.workflows  # noqa: F401
+        assert True  # import succeeded = no validation error
+
+    def test_validate_registry_catches_missing_required(self):
+        """Entry with required param not in function signature raises NautobotValidationError."""
+        from nautobot_mcp.exceptions import NautobotValidationError
+        import inspect
+
+        # Temporarily break an entry to trigger the check
+        # We use onboard_config (has a valid function) but add a fake required param
+        from nautobot_mcp import workflows as wf_module
+        import copy
+
+        original = wf_module.WORKFLOW_REGISTRY["onboard_config"].copy()
+        wf_module.WORKFLOW_REGISTRY["onboard_config"]["required"] = ["fake_missing_param"]
+        # Also need param_map entry so it's in registry_params
+        wf_module.WORKFLOW_REGISTRY["onboard_config"]["param_map"]["fake_missing_param"] = "fake_missing_param"
+
+        try:
+            with pytest.raises(NautobotValidationError, match="fake_missing_param"):
+                wf_module._validate_registry()
+        finally:
+            wf_module.WORKFLOW_REGISTRY["onboard_config"] = original
+
+    def test_validate_registry_catches_extra_func_param(self):
+        """Entry where function accepts param not listed in required or param_map raises."""
+        from nautobot_mcp.exceptions import NautobotValidationError
+        from nautobot_mcp import workflows as wf_module
+
+        original = wf_module.WORKFLOW_REGISTRY["bgp_summary"].copy()
+        # bgp_summary function: get_device_bgp_summary(client, device, detail=None)
+        # Add 'fake_extra' as required — not in function signature
+        wf_module.WORKFLOW_REGISTRY["bgp_summary"]["required"] = ["device", "fake_extra"]
+
+        try:
+            with pytest.raises(NautobotValidationError, match="fake_extra"):
+                wf_module._validate_registry()
+        finally:
+            wf_module.WORKFLOW_REGISTRY["bgp_summary"] = original
+
+
+# ---------------------------------------------------------------------------
+# verify_data_model transform test
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyDataModelTransform:
+    """Test that verify_data_model applies ParsedConfig.model_validate transform."""
+
+    def test_verify_data_model_transforms_parsed_config(self):
+        """parsed_config dict should be transformed to ParsedConfig via model_validate."""
+        from nautobot_mcp.workflows import run_workflow, WORKFLOW_REGISTRY
+        from nautobot_mcp.models.parser import ParsedConfig
+
+        config_dict = {
+            "hostname": "test-rtr",
+            "platform": "junos",
+            "interfaces": [],
+            "ip_addresses": [],
+            "vlans": [],
+            "routing_instances": [],
+            "protocols": [],
+            "firewall_filters": [],
+        }
+
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"interfaces": [], "ip_addresses": [], "vlans": []}
+
+        # Save original
+        orig = WORKFLOW_REGISTRY["verify_data_model"]["function"]
+
+        def fake_verify(client, device_name, parsed_config):
+            # parsed_config should be a ParsedConfig instance after transform
+            assert isinstance(parsed_config, ParsedConfig)
+            return mock_result
+
+        WORKFLOW_REGISTRY["verify_data_model"]["function"] = fake_verify
+        try:
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="verify_data_model",
+                params={"device_name": "test-rtr", "parsed_config": config_dict},
+            )
+            assert result["status"] == "ok"
+        finally:
+            WORKFLOW_REGISTRY["verify_data_model"]["function"] = orig
+
+
+# ---------------------------------------------------------------------------
+# ERR-03: Composite workflow exception -> warning entry in envelope
+# ---------------------------------------------------------------------------
+
+
+class TestRunWorkflowCompositeErrorOrigin:
+    """Test that workflow exceptions surface as warning entries with origin field (ERR-03)."""
+
+    def test_workflow_exception_includes_operation_in_warnings(self):
+        """Exception from a workflow should appear in warnings with 'operation' key."""
+        with workflow_func_mock("bgp_summary") as mock_func:
+            mock_func.side_effect = RuntimeError("Nautobot API timeout during BGP query")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="bgp_summary",
+                params={"device": "rtr-01"},
+            )
+
+        # ERR-03: envelope must have status=error (no data) AND warnings list with the exception
+        assert result["status"] == "error"
+        assert result["data"] is None
+        assert "warnings" in result
+        assert len(result["warnings"]) == 1
+        assert result["warnings"][0]["operation"] == "bgp_summary"
+        assert "Nautobot API timeout" in result["warnings"][0]["error"]
+
+    def test_routing_table_exception_includes_operation_origin(self):
+        """routing_table exception should include 'routing_table' as operation in warnings."""
+        with workflow_func_mock("routing_table") as mock_func:
+            mock_func.side_effect = ValueError("Invalid route data format")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="routing_table",
+                params={"device": "rtr-01"},
+            )
+
+        assert result["status"] == "error"
+        assert len(result["warnings"]) == 1
+        assert result["warnings"][0]["operation"] == "routing_table"
+        assert "Invalid route" in result["warnings"][0]["error"]
+
+    def test_firewall_summary_exception_includes_operation_origin(self):
+        """firewall_summary exception should include 'firewall_summary' as operation."""
+        with workflow_func_mock("firewall_summary") as mock_func:
+            mock_func.side_effect = Exception("Device not found in Nautobot")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="firewall_summary",
+                params={"device": "fw-01"},
+            )
+
+        assert result["status"] == "error"
+        assert len(result["warnings"]) == 1
+        assert result["warnings"][0]["operation"] == "firewall_summary"
+        assert "warnings" in result
+        assert isinstance(result["warnings"], list)
+
+    def test_interface_detail_exception_includes_operation_origin(self):
+        """interface_detail exception should include 'interface_detail' as operation."""
+        with workflow_func_mock("interface_detail") as mock_func:
+            mock_func.side_effect = ConnectionError("Cannot reach Nautobot")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="interface_detail",
+                params={"device": "dist-sw-01"},
+            )
+
+        assert result["status"] == "error"
+        assert result["warnings"][0]["operation"] == "interface_detail"
+        assert "Cannot reach Nautobot" in result["warnings"][0]["error"]
+
+    def test_verify_data_model_exception_includes_operation_origin(self):
+        """verify_data_model exception should include 'verify_data_model' as operation."""
+        from nautobot_mcp.models.parser import ParsedConfig
+
+        with workflow_func_mock("verify_data_model") as mock_func:
+            mock_func.side_effect = RuntimeError("DiffSync comparison failed")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="verify_data_model",
+                params={
+                    "device_name": "test-rtr",
+                    "parsed_config": {
+                        "hostname": "test",
+                        "platform": "junos",
+                        "interfaces": [],
+                        "ip_addresses": [],
+                        "vlans": [],
+                        "routing_instances": [],
+                        "protocols": [],
+                        "firewall_filters": [],
+                    },
+                },
+            )
+
+        assert result["status"] == "error"
+        assert result["warnings"][0]["operation"] == "verify_data_model"
+        assert "DiffSync comparison failed" in result["warnings"][0]["error"]
+
+    def test_error_string_still_present_in_envelope(self):
+        """Exception string should still appear in the 'error' field for backward compat."""
+        with workflow_func_mock("bgp_summary") as mock_func:
+            mock_func.side_effect = RuntimeError("connection refused")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="bgp_summary",
+                params={"device": "rtr-01"},
+            )
+
+        assert result["error"] is not None
+        assert "connection refused" in result["error"]
+        # Also present in warnings
+        assert "connection refused" in result["warnings"][0]["error"]
+
+    def test_partial_failure_from_composite_still_returns_partial_not_error(self):
+        """Phase 19 partial failures (tuple return with warnings) remain unchanged by ERR-03.
+
+        This test ensures the Phase 19 behavior is preserved: composite functions that
+        return (result, warnings) tuples still get status='partial', not status='error'.
+        ERR-03 only modifies the except Exception handler.
+        """
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": ["core"]}
+        warnings_from_composite = [
+            {"operation": "list_bgp_address_families", "error": "404 Not Found"},
+        ]
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, warnings_from_composite)):
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="bgp_summary",
+                params={"device": "rtr-01"},
+            )
+
+        # Phase 19 behavior: partial envelope (not error)
+        assert result["status"] == "partial"
+        assert result["data"] is not None
+        assert result["warnings"] == warnings_from_composite
+        # Error field contains summary string (not exception)
+        assert "enrichment" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# RSP-02: response_size_bytes in envelope (run_workflow integration)
+# ---------------------------------------------------------------------------
+
+
+class TestResponseSizeBytes:
+    """RSP-02: All composite workflow envelopes include response_size_bytes."""
+
+    @pytest.mark.parametrize("workflow_id", [
+        "bgp_summary",
+        "routing_table",
+        "firewall_summary",
+        "interface_detail",
+    ])
+    def test_response_size_bytes_present_in_ok_envelope(self, workflow_id):
+        """response_size_bytes must be in envelope for all composite workflows."""
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"key": "value"}
+
+        with workflow_func_mock(workflow_id, return_value=mock_result):
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id=workflow_id, params={"device": "rtr-01"}
+            )
+
+        assert "response_size_bytes" in result, (
+            f"{workflow_id}: missing response_size_bytes field"
+        )
+        assert isinstance(result["response_size_bytes"], int), (
+            f"{workflow_id}: response_size_bytes must be int"
+        )
+        assert result["response_size_bytes"] > 0, (
+            f"{workflow_id}: response_size_bytes should be > 0, got {result['response_size_bytes']}"
+        )
+
+    def test_response_size_bytes_in_partial_envelope(self):
+        """response_size_bytes present and positive in partial status envelope."""
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"x": 1}
+        w = [{"operation": "list_af", "error": "timeout"}]
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, w)):
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id="bgp_summary", params={"device": "rtr-01"}
+            )
+
+        assert result["status"] == "partial"
+        assert "response_size_bytes" in result
+        assert result["response_size_bytes"] > 0
+
+    def test_response_size_bytes_equals_actual_json_bytes(self):
+        """response_size_bytes equals len(json.dumps(data)) after serialization."""
+        mock_result = MagicMock()
+        payload = {"groups": [{"id": "1", "name": "test"}], "total_groups": 1}
+        mock_result.model_dump.return_value = payload
+
+        with workflow_func_mock("bgp_summary", return_value=mock_result):
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id="bgp_summary", params={"device": "rtr-01"}
+            )
+
+        import json
+        expected = len(json.dumps(payload))
+        assert result["response_size_bytes"] == expected, (
+            f"Expected {expected}, got {result['response_size_bytes']}"
+        )
+
+    def test_response_size_bytes_zero_on_hard_error(self):
+        """response_size_bytes is 0 when the workflow raises an exception."""
+        with workflow_func_mock("bgp_summary") as mock_func:
+            mock_func.side_effect = RuntimeError("connection refused")
+
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id="bgp_summary", params={"device": "rtr-01"}
+            )
+
+        assert result["status"] == "error"
+        assert result["data"] is None
+        assert result["response_size_bytes"] == 0

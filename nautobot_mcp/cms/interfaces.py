@@ -647,17 +647,22 @@ def get_vrrp_track_interface(client: NautobotClient, id: str) -> VRRPTrackInterf
 # ---------------------------------------------------------------------------
 
 from nautobot_mcp.models.cms.composites import InterfaceDetailResponse  # noqa: E402
+from nautobot_mcp.warnings import WarningCollector  # noqa: E402
 
 
 def get_interface_detail(
     client: "NautobotClient",
     device: str,
     include_arp: bool = False,
-) -> InterfaceDetailResponse:
+    detail: bool = True,
+    limit: int = 0,
+) -> tuple[InterfaceDetailResponse, list]:
     """Get a composite interface detail summary for a device.
 
     Aggregates interface units with their families, VRRP groups, and
     optionally ARP entries into a single device-scoped response.
+    VRRP and ARP enrichment failures are captured as warnings rather
+    than silently discarded.
 
     Args:
         client: NautobotClient instance.
@@ -666,9 +671,9 @@ def get_interface_detail(
             them per interface unit by interface name matching.
 
     Returns:
-        InterfaceDetailResponse with units (with enriched family data),
-        total_units, and optionally arp_entries.
+        Tuple of (InterfaceDetailResponse, warnings_list).
     """
+    collector = WarningCollector()
     try:
         # Fetch all interface units for device
         units_resp = list_interface_units(client, device=device, limit=0)
@@ -679,41 +684,68 @@ def get_interface_detail(
         for unit in units:
             unit_dict = unit.model_dump()
 
-            # Fetch families for the unit
+            # Fetch families for the unit (critical — failure propagates)
             families = list_interface_families(client, unit_id=unit.id, limit=0)
-            family_dicts = []
-            for fam in families.results:
-                fam_dict = fam.model_dump()
-                # Add VRRP groups for each family
-                try:
-                    vrrp = list_vrrp_groups(client, family_id=fam.id, limit=0)
-                    fam_dict["vrrp_groups"] = [v.model_dump() for v in vrrp.results]
-                    fam_dict["vrrp_group_count"] = vrrp.count
-                except Exception:
-                    fam_dict["vrrp_groups"] = []
-                    fam_dict["vrrp_group_count"] = 0
-                family_dicts.append(fam_dict)
+            family_count = families.count
 
-            unit_dict["families"] = family_dicts
-            unit_dict["family_count"] = len(families.results)
+            if detail:
+                # Full enrichment: nested families + VRRP groups
+                family_dicts = []
+                for fam in families.results:
+                    fam_dict = fam.model_dump()
+                    try:
+                        vrrp = list_vrrp_groups(client, family_id=fam.id, limit=0)
+                        fam_dict["vrrp_groups"] = [v.model_dump() for v in vrrp.results]
+                        fam_dict["vrrp_group_count"] = vrrp.count
+                    except Exception as e:
+                        collector.add(f"list_vrrp_groups(family={fam.id})", str(e))
+                        fam_dict["vrrp_groups"] = []
+                        fam_dict["vrrp_group_count"] = 0
+                    # Cap families[] nested array at limit
+                    if limit > 0 and len(family_dicts) >= limit:
+                        break
+                    family_dicts.append(fam_dict)
+                unit_dict["families"] = family_dicts
+                unit_dict["family_count"] = family_count
+            else:
+                # Summary mode: strip families[] and vrrp_groups[], keep counts only.
+                # Compute vrrp_group_count by iterating each family.
+                total_vrrp = 0
+                for fam in families.results:
+                    try:
+                        vrrp = list_vrrp_groups(client, family_id=fam.id, limit=0)
+                        total_vrrp += vrrp.count
+                    except Exception:
+                        # Non-fatal in summary mode; skip
+                        pass
+                unit_dict["families"] = []      # stripped for agents
+                unit_dict["family_count"] = family_count
+                unit_dict["vrrp_group_count"] = total_vrrp
+
+            # Cap units[] at limit
+            if limit > 0 and len(enriched_units) >= limit:
+                break
             enriched_units.append(unit_dict)
 
-        # Optionally include ARP entries
+        # Optionally include ARP entries (optional enrichment — captured as warning)
         arp_entries = []
         if include_arp:
             try:
                 from nautobot_mcp.cms.arp import list_arp_entries
                 arp_resp = list_arp_entries(client, device=device, limit=0)
                 arp_entries = [e.model_dump() for e in arp_resp.results]
-            except Exception:
-                pass
+                # Cap arp_entries[] at limit
+                arp_entries = arp_entries[:limit] if limit > 0 else arp_entries
+            except Exception as e:
+                collector.add("list_arp_entries", str(e))
 
-        return InterfaceDetailResponse(
+        result = InterfaceDetailResponse(
             device_name=device,
             units=enriched_units,
             total_units=len(units),
             arp_entries=arp_entries,
         )
+        return result, collector.warnings
     except Exception as e:
         client._handle_api_error(e, "get_interface_detail", "InterfaceDetail")
         raise

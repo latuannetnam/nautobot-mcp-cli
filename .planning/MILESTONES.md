@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.4 Operational Robustness (Shipped: 2026-03-26)
+
+**Phases completed:** 4 phases, 7 plans, 18 tasks | 55 commits | 371 files changed | +60,732 / -959 lines
+
+**Key accomplishments:**
+
+- **Partial failure resilience** — `WarningCollector`, 3-tier status (`ok`/`partial`/`error`), all 4 composites return `(result, warnings)` tuples; co-primaries pattern in `firewall_summary` (filters + policers fetched independently)
+- **Import-time registry validation** — `_validate_registry()` catches param/signature drift at module load; caught and fixed 3 pre-existing bugs in the workflow registry
+- **Error diagnostics** — DRF 400 body parsing (field-level errors), `ERROR_HINTS` (10 endpoint-specific hints), `STATUS_CODE_HINTS` (429/500/502/503/504), `NautobotAPIError` status-code-derived defaults
+- **Catalog accuracy** — Per-endpoint `CMS_ENDPOINT_FILTERS` (43 entries) replaces domain-level `CMS_DOMAIN_FILTERS`; correct FK filters for all CMS endpoints
+- **UUID path normalization** — REST bridge strips UUID from `/api/.../<uuid>/` paths; agents can pass linked object URLs directly
+- **Response ergonomics** — `response_size_bytes` in all envelopes; `detail=False` summary mode (strips `families[]`/`vrrp_groups[]`); `limit=N` independently caps all nested arrays
+- **476 unit tests** — up from 397 at v1.3; zero regressions across all phases
+
+---
+
 ## v1.3 API Bridge MCP Server (Shipped: 2026-03-25)
 
 **Phases completed:** 4 phases, 8 plans, 0 tasks

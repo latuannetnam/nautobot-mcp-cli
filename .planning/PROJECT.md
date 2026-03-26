@@ -2,25 +2,17 @@
 
 ## What This Is
 
-An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. The v1.3 API Bridge consolidates 165 individual tools into 3 universal tools (`nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`) plus distributed agent skills — covering devices, interfaces, IP addresses, VLANs, circuits, and full Juniper CMS model coverage (BGP, routing, interfaces, firewalls, policies, ARP). Integrates with vendor-specific MCP servers (Juniper jmcp) to bridge live network state with Nautobot as the source of truth.
+An MCP server, CLI tool, and agent skills library that enables AI agents to interact with Nautobot for network automation. The v1.4 API Bridge consolidates 165 individual tools into 3 universal tools (`nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`) plus distributed agent skills — covering devices, interfaces, IP addresses, VLANs, circuits, and full Juniper CMS model coverage (BGP, routing, interfaces, firewalls, policies, ARP). Integrates with vendor-specific MCP servers (Juniper jmcp) to bridge live network state with Nautobot as the source of truth. Ships with partial failure resilience, import-time registry validation, actionable error diagnostics, and response ergonomics controls.
 
 ## Core Value
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.4 Operational Robustness
+## Current Milestone: Planning v1.5
 
-**Goal:** Fix confirmed pain points in the MCP bridge to improve partial failure resilience, catalog accuracy, error diagnostics, and response ergonomics.
+Run `/gsd:new-milestone` to start the next milestone.
 
-**Target features:**
-- Graceful degradation for composite workflows (partial results + warnings)
-- Per-endpoint filter registry replacing incorrect domain-level filter advertisement
-- URL dereference support in the REST bridge (linked object follow)
-- Fix `verify_data_model` workflow contract (`parsed_config` required + transform)
-- Enriched error diagnostics (parse 400 bodies, contextual hints, error provenance)
-- Summary mode for large-payload workflows (response size metadata, `limit` param)
-
-**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25)
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → **v1.4 Operational Robustness (2026-03-26)**
 
 ## Requirements
 
@@ -52,10 +44,16 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - ✓ Consolidated server.py — 3 tools replacing 165 individual tool wrappers — v1.3
 - ✓ Agent skills rewritten for 3-tool API (`cms-device-audit`, `onboard-router-config`, `verify-compliance`) — v1.3
 - ✓ UAT pytest suite (11 live tests) + standalone smoke script (9 checks) against dev server — v1.3
+- ✓ Partial failure resilience — `WarningCollector`, 3-tier status, co-primaries pattern — v1.4
+- ✓ Import-time registry validation (`_validate_registry()`) — catches param/signature drift at load — v1.4
+- ✓ Error diagnostics — DRF 400 parsing, `ERROR_HINTS`, `STATUS_CODE_HINTS`, status-code-derived `NautobotAPIError` defaults — v1.4
+- ✓ Per-endpoint CMS filter registry (`CMS_ENDPOINT_FILTERS`, 43 entries) — v1.4
+- ✓ UUID path normalization in REST bridge — agents pass linked object URLs directly — v1.4
+- ✓ Response ergonomics — `response_size_bytes`, `detail=False` summary mode, `limit=N` capping — v1.4
 
 ### Active
 
-*(See REQUIREMENTS.md for v1.4 requirements)*
+*(Run `/gsd:new-milestone` to define v1.5 requirements)*
 
 ### Rejected
 
@@ -96,6 +94,15 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 | API Bridge MCP Server (v1.3) | 165 tools → 3 via catalog + REST bridge + workflows; ~96% token reduction | ✓ Shipped v1.3 |
 | `live` pytest marker for UAT | UAT tests hit real server; excluded from CI by `addopts = "-m 'not live'"` | ✓ Clean CI/CD isolation |
 | Smoke script as Windows-safe ASCII output | Replaced ✓/✗ Unicode with [PASS]/[FAIL] for CP1252 compatibility | ✓ Portable on Windows terminals |
+| Three-tier workflow status (`ok`/`partial`/`error`) | Agents see partial data immediately instead of all-or-nothing failure | ✓ Shipped v1.4; proven in practice |
+| `WarningCollector` dataclass | Shared warning accumulation pattern across all composites | ✓ Consistent envelope shape |
+| Independent co-primaries in composites | Fetch filters + policers in parallel, one failure doesn't block the other | ✓ `firewall_summary` uses it |
+| Import-time registry self-validation | `_validate_registry()` catches param/signature drift before runtime | ✓ Caught 3 pre-existing bugs |
+| DRF 400 body parsing | Field-level validation errors surfaced in `NautobotValidationError.errors` | ✓ Ships in v1.4 |
+| Status-code-derived error defaults | `NautobotAPIError` derives hint from HTTP status when no explicit hint | ✓ No more generic placeholders |
+| Per-endpoint filter registry | Each CMS endpoint advertises correct FK filter(s); not domain-level | ✓ 43 entries; replaced 1-size-fits-all |
+| UUID path normalization | REST bridge strips UUID segments; linked object URLs work directly | ✓ Agents can pass full URLs |
+| Summary mode + limit ergonomics | `detail=False` strips nested arrays; `limit=N` caps all arrays independently | ✓ Ships in v1.4 |
 
 ## Constraints
 
@@ -107,4 +114,4 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
 ---
-*Last updated: 2026-03-25 after v1.3 API Bridge milestone completion*
+*Last updated: 2026-03-26 after v1.4 Operational Robustness milestone shipped*

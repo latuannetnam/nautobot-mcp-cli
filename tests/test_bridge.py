@@ -14,6 +14,7 @@ from nautobot_mcp.bridge import (
     _parse_core_endpoint,
     _validate_method,
     _build_valid_endpoints,
+    _strip_uuid_from_endpoint,
     MAX_LIMIT,
     DEFAULT_LIMIT,
 )
@@ -480,3 +481,98 @@ class TestErrorHandling:
             _validate_endpoint("/api/dcim/invalid/")
         except NautobotValidationError as e:
             assert e.code == "VALIDATION_ERROR"
+
+
+class TestUUIDPathNormalization:
+    """Test UUID path segment detection and stripping."""
+
+    def test_no_uuid_returns_unchanged(self):
+        """Path without UUID returns unchanged."""
+        base, uuid = _strip_uuid_from_endpoint("/api/dcim/devices/")
+        assert base == "/api/dcim/devices/"
+        assert uuid is None
+
+    def test_uuid_stripped_from_core_path(self):
+        """UUID segment stripped from core endpoint path."""
+        base, uuid = _strip_uuid_from_endpoint(
+            "/api/dcim/device-types/abc12345-def4-5678-9abc-def012345678/"
+        )
+        assert base == "/api/dcim/device-types/"
+        assert uuid == "abc12345-def4-5678-9abc-def012345678"
+
+    def test_uuid_stripped_preserves_app_and_endpoint(self):
+        """Stripping UUID preserves app and endpoint names."""
+        base, uuid = _strip_uuid_from_endpoint(
+            "/api/ipam/ip-addresses/11111111-2222-3333-4444-555555555555/"
+        )
+        assert base == "/api/ipam/ip-addresses/"
+        assert uuid == "11111111-2222-3333-4444-555555555555"
+
+    def test_cms_endpoint_not_affected(self):
+        """CMS endpoints (no /api/ prefix) pass through unchanged."""
+        base, uuid = _strip_uuid_from_endpoint("cms:juniper_static_routes")
+        assert base == "cms:juniper_static_routes"
+        assert uuid is None
+
+    def test_nested_uuid_path_raises_error(self):
+        """Path with multiple UUIDs raises NautobotValidationError."""
+        with pytest.raises(NautobotValidationError, match="Nested UUID paths"):
+            _strip_uuid_from_endpoint(
+                "/api/dcim/devices/11111111-2222-3333-4444-555555555555/"
+                "interfaces/66666666-7777-8888-9999-aaaaaaaaaaaa/"
+            )
+
+    def test_uppercase_uuid_stripped(self):
+        """UUID with uppercase hex chars is still detected."""
+        base, uuid = _strip_uuid_from_endpoint(
+            "/api/dcim/devices/ABCDEF12-3456-7890-ABCD-EF1234567890/"
+        )
+        assert base == "/api/dcim/devices/"
+        assert uuid == "ABCDEF12-3456-7890-ABCD-EF1234567890"
+
+
+class TestCallNautobotWithUUID:
+    """Test call_nautobot transparently handles UUID-embedded paths."""
+
+    def _make_mock_client(self):
+        client = MagicMock()
+        record = MagicMock()
+        type(record).__iter__ = lambda self: iter({"id": "uuid-123"}.items())
+        endpoint = MagicMock()
+        endpoint.get.return_value = record
+        app = MagicMock()
+        setattr(app, "devices", endpoint)
+        client.api.dcim = app
+        return client, endpoint
+
+    def test_uuid_in_path_used_as_id(self):
+        """UUID in path is extracted and used as id parameter."""
+        client, endpoint = self._make_mock_client()
+        result = call_nautobot(
+            client,
+            "/api/dcim/devices/abc12345-def4-5678-9abc-def012345678/",
+            "GET",
+        )
+        endpoint.get.assert_called_once_with(id="abc12345-def4-5678-9abc-def012345678")
+        assert result["count"] == 1
+
+    def test_explicit_id_overrides_path_uuid(self):
+        """Explicit id parameter takes precedence over URL-embedded UUID."""
+        client, endpoint = self._make_mock_client()
+        call_nautobot(
+            client,
+            "/api/dcim/devices/abc12345-def4-5678-9abc-def012345678/",
+            "GET",
+            id="explicit-id-11111111-2222-3333-4444",
+        )
+        endpoint.get.assert_called_once_with(id="explicit-id-11111111-2222-3333-4444")
+
+    def test_response_preserves_original_endpoint(self):
+        """Response endpoint field shows the original UUID-embedded path."""
+        client, endpoint = self._make_mock_client()
+        result = call_nautobot(
+            client,
+            "/api/dcim/devices/abc12345-def4-5678-9abc-def012345678/",
+            "GET",
+        )
+        assert result["endpoint"] == "/api/dcim/devices/abc12345-def4-5678-9abc-def012345678/"

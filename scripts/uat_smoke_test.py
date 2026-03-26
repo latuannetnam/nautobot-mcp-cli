@@ -166,6 +166,86 @@ def test_workflow_onboard_dry_run(client: NautobotClient):
 
 
 # -------------------------------------------------------------------------
+# RSP-01: detail=False summary mode
+# -------------------------------------------------------------------------
+
+
+def test_rsp01_interface_detail_summary_mode(client: NautobotClient):
+    """RSP-01: interface_detail(detail=False) returns counts but no nested arrays."""
+    result = run_workflow(
+        client,
+        workflow_id="interface_detail",
+        params={"device": UAT_DEVICE, "detail": False},
+    )
+    assert result["status"] in ("ok", "partial"), f"Workflow failed: {result.get('error')}"
+    data = result["data"]
+    assert data is not None, "data must be present in summary mode"
+    for unit in data.get("units", []):
+        assert "families" in unit, "families key must be present in unit"
+        assert unit["families"] == [], (
+            f"families[] must be empty in detail=False, got {unit.get('families')}"
+        )
+        assert "family_count" in unit, "family_count must be present in summary mode"
+        assert isinstance(unit["family_count"], int), "family_count must be an integer"
+
+
+# -------------------------------------------------------------------------
+# RSP-02: response_size_bytes in envelope
+# -------------------------------------------------------------------------
+
+
+def test_rsp02_response_size_bytes_in_envelope(client: NautobotClient):
+    """RSP-02: All composite envelopes include response_size_bytes (positive int)."""
+    composite_workflows = (
+        "bgp_summary",
+        "routing_table",
+        "firewall_summary",
+        "interface_detail",
+    )
+    for wf_id in composite_workflows:
+        result = run_workflow(client, workflow_id=wf_id, params={"device": UAT_DEVICE})
+        assert "response_size_bytes" in result, (
+            f"{wf_id}: envelope missing response_size_bytes field"
+        )
+        assert isinstance(result["response_size_bytes"], int), (
+            f"{wf_id}: response_size_bytes must be int, got {type(result['response_size_bytes'])}"
+        )
+        assert result["response_size_bytes"] > 0, (
+            f"{wf_id}: response_size_bytes must be > 0, got {result['response_size_bytes']}"
+        )
+
+
+# -------------------------------------------------------------------------
+# RSP-03: limit parameter caps result arrays
+# -------------------------------------------------------------------------
+
+
+def test_rsp03_limit_parameter_caps_results(client: NautobotClient):
+    """RSP-03: limit=N independently caps each result array in composite workflows."""
+    composite_workflows = (
+        ("bgp_summary", "groups"),
+        ("routing_table", "routes"),
+        ("firewall_summary", "filters"),
+        ("interface_detail", "units"),
+    )
+    for wf_id, top_key in composite_workflows:
+        result = run_workflow(
+            client,
+            workflow_id=wf_id,
+            params={"device": UAT_DEVICE, "limit": 2},
+        )
+        assert result["status"] in ("ok", "partial"), (
+            f"{wf_id} with limit=2 failed: {result.get('error')}"
+        )
+        data = result["data"]
+        assert data is not None, f"{wf_id}: data must not be None"
+        items = data.get(top_key, [])
+        assert len(items) <= 2, (
+            f"{wf_id}: {top_key} must be capped at 2, got {len(items)} items"
+        )
+
+
+# -------------------------------------------------------------------------
 # Main runner
 # -------------------------------------------------------------------------
 
@@ -210,7 +290,14 @@ def run_tests() -> None:
         _run("onboard_config dry-run", lambda: test_workflow_onboard_dry_run(client)),
     ]
 
-    all_results = catalog_results + bridge_results + workflow_results
+    print("\n[ RSP-01/02/03 Response Ergonomics Tests ]")
+    rsp_results = [
+        _run("RSP-01: interface_detail summary mode", lambda: test_rsp01_interface_detail_summary_mode(client)),
+        _run("RSP-02: response_size_bytes in envelope", lambda: test_rsp02_response_size_bytes_in_envelope(client)),
+        _run("RSP-03: limit parameter caps arrays", lambda: test_rsp03_limit_parameter_caps_results(client)),
+    ]
+
+    all_results = catalog_results + bridge_results + workflow_results + rsp_results
     passed = sum(all_results)
     failed = len(all_results) - passed
 

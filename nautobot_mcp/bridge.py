@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import difflib
 import logging
+import re
 from typing import Optional
 
 from nautobot_mcp.catalog.engine import get_catalog
@@ -23,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 MAX_LIMIT = 200  # Hard cap to prevent context window flooding
 DEFAULT_LIMIT = 50
+
+# UUID v4 pattern for path segment detection
+_UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
 
 
 def _build_valid_endpoints() -> list[str]:
@@ -40,6 +47,46 @@ def _suggest_endpoint(invalid_endpoint: str) -> list[str]:
     """Find closest matching valid endpoints using difflib."""
     valid = _build_valid_endpoints()
     return difflib.get_close_matches(invalid_endpoint, valid, n=3, cutoff=0.4)
+
+
+def _strip_uuid_from_endpoint(endpoint: str) -> tuple[str, str | None]:
+    """Strip UUID segment from endpoint path for catalog validation.
+
+    Handles URLs like /api/dcim/device-types/abc123-def456/ by extracting
+    the UUID and returning the base endpoint path.
+
+    Args:
+        endpoint: API endpoint path, possibly containing a UUID segment.
+
+    Returns:
+        Tuple of (base_endpoint, extracted_uuid_or_None).
+        If no UUID found, returns (endpoint, None).
+
+    Raises:
+        NautobotValidationError: If path contains multiple UUID segments
+            (nested paths not supported).
+    """
+    if not endpoint.startswith("/api/"):
+        return endpoint, None
+
+    parts = endpoint.strip("/").split("/")
+    uuid_indices = [i for i, p in enumerate(parts) if _UUID_RE.fullmatch(p)]
+
+    if not uuid_indices:
+        return endpoint, None
+
+    if len(uuid_indices) > 1:
+        raise NautobotValidationError(
+            message=f"Nested UUID paths not supported: '{endpoint}'",
+            hint="Use separate calls for each resource level. "
+                 "E.g., GET /api/dcim/devices/ with id parameter.",
+        )
+
+    uuid_val = parts[uuid_indices[0]]
+    # Remove UUID segment and rebuild path
+    clean_parts = [p for i, p in enumerate(parts) if i not in uuid_indices]
+    base_endpoint = "/" + "/".join(clean_parts) + "/"
+    return base_endpoint, uuid_val
 
 
 def _validate_endpoint(endpoint: str) -> None:
@@ -301,23 +348,31 @@ def call_nautobot(
     """
     # Resolve body/data alias — body takes precedence if both provided
     effective_data = body if body is not None else data
-    # Validate endpoint exists in catalog
-    _validate_endpoint(endpoint)
+
+    # Strip UUID from endpoint path (e.g., /api/dcim/devices/<uuid>/ → /api/dcim/devices/)
+    base_endpoint, path_uuid = _strip_uuid_from_endpoint(endpoint)
+
+    # Use path UUID as id if caller didn't provide one
+    if path_uuid and id is None:
+        id = path_uuid
+
+    # Validate base endpoint exists in catalog
+    _validate_endpoint(base_endpoint)
 
     # Validate and normalize method
-    method = _validate_method(method, endpoint)
+    method = _validate_method(method, base_endpoint)
 
     # Cap limit
     effective_limit = min(limit, MAX_LIMIT) if limit > 0 else DEFAULT_LIMIT
 
     try:
         # Route to correct backend
-        if endpoint.startswith("/api/"):
-            app_name, ep_name = _parse_core_endpoint(endpoint)
+        if base_endpoint.startswith("/api/"):
+            app_name, ep_name = _parse_core_endpoint(base_endpoint)
             result = _execute_core(client, app_name, ep_name, method,
                                    params, effective_data, id, effective_limit)
-        elif endpoint.startswith("cms:"):
-            cms_key = endpoint[4:]  # Strip "cms:" prefix
+        elif base_endpoint.startswith("cms:"):
+            cms_key = base_endpoint[4:]  # Strip "cms:" prefix
             result = _execute_cms(client, cms_key, method,
                                   params, effective_data, id, effective_limit)
         else:
@@ -327,7 +382,7 @@ def call_nautobot(
                      "Use nautobot_api_catalog() to see available endpoints.",
             )
 
-        # Add request context to response
+        # Add request context to response (use original endpoint for transparency)
         result["endpoint"] = endpoint
         result["method"] = method
         return result
