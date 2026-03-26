@@ -41,9 +41,9 @@ Requirements derived from verified user-reported pain points (see analysis repor
 
 ### Response Ergonomics (RSP)
 
-- [ ] **RSP-01**: `interface_detail` workflow supports `detail` toggle (summary mode strips unit/family/filter details, keeps counts)
-- [ ] **RSP-02**: Composite workflow envelopes include `response_size_bytes` metadata
-- [ ] **RSP-03**: Composite workflows support optional `limit` parameter to cap items in response
+- [x] **RSP-01**: `interface_detail` workflow supports `detail` toggle (summary mode strips unit/family/filter details, keeps counts)
+- [x] **RSP-02**: Composite workflow envelopes include `response_size_bytes` metadata
+- [x] **RSP-03**: Composite workflows support optional `limit` parameter to cap items in response
 
 ## Future Requirements
 
@@ -88,9 +88,9 @@ Requirements derived from verified user-reported pain points (see analysis repor
 | ERR-02 | Phase 21 | Complete |
 | ERR-03 | Phase 21 | Complete |
 | ERR-04 | Phase 21 | Complete |
-| RSP-01 | Phase 22 | Pending |
-| RSP-02 | Phase 22 | Pending |
-| RSP-03 | Phase 22 | Pending |
+| RSP-01 | Phase 22 | Complete |
+| RSP-02 | Phase 22 | Complete |
+| RSP-03 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 20 total

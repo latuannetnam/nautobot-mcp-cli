@@ -133,7 +133,7 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 4. All v1.4 UAT tests pass against Nautobot dev server
 
 **Plans:**
-1/1 plan complete
+1/1 plans complete
 - [x] Plan 01: RSP-01/02/03 + UAT — completed 2026-03-26
 
 ---
