@@ -69,7 +69,7 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 
 - [x] **Phase 19: Partial Failure Resilience** — Composite workflows gracefully degrade — completed 2026-03-25
 - [x] **Phase 20: Catalog Accuracy & Endpoint Dereference** — Fix filter contracts + URL follow (completed 2026-03-25)
-- [ ] **Phase 21: Workflow Contracts & Error Diagnostics** — Fix param contracts + enrich errors
+- [x] **Phase 21: Workflow Contracts & Error Diagnostics** — Fix param contracts + enrich errors (completed 2026-03-26)
 - [ ] **Phase 22: Response Ergonomics & UAT** — Summary modes, size metadata, live validation
 
 #### Phase 19: Partial Failure Resilience
@@ -115,7 +115,7 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 4. Composite workflow errors show which child operation failed via `origin` field
 
 **Plans:**
-- [x] Plan 01: WFC-01/WFC-02/WFC-03 (verify_data_model contract fixes) + ERR-01/ERR-02 (error body parsing) — completed 2026-03-26
+2/2 plans complete
 - [x] Plan 02: ERR-03 (composite workflow exception → warning entry) — completed 2026-03-26
 
 #### Phase 22: Response Ergonomics & UAT

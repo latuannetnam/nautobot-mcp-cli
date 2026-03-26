@@ -28,16 +28,16 @@ Requirements derived from verified user-reported pain points (see analysis repor
 
 ### Workflow Contracts (WFC)
 
-- [ ] **WFC-01**: `verify_data_model` workflow entry lists `parsed_config` as required parameter
-- [ ] **WFC-02**: `verify_data_model` workflow entry includes `ParsedConfig.model_validate` transform for `parsed_config`
-- [ ] **WFC-03**: Workflow registry validation catches required-param mismatches at import time (startup self-check)
+- [x] **WFC-01**: `verify_data_model` workflow entry lists `parsed_config` as required parameter
+- [x] **WFC-02**: `verify_data_model` workflow entry includes `ParsedConfig.model_validate` transform for `parsed_config`
+- [x] **WFC-03**: Workflow registry validation catches required-param mismatches at import time (startup self-check)
 
 ### Error Diagnostics (ERR)
 
-- [ ] **ERR-01**: 400 (validation) errors parse response body and include field-level error details in `NautobotValidationError.errors`
-- [ ] **ERR-02**: Error hints are contextual to the specific endpoint and filter being used (not generic "check server logs")
-- [ ] **ERR-03**: Composite workflow errors include `origin` field showing which child operation failed
-- [ ] **ERR-04**: `NautobotAPIError` default hint replaced with operation-specific guidance
+- [x] **ERR-01**: 400 (validation) errors parse response body and include field-level error details in `NautobotValidationError.errors`
+- [x] **ERR-02**: Error hints are contextual to the specific endpoint and filter being used (not generic "check server logs")
+- [x] **ERR-03**: Composite workflow errors include `origin` field showing which child operation failed
+- [x] **ERR-04**: `NautobotAPIError` default hint replaced with operation-specific guidance
 
 ### Response Ergonomics (RSP)
 
@@ -81,13 +81,13 @@ Requirements derived from verified user-reported pain points (see analysis repor
 | DRF-01 | Phase 20 | Complete |
 | DRF-02 | Phase 20 | Complete |
 | DRF-03 | Phase 20 | Complete |
-| WFC-01 | Phase 21 | Pending |
-| WFC-02 | Phase 21 | Pending |
-| WFC-03 | Phase 21 | Pending |
-| ERR-01 | Phase 21 | Pending |
-| ERR-02 | Phase 21 | Pending |
-| ERR-03 | Phase 21 | Pending |
-| ERR-04 | Phase 21 | Pending |
+| WFC-01 | Phase 21 | Complete |
+| WFC-02 | Phase 21 | Complete |
+| WFC-03 | Phase 21 | Complete |
+| ERR-01 | Phase 21 | Complete |
+| ERR-02 | Phase 21 | Complete |
+| ERR-03 | Phase 21 | Complete |
+| ERR-04 | Phase 21 | Complete |
 | RSP-01 | Phase 22 | Pending |
 | RSP-02 | Phase 22 | Pending |
 | RSP-03 | Phase 22 | Pending |
