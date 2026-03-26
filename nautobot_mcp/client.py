@@ -223,7 +223,8 @@ class NautobotClient:
             NautobotAPIError: For all other API errors.
         """
         if isinstance(error, pynautobot.core.query.RequestError):
-            status_code = getattr(getattr(error, "req", None), "status_code", 0)
+            req_obj = getattr(error, "req", None)
+            status_code = getattr(req_obj, "status_code", 0) if req_obj else 0
 
             if status_code == 404:
                 raise NautobotNotFoundError(
@@ -236,35 +237,39 @@ class NautobotClient:
                     message=f"Authentication failed during {operation} on {model_name}",
                 ) from error
 
-            if status_code == 400:
-                # ERR-01: Parse DRF 400 body for field-level errors
-                import json as _json
+            # ERR-01: Parse DRF 400 body — handle None req by using effective_status=400
+            if status_code == 400 or (req_obj is None and not isinstance(error, RequestsConnectionError)):
+                # When req_obj is None, we can't definitively determine the status.
+                # Treat as 400 (validation error) since that's the most common case.
+                effective_status = status_code if status_code == 400 else 400
 
                 field_errors: list[dict[str, str]] = []
-                req_obj = getattr(error, "req", None)
-                raw_body = getattr(req_obj, "text", None) if req_obj else None
 
-                if raw_body:
-                    try:
-                        body = _json.loads(raw_body)
-                        # Handle DRF error shapes:
-                        # {"field": ["msg"]}  or  {"field": "msg"}  or  {"detail": "string"}
-                        if isinstance(body, dict):
-                            for field, messages in body.items():
-                                if isinstance(messages, list):
-                                    for msg in messages:
-                                        field_errors.append({"field": field, "error": str(msg)})
-                                elif isinstance(messages, str):
-                                    field_errors.append({"field": field, "error": messages})
-                                else:
-                                    field_errors.append({"field": field, "error": str(messages)})
-                        elif isinstance(body, str):
-                            # Non-dict body (e.g. plain "Invalid input.") — treat as detail
-                            field_errors.append({"field": "_detail", "error": body})
-                    except (ValueError, TypeError):
-                        pass  # Non-JSON body — fall through to generic message
+                if req_obj is not None:
+                    raw_body = getattr(req_obj, "text", None)
+                    if raw_body:
+                        import json as _json
+                        try:
+                            body = _json.loads(raw_body)
+                            # Handle DRF error shapes:
+                            # {"field": ["msg"]}  or  {"field": "msg"}  or  {"detail": "string"}
+                            # Normalize non_field_errors and detail to _detail for uniform handling
+                            if isinstance(body, dict):
+                                for field, messages in body.items():
+                                    normalized_field = "_detail" if field in ("detail", "non_field_errors") else field
+                                    if isinstance(messages, list):
+                                        for msg in messages:
+                                            field_errors.append({"field": normalized_field, "error": str(msg)})
+                                    elif isinstance(messages, str):
+                                        field_errors.append({"field": normalized_field, "error": messages})
+                                    else:
+                                        field_errors.append({"field": normalized_field, "error": str(messages)})
+                            elif isinstance(body, str):
+                                field_errors.append({"field": "_detail", "error": body})
+                        except (ValueError, TypeError):
+                            pass  # Non-JSON body — fall through to generic message
 
-                hint = _get_hint_for_request(req_obj, operation, model_name, status_code)
+                hint = _get_hint_for_request(req_obj, operation, model_name, effective_status)
 
                 raise NautobotValidationError(
                     message=f"Validation error during {operation} on {model_name}: {error}",
@@ -272,7 +277,6 @@ class NautobotClient:
                     errors=field_errors if field_errors else None,
                 ) from error
 
-            req_obj = getattr(error, "req", None)
             hint = _get_hint_for_request(req_obj, operation, model_name, status_code)
 
             raise NautobotAPIError(
