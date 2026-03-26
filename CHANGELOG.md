@@ -9,13 +9,66 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-> Changes targeting the next milestone (v1.4) will appear here.
+> Changes targeting the next milestone will appear here.
 
 Candidates:
 - Multi-vendor config parsers (Cisco IOS/IOS-XE, Arista EOS)
 - Bulk device onboarding (batch config files)
 - Config remediation suggestions based on drift reports
 - Extended drift coverage (interfaces, firewalls)
+
+---
+
+## [v1.4] — 2026-03-26
+
+### Partial Failure Resilience
+
+Composite workflows now gracefully degrade instead of all-or-nothing failure. Sub-operation errors are captured as structured warnings in the response envelope while valid results are still returned.
+
+- `WarningCollector` dataclass (`nautobot_mcp/warnings.py`) — thread-safe warning accumulation with `add(operation, error)` and `summary(total_ops)` methods
+- Three-tier response status: `ok` (full success), `partial` (some results + warnings), `error` (complete failure)
+- All 4 composite functions (`bgp_summary`, `routing_table`, `firewall_summary`, `interface_detail`) return `(result, warnings)` tuples
+- Independent co-primaries in `firewall_summary`: filter and policer fetches are independent — one failure does not block the other
+
+### Workflow Contract Validation
+
+Import-time self-validation catches registry/signature drift before runtime.
+
+- `_validate_registry()` runs at module load — raises `NautobotValidationError` if any registry entry's `param_map` keys don't match the actual function signature
+- Caught and fixed 3 pre-existing bugs: `onboard_config` param key, `compare_device` required list, `verify_data_model` missing transforms
+- Registry param_map keys must be actual function parameter names (not agent-facing aliases)
+
+### Error Diagnostics & Actionable Hints
+
+All API errors now include context-specific guidance rather than generic messages.
+
+- DRF 400 responses parsed for field-level validation errors — `NautobotValidationError.errors` populated from response body
+- `ERROR_HINTS` dict with 10 endpoint-specific actionable hints (longest-match lookup)
+- `STATUS_CODE_HINTS` for 429/500/502/503/504/422 with rate-limit guidance, retry windows, upstream error context
+- `NautobotAPIError` default hint is status-code-derived — no more generic placeholder messages
+- Composite workflow exceptions captured as structured warning entries in the error envelope (`ERR-03`)
+
+### Catalog Accuracy
+
+CMS endpoint filters corrected and UUID path segments supported.
+
+- Per-endpoint `CMS_ENDPOINT_FILTERS` dict (43 entries) replaces domain-level `CMS_DOMAIN_FILTERS` — each CMS endpoint now advertises the correct primary FK filter(s)
+- UUID path segment detection: agents can pass `/api/dcim/devices/<uuid>/` directly to `call_nautobot()` without manually decomposing
+
+### Response Ergonomics
+
+Composite workflow responses now include sizing metadata and summary modes for token-efficient agent consumption.
+
+- `response_size_bytes` in all composite workflow envelopes — `len(json.dumps(data))` measured at the workflow engine level
+- `detail=False` summary mode for `interface_detail`: strips `families[]` and `vrrp_groups[]` arrays, keeps `family_count` and `vrrp_group_count` integers
+- `limit=N` parameter on all 4 composites: independently caps arrays within each composite (`groups[]`, `neighbors[]` per group, `routes[]`, `filters[]`, `policers[]`, `terms[]`, `actions[]`, `units[]`, `families[]`, `arp_entries[]`)
+- Smoke test suite with 10 checks covering all 3 ergonomics requirements
+
+### Stats
+
+- MCP tools: 3 (unchanged)
+- Unit tests: 397 → **476**
+- Phases: 19-22 (Partial Failure Resilience, Catalog Accuracy, Workflow Contracts & Error Diagnostics, Response Ergonomics)
 
 ---
 
