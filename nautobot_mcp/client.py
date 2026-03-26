@@ -7,7 +7,7 @@ Connection is lazy — validated on first API call, not on initialization.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import pynautobot
 from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -63,6 +63,55 @@ STATUS_CODE_HINTS: dict[int, str] = {
     504: "Nautobot request timed out — try a narrower filter or smaller query",
     422: "Unprocessable entity — field values don't match Nautobot API schema; check data types",
 }
+
+
+def _get_hint_for_request(
+    req: Any,
+    operation: str,
+    model_name: str,
+    status_code: int,
+) -> str:
+    """Resolve the best available hint for a failed API request.
+
+    Strategy (in priority order):
+    1. Longest-match ERROR_HINTS entry for the request URL path
+    2. STATUS_CODE_HINTS entry for the HTTP status code
+    3. Generic fallback string
+
+    Args:
+        req: requests.Response object (or Any from pynautobot RequestError.req).
+             May be None if the error has no associated response.
+        operation: Operation name (e.g., "list", "create", "filter").
+        model_name: Model name (e.g., "Device", "Interface").
+        status_code: HTTP status code integer.
+
+    Returns:
+        A hint string — always non-empty.
+    """
+    # 1. Try endpoint-specific hint from ERROR_HINTS
+    if req is not None and hasattr(req, "url"):
+        url = getattr(req, "url", "") or ""
+        # Longest-match: sort keys by length descending, pick first match
+        for hint_key in sorted(ERROR_HINTS.keys(), key=len, reverse=True):
+            if hint_key in url:
+                return ERROR_HINTS[hint_key]
+
+    # 2. Try status-code fallback
+    if status_code in STATUS_CODE_HINTS:
+        return STATUS_CODE_HINTS[status_code]
+
+    # 3. Generic fallback derived from operation + model
+    fallbacks = {
+        "list": f"Check that {model_name.lower()} objects exist in Nautobot and the filter parameters are valid",
+        "get": f"Verify the {model_name.lower()} ID or name is correct",
+        "create": f"Check required fields for {model_name.lower()} match the Nautobot API schema",
+        "update": f"Verify the {model_name.lower()} exists and the update data is valid",
+        "delete": f"Verify the {model_name.lower()} exists and is not protected",
+    }
+    return fallbacks.get(
+        operation,
+        f"Check {model_name.lower()} data and Nautobot server health",
+    )
 
 
 class NautobotClient:
