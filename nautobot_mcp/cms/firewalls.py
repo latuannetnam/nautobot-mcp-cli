@@ -649,6 +649,7 @@ def get_device_firewall_summary(
     client: "NautobotClient",
     device: str,
     detail: bool = False,
+    limit: int = 0,
 ) -> tuple[FirewallSummaryResponse, list]:
     """Get a composite firewall summary for a Juniper device.
 
@@ -701,12 +702,15 @@ def get_device_firewall_summary(
             fd = fw_filter.model_dump()
             try:
                 terms_resp = list_firewall_terms(client, filter_id=fw_filter.id, limit=0)
-                fd["terms"] = [t.model_dump() for t in terms_resp.results]
+                terms_capped = terms_resp.results[:limit] if limit > 0 else terms_resp.results
+                fd["terms"] = [t.model_dump() for t in terms_capped]
                 fd["term_count"] = terms_resp.count
             except Exception as e:
                 collector.add(f"list_firewall_terms(filter={fw_filter.id})", str(e))
                 fd["terms"] = []
             filter_dicts.append(fd)
+        # Cap filters[] at limit (per-array independent cap)
+        filter_dicts = filter_dicts[:limit] if limit > 0 else filter_dicts
 
         # For each policer, fetch full action data
         policer_dicts = []
@@ -714,16 +718,21 @@ def get_device_firewall_summary(
             pd = policer.model_dump()
             try:
                 actions_resp = list_firewall_policer_actions(client, policer_id=policer.id, limit=0)
-                pd["actions"] = [a.model_dump() for a in actions_resp.results]
+                actions_capped = actions_resp.results[:limit] if limit > 0 else actions_resp.results
+                pd["actions"] = [a.model_dump() for a in actions_capped]
                 pd["action_count"] = actions_resp.count
             except Exception as e:
                 collector.add(f"list_firewall_policer_actions(policer={policer.id})", str(e))
                 pd["actions"] = []
             policer_dicts.append(pd)
+        # Cap policers[] at limit (per-array independent cap)
+        policer_dicts = policer_dicts[:limit] if limit > 0 else policer_dicts
     else:
         # Shallow — term_count and action_count already populated by list_ calls
-        filter_dicts = [f.model_dump() for f in filters_data]
-        policer_dicts = [p.model_dump() for p in policers_data]
+        filters_capped = filters_data[:limit] if limit > 0 else filters_data
+        policers_capped = policers_data[:limit] if limit > 0 else policers_data
+        filter_dicts = [f.model_dump() for f in filters_capped]
+        policer_dicts = [p.model_dump() for p in policers_capped]
 
     result = FirewallSummaryResponse(
         device_name=device,

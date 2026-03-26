@@ -600,6 +600,7 @@ def get_device_bgp_summary(
     client: "NautobotClient",
     device: str,
     detail: bool = False,
+    limit: int = 0,
 ) -> tuple[BGPSummaryResponse, list]:
     """Get a composite BGP summary for a device.
 
@@ -658,12 +659,16 @@ def get_device_bgp_summary(
                         nbr_dict["policy_associations"] = []
                         nbr_dict["policy_association_count"] = 0
                     enriched_neighbors.append(nbr_dict)
+                # Cap neighbors[] per group at limit (per-array independent cap)
+                enriched_neighbors = enriched_neighbors[:limit] if limit > 0 else enriched_neighbors
                 grp_dict["neighbors"] = enriched_neighbors
             else:
                 grp_dict["neighbors"] = [nbr.model_dump() for nbr in neighbors_for_group]
 
             grp_dict["neighbor_count"] = len(neighbors_for_group)
             group_dicts.append(grp_dict)
+        # Cap groups[] at limit (per-array independent cap)
+        group_dicts = group_dicts[:limit] if limit > 0 else group_dicts
 
         result = BGPSummaryResponse(
             device_name=device,
@@ -681,6 +686,7 @@ def get_device_routing_table(
     client: "NautobotClient",
     device: str,
     detail: bool = False,
+    limit: int = 0,
 ) -> tuple[RoutingTableResponse, list]:
     """Get a composite routing table summary for a device.
 
@@ -705,6 +711,9 @@ def get_device_routing_table(
         # here we capture them via the collector pattern
         routes_resp = list_static_routes(client, device=device, limit=0)
         routes = routes_resp.results
+
+        # Cap routes[] at limit
+        routes = routes[:limit] if limit > 0 else routes
 
         if detail:
             # Full data already inlined by list_static_routes
