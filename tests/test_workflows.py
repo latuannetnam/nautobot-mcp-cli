@@ -601,3 +601,157 @@ class TestVerifyDataModelTransform:
             assert result["status"] == "ok"
         finally:
             WORKFLOW_REGISTRY["verify_data_model"]["function"] = orig
+
+
+# ---------------------------------------------------------------------------
+# ERR-03: Composite workflow exception -> warning entry in envelope
+# ---------------------------------------------------------------------------
+
+
+class TestRunWorkflowCompositeErrorOrigin:
+    """Test that workflow exceptions surface as warning entries with origin field (ERR-03)."""
+
+    def test_workflow_exception_includes_operation_in_warnings(self):
+        """Exception from a workflow should appear in warnings with 'operation' key."""
+        with workflow_func_mock("bgp_summary") as mock_func:
+            mock_func.side_effect = RuntimeError("Nautobot API timeout during BGP query")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="bgp_summary",
+                params={"device": "rtr-01"},
+            )
+
+        # ERR-03: envelope must have status=error (no data) AND warnings list with the exception
+        assert result["status"] == "error"
+        assert result["data"] is None
+        assert "warnings" in result
+        assert len(result["warnings"]) == 1
+        assert result["warnings"][0]["operation"] == "bgp_summary"
+        assert "Nautobot API timeout" in result["warnings"][0]["error"]
+
+    def test_routing_table_exception_includes_operation_origin(self):
+        """routing_table exception should include 'routing_table' as operation in warnings."""
+        with workflow_func_mock("routing_table") as mock_func:
+            mock_func.side_effect = ValueError("Invalid route data format")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="routing_table",
+                params={"device": "rtr-01"},
+            )
+
+        assert result["status"] == "error"
+        assert len(result["warnings"]) == 1
+        assert result["warnings"][0]["operation"] == "routing_table"
+        assert "Invalid route" in result["warnings"][0]["error"]
+
+    def test_firewall_summary_exception_includes_operation_origin(self):
+        """firewall_summary exception should include 'firewall_summary' as operation."""
+        with workflow_func_mock("firewall_summary") as mock_func:
+            mock_func.side_effect = Exception("Device not found in Nautobot")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="firewall_summary",
+                params={"device": "fw-01"},
+            )
+
+        assert result["status"] == "error"
+        assert len(result["warnings"]) == 1
+        assert result["warnings"][0]["operation"] == "firewall_summary"
+        assert "warnings" in result
+        assert isinstance(result["warnings"], list)
+
+    def test_interface_detail_exception_includes_operation_origin(self):
+        """interface_detail exception should include 'interface_detail' as operation."""
+        with workflow_func_mock("interface_detail") as mock_func:
+            mock_func.side_effect = ConnectionError("Cannot reach Nautobot")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="interface_detail",
+                params={"device": "dist-sw-01"},
+            )
+
+        assert result["status"] == "error"
+        assert result["warnings"][0]["operation"] == "interface_detail"
+        assert "Cannot reach Nautobot" in result["warnings"][0]["error"]
+
+    def test_verify_data_model_exception_includes_operation_origin(self):
+        """verify_data_model exception should include 'verify_data_model' as operation."""
+        from nautobot_mcp.models.parser import ParsedConfig
+
+        with workflow_func_mock("verify_data_model") as mock_func:
+            mock_func.side_effect = RuntimeError("DiffSync comparison failed")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="verify_data_model",
+                params={
+                    "device_name": "test-rtr",
+                    "parsed_config": {
+                        "hostname": "test",
+                        "platform": "junos",
+                        "interfaces": [],
+                        "ip_addresses": [],
+                        "vlans": [],
+                        "routing_instances": [],
+                        "protocols": [],
+                        "firewall_filters": [],
+                    },
+                },
+            )
+
+        assert result["status"] == "error"
+        assert result["warnings"][0]["operation"] == "verify_data_model"
+        assert "DiffSync comparison failed" in result["warnings"][0]["error"]
+
+    def test_error_string_still_present_in_envelope(self):
+        """Exception string should still appear in the 'error' field for backward compat."""
+        with workflow_func_mock("bgp_summary") as mock_func:
+            mock_func.side_effect = RuntimeError("connection refused")
+
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="bgp_summary",
+                params={"device": "rtr-01"},
+            )
+
+        assert result["error"] is not None
+        assert "connection refused" in result["error"]
+        # Also present in warnings
+        assert "connection refused" in result["warnings"][0]["error"]
+
+    def test_partial_failure_from_composite_still_returns_partial_not_error(self):
+        """Phase 19 partial failures (tuple return with warnings) remain unchanged by ERR-03.
+
+        This test ensures the Phase 19 behavior is preserved: composite functions that
+        return (result, warnings) tuples still get status='partial', not status='error'.
+        ERR-03 only modifies the except Exception handler.
+        """
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"groups": ["core"]}
+        warnings_from_composite = [
+            {"operation": "list_bgp_address_families", "error": "404 Not Found"},
+        ]
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, warnings_from_composite)):
+            client = MagicMock()
+            result = run_workflow(
+                client,
+                workflow_id="bgp_summary",
+                params={"device": "rtr-01"},
+            )
+
+        # Phase 19 behavior: partial envelope (not error)
+        assert result["status"] == "partial"
+        assert result["data"] is not None
+        assert result["warnings"] == warnings_from_composite
+        # Error field contains summary string (not exception)
+        assert "enrichment" in result["error"]
