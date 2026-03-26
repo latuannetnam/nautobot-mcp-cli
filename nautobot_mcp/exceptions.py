@@ -98,12 +98,25 @@ class NautobotValidationError(NautobotMCPError):
 class NautobotAPIError(NautobotMCPError):
     """Raised for generic Nautobot API errors with HTTP status codes."""
 
+    # Status-code-based default hints (used when no hint is provided)
+    _STATUS_DEFAULTS: dict[int, str] = {
+        429: "Rate limited — retry after exponential backoff or check Nautobot task schedule",
+        500: "Nautobot server error — check Nautobot service health and application logs",
+        502: "Nautobot gateway error — check Nautobot service health and reverse proxy logs",
+        503: "Nautobot unavailable — check service status and network connectivity",
+        504: "Nautobot request timed out — try a narrower filter or smaller query",
+        422: "Unprocessable entity — field values don't match Nautobot API schema; check data types",
+    }
+
     def __init__(
         self,
         message: str = "Nautobot API error",
         status_code: int = 0,
-        hint: str = "Check Nautobot server logs for details",
+        hint: Optional[str] = None,
     ) -> None:
+        # Derive hint from status code if not provided
+        if hint is None:
+            hint = self._STATUS_DEFAULTS.get(status_code, "Check Nautobot server logs for details")
         super().__init__(message=message, code="API_ERROR", hint=hint)
         self.status_code = status_code
 

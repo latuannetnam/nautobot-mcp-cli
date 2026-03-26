@@ -87,3 +87,43 @@ def test_exception_str_format():
     result = str(error)
     assert "Cannot connect" in result
     assert "Check URL" in result
+
+
+def test_validation_error_to_dict_includes_validation_errors():
+    """NautobotValidationError.to_dict() must include validation_errors key when errors set."""
+    error = NautobotValidationError(
+        message="Invalid device data",
+        hint="Check required fields",
+        errors=[
+            {"field": "name", "error": "This field is required."},
+            {"field": "device_type", "error": "Invalid pk 'foo' — object does not exist."},
+        ],
+    )
+    result = error.to_dict()
+    assert "validation_errors" in result
+    assert len(result["validation_errors"]) == 2
+    assert result["validation_errors"][0]["field"] == "name"
+    assert result["validation_errors"][1]["error"] == "Invalid pk 'foo' — object does not exist."
+
+
+def test_api_error_hint_preserved_in_to_dict():
+    """NautobotAPIError.to_dict() must include the hint field with the correct value."""
+    error = NautobotAPIError(
+        message="Server error",
+        status_code=500,
+        hint="Nautobot server error — check Nautobot service health and application logs",
+    )
+    result = error.to_dict()
+    assert "hint" in result
+    assert result["hint"] == "Nautobot server error — check Nautobot service health and application logs"
+    assert result["status_code"] == 500
+    assert result["code"] == "API_ERROR"
+
+
+def test_api_error_default_hint_is_not_generic():
+    """NautobotAPIError created without hint should NOT use generic 'check server logs'."""
+    error = NautobotAPIError(message="Server error", status_code=500)
+    # The default hint should be derived from status code, not a generic placeholder
+    assert error.hint != "Check Nautobot server logs for details"
+    assert len(error.hint) > 0
+
