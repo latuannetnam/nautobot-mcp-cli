@@ -37,6 +37,49 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
+def _validate_registry() -> None:
+    """Validate WORKFLOW_REGISTRY entries against actual function signatures at import time.
+
+    For each entry, compares the union of required + param_map keys (agent-facing names)
+    against the function's actual parameters, excluding 'client' (always injected separately).
+
+    Raises NautobotValidationError on any mismatch — fails fast, preventing a server
+    from starting with a broken registry entry.
+    """
+    import inspect
+
+    for wf_id, entry in WORKFLOW_REGISTRY.items():
+        func = entry.get("function")
+        if not func:
+            continue  # skip entries without functions (shouldn't happen in practice)
+
+        sig = inspect.signature(func)
+        func_params = set(sig.parameters.keys())
+
+        required = set(entry.get("required", []))
+        param_map_keys = set(entry.get("param_map", {}).keys())
+        registry_params = required | param_map_keys
+
+        # client is injected by run_workflow, not an agent-facing param — exclude it
+        func_params = func_params - {"client"}
+
+        missing_in_func = registry_params - func_params
+        extra_in_func = func_params - registry_params
+
+        if missing_in_func:
+            raise NautobotValidationError(
+                f"WORKFLOW_REGISTRY['{wf_id}'] lists {sorted(missing_in_func)} as required/mapped "
+                f"params but the function signature does not accept them. "
+                f"Fix workflows.py entry for '{wf_id}'."
+            )
+        if extra_in_func:
+            raise NautobotValidationError(
+                f"WORKFLOW_REGISTRY['{wf_id}'] function accepts {sorted(extra_in_func)} "
+                f"but these are not listed in required or param_map. "
+                f"Fix workflows.py entry for '{wf_id}'."
+            )
+
+
 WORKFLOW_REGISTRY: dict[str, dict] = {
     "bgp_summary": {
         "function": get_device_bgp_summary,
