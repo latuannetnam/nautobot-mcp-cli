@@ -1,193 +1,56 @@
-# Pitfalls Research
+# PITFALLS — v1.5 MCP Server Quality & Agent Performance
 
-**Domain:** MCP Server API Bridge for Nautobot
-**Researched:** 2026-03-24
-**Confidence:** HIGH
+**Scope:** Subsequent milestone after v1.4, focused on agent-performance and quality upgrades to the 3-tool API Bridge (`nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`).
+**Target changes:** batching, projection, compact responses, and security hardening.
+**Research date:** 2026-03-26
 
-## Critical Pitfalls
+## High-risk pitfalls
 
-### Pitfall 1: Agent Can't Find the Right Endpoint
+| ID | Pitfall (milestone-specific) | Why this codebase is exposed | Recommended mitigation phase |
+|---|---|---|---|
+| P1 | **Batch path bypasses existing validation** | `call_nautobot()` currently enforces `_strip_uuid_from_endpoint()`, `_validate_endpoint()`, `_validate_method()`. A new batch executor can accidentally skip these per-item checks for speed. | **Phase 2 — Batch execution engine** |
+| P2 | **Fail-fast batching breaks v1.4 partial-resilience expectations** | v1.4 established partial-failure behavior in workflows. If a batch aborts on first error, agents lose successful results and retry unnecessarily. | **Phase 2 — Batch execution engine** |
+| P3 | **Response contract drift from compact mode** | Existing clients/skills expect `count`, `results`, `endpoint`, `method` and optionally `truncated`/`total_available`. Compact mode often removes “redundant” fields that are actually relied on. | **Phase 1 — Contract compatibility guardrails** |
+| P4 | **Projection removes identity/navigation fields** | If projection strips `id`, `url`, or relation keys, follow-up PATCH/DELETE and workflow chaining fail. | **Phase 3 — Projection and compaction** |
+| P5 | **Projection/compact applied inconsistently across core vs CMS routes** | `_execute_core()` and `_execute_cms()` are separate paths; uneven implementation causes agent confusion and nondeterministic outputs. | **Phase 3 — Projection and compaction** |
+| P6 | **Batch limits applied globally instead of per operation** | Current `limit` semantics are per call with `MAX_LIMIT`. In batch mode, a shared cap can starve later operations and silently under-return data. | **Phase 2 — Batch execution engine** |
+| P7 | **Security hardening blocks valid UUID endpoint patterns** | v1.4 added UUID path normalization (`/api/.../<uuid>/`). Tight regex/prefix rules can regress this and break common agent inputs. | **Phase 4 — Security hardening** |
+| P8 | **Security relaxations re-open endpoint injection surface** | Current bridge only allows `/api/` and `cms:` prefixes. Performance shortcuts that add “raw URL” support can bypass safe routing boundaries. | **Phase 4 — Security hardening** |
+| P9 | **Error quality regresses in optimized paths** | `server.handle_error()` depends on `NautobotMCPError.message/hint`. Batch/compact wrappers often collapse errors into generic strings, removing actionable hints. | **Phase 1 — Contract compatibility guardrails** |
+| P10 | **Unbounded optimization knobs create DoS-by-legitimate-use** | Batch count + broad GET + projection wildcards can create massive in-memory lists (`list(endpoint_accessor.all())`) despite `MAX_LIMIT` on returned rows. | **Phase 4 — Security hardening** |
 
-**What goes wrong:**
-Agent calls `call_nautobot` with an invalid or misspelled endpoint string. Without 165 typed tool names, the agent must construct endpoint strings from catalog knowledge.
+## Prevention controls
 
-**Why it happens:**
-Agents are used to typed tool names (e.g., `nautobot_list_devices`). With `call_nautobot(endpoint="/api/dcim/devices/")`, they must remember the exact endpoint path.
+| Pitfall IDs | Prevention control | Actionable implementation in this repo | Testable acceptance criteria |
+|---|---|---|---|
+| P1, P8 | **Single execution path policy** | Implement batch as a thin loop that calls existing `call_nautobot()` per item (or a shared internal function) instead of a separate fast path. | Unit test: invalid endpoint/method in batch item returns same `NautobotValidationError` structure as single call. |
+| P2 | **Per-item result envelope with aggregate status** | Return `{"status": "ok/partial/error", "items": [...], "errors": [...]}` while preserving successful item payloads even when others fail. | Integration test: 1 valid + 1 invalid item returns `status=partial`, includes one success and one structured error. |
+| P3, P9 | **Response compatibility contract** | Define immutable minimum keys for `nautobot_call_nautobot` responses (`endpoint`, `method`, `count`, `results` or equivalent canonical compact field). Version any breaking compact schema (`compact_v2`). | Contract tests for normal and compact modes; existing agent skills pass without changes in default mode. |
+| P4 | **Projection safelist + required fields floor** | Enforce required identity fields (`id`, optionally `url`) always included unless explicitly disabled with a guarded flag. Reject unknown projection fields with validation errors. | Unit test: projection omitting `id` still returns `id`; unknown field returns `VALIDATION_ERROR` + hint. |
+| P5 | **Normalization layer after route execution** | Apply projection/compact in one post-processing function used by both `_execute_core()` and `_execute_cms()`. | Snapshot tests: equivalent core and CMS list calls produce identical envelope semantics under projection/compact. |
+| P6, P10 | **Resource guardrails** | Add `max_batch_items`, `max_projection_fields`, and per-item `limit` clamped by `MAX_LIMIT`; reject oversized requests early. | Security/perf tests: oversized batch returns deterministic validation error; memory/time stays within threshold under stress tests. |
+| P7 | **Regression lock for UUID normalization** | Keep `_strip_uuid_from_endpoint()` behavior covered before and after security changes; preserve one-UUID support and explicit rejection of nested UUID paths. | Unit tests: `/api/dcim/devices/<uuid>/` resolves correctly; nested UUID path returns clear validation hint. |
+| P8 | **Strict endpoint allowlist enforcement** | Preserve `/api/` and `cms:` prefix checks; never execute arbitrary host URLs from tool input. | Unit test: `https://evil.example/...` rejected with unsupported-prefix validation error. |
+| P1–P10 | **Milestone gate with scenario UAT** | Add live/UAT scenarios: catalog→projected read→batch mixed CRUD→workflow follow-up; include CMS endpoint coverage. | CI gate: all new unit + integration tests pass; UAT script reports no schema or hint regressions. |
 
-**How to avoid:**
-1. `nautobot_api_catalog` returns exact endpoint strings agents should copy-paste
-2. `call_nautobot` validates endpoint against catalog and returns "did you mean X?" hints
-3. Agent skills include the exact `call_nautobot` invocation syntax
+## Early warning signals
 
-**Warning signs:**
-Agent repeatedly calls `call_nautobot` with wrong endpoints, or asks user "what endpoint should I use?"
-
-**Phase to address:** Phase 15 (Catalog Engine) — validation + error hints
-
----
-
-### Pitfall 2: Breaking Existing Domain Module Tests
-
-**What goes wrong:**
-Refactoring `server.py` accidentally modifies domain module interfaces. Existing 293 domain tests start failing.
-
-**Why it happens:**
-Developer changes domain function signatures to "fit" the new bridge, or accidentally imports that create circular dependencies.
-
-**How to avoid:**
-1. Domain modules are 100% unchanged — zero modifications to function signatures
-2. Bridge layer wraps domain functions, never modifies them
-3. Run full test suite (`pytest`) after each change
-4. Bridge uses existing function signatures exactly as they are
-
-**Warning signs:**
-Any domain module test failure = bridge is leaking into domain layer.
-
-**Phase to address:** Phase 16 (REST Bridge) — test-first validation
-
----
-
-### Pitfall 3: CMS Endpoint Discovery Fails Silently
-
-**What goes wrong:**
-`nautobot_api_catalog` shows CMS endpoints, but `call_nautobot` fails because CMS_ENDPOINTS registry format doesn't match expected bridge input format.
-
-**Why it happens:**
-CMS_ENDPOINTS uses a specific dict structure (`{endpoint_key: {"path": ..., "model": ...}}`). Bridge must map this correctly to the `cms:` prefix routing.
-
-**How to avoid:**
-1. Single mapping function `cms_endpoint_to_catalog_entry()` tested independently
-2. Test: for every entry in `CMS_ENDPOINTS`, verify `call_nautobot(endpoint="cms:{key}")` routes correctly
-3. Integration test: catalog discover → call → assert success
-
-**Warning signs:**
-`nautobot_api_catalog` returns CMS entries but `call_nautobot("cms:juniper_static_routes")` returns "unknown endpoint."
-
-**Phase to address:** Phase 15-16 — catalog + bridge must be tested together
+- **Validation mismatch spike:** Rising count of `Unknown endpoint` / `Invalid method` errors in batch mode compared to single-call mode (signals P1).
+- **Partial status collapse:** Batch requests frequently return full `error` when at least one item should succeed (signals P2).
+- **Schema drift detections:** Agent skills begin requiring conditional parsing for compact vs non-compact defaults (signals P3/P5).
+- **Follow-up call failures:** Increased `PATCH requires 'id'` or not-found-after-read patterns after projected GETs (signals P4).
+- **Core/CMS parity breaks:** Same query shape succeeds in core endpoints but fails/changes shape in CMS endpoints (signals P5).
+- **Unexpected truncation behavior:** User reports “missing items” with low counts in later batch elements (signals P6).
+- **UUID regression:** Increase in errors for endpoint strings that include object UUID paths previously accepted in v1.4 (signals P7).
+- **Security boundary regression:** Any acceptance of full external URLs or non-`/api/`/`cms:` prefixes in request logs (signals P8).
+- **Hint quality degradation:** Error payloads lose actionable `hint` text and become generic “Unexpected error” responses (signals P9).
+- **Latency/memory cliffs:** P95 latency and worker memory jump disproportionately with large batch + wide projection requests (signals P10).
 
 ---
 
-### Pitfall 4: Workflow Parameter Mismatch
-
-**What goes wrong:**
-Workflow registry declares params `{"device": "str"}` but the underlying function expects `device_name` or `client` as first argument. Agent passes correct params from catalog but workflow function rejects them.
-
-**Why it happens:**
-Workflow functions have inconsistent parameter names across domain modules (some use `device`, others `device_name`, some require client object).
-
-**How to avoid:**
-1. Workflow registry includes parameter mapping/normalization per workflow
-2. Each workflow entry tested: `execute_workflow(name, params)` → success
-3. Document parameter mapping in WORKFLOW_REGISTRY comments
-
-**Warning signs:**
-`run_workflow("bgp_summary", {"device": "router1"})` returns `TypeError: unexpected keyword argument`.
-
-**Phase to address:** Phase 17 (Workflow Registry) — parameter normalization layer
-
----
-
-### Pitfall 5: Agent Loses Context of Available Operations
-
-**What goes wrong:**
-Agent calls `nautobot_api_catalog` once at the start of a conversation, but then the catalog response falls out of context window during a long conversation. Agent starts guessing endpoint names.
-
-**Why it happens:**
-LLM context windows are finite. The catalog response (~400 tokens) competes with conversation history.
-
-**How to avoid:**
-1. Agent skills include the relevant endpoints inline — agent doesn't need to memorize
-2. `call_nautobot` error messages include a hint: "Use nautobot_api_catalog to see available endpoints"
-3. Keep catalog responses concise — domain filter helps reduce response size
-
-**Warning signs:**
-Late in conversation, agent stops using correct endpoints or starts inventing tool names.
-
-**Phase to address:** Phase 18 (Agent Skills) — skills embed endpoint references
-
----
-
-### Pitfall 6: Over-Engineering the Catalog
-
-**What goes wrong:**
-Catalog becomes a full API documentation system with field types, constraints, example values — bloating the response and slowing down agent discovery.
-
-**Why it happens:**
-Temptation to replace `nautobot_resource_schema` from rejected v1.3 with a "smart catalog."
-
-**How to avoid:**
-1. Catalog returns: endpoint, methods, common filters (names only), description
-2. No field types, no constraints, no examples in catalog
-3. Agent learns what params to pass from skills + trial-and-error
-4. If schema needed later, add as separate optional tool (not in v1.3)
-
-**Warning signs:**
-Catalog response exceeds 2000 tokens or includes Pydantic model schemas.
-
-**Phase to address:** Phase 15 — catalog design scope constraint
-
-## Technical Debt Patterns
-
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Hardcoding core endpoint list | Faster to implement than OpenAPI parsing | Must update JSON when Nautobot adds endpoints | v1.3 — update frequency is very low |
-| No field-level schema in catalog | Simpler catalog, smaller token footprint | Agent can't validate params client-side | v1.3 — skills guide correct param usage |
-| Workflow params as dict (no Pydantic) | Faster to implement, flexible | Less type safety | v1.3 — workflow count is small (~10) |
-
-## Integration Gotchas
-
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| pynautobot endpoint names | Using hyphens (`ip-addresses`) | Convert to underscores (`ip_addresses`) |
-| CMS device filtering | Passing device name to CMS API | Resolve device name → UUID first via core API |
-| Pagination in pynautobot | Not setting `limit` param | Use `limit` param; pynautobot handles auto-pagination |
-| Plugin endpoints | Accessing via raw REST | Use `nautobot.plugins.netnam_cms_core` accessor |
-
-## Performance Traps
-
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Large catalog response | Slow `nautobot_api_catalog` calls | Domain filter param, concise descriptions | >100 endpoints in catalog |
-| Unbounded pagination | `call_nautobot` returns thousands of records | Default `limit=50`, agent specifies higher | >1000 results without limit |
-| Workflow timeout | `run_workflow("firewall_summary")` times out on large devices | Existing timeout handling in domain modules | Devices with 500+ firewall terms |
-
-## "Looks Done But Isn't" Checklist
-
-- [ ] **Catalog completeness:** Verify ALL existing MCP operations are reachable via catalog + call_nautobot + run_workflow
-- [ ] **CMS endpoint coverage:** Every CMS_ENDPOINTS entry appears in catalog AND routes correctly
-- [ ] **Workflow parity:** Every composite tool from old server.py has a workflow registry entry
-- [ ] **Skill updates:** All agent skills reference new 3-tool API, not old tool names
-- [ ] **Error messages:** Invalid endpoint returns helpful "did you mean" hints, not stack traces
-- [ ] **Test coverage:** New bridge/catalog/workflow code has dedicated tests
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Agent endpoint confusion | LOW | Add better hints to error messages, update skill docs |
-| Domain test breakage | MEDIUM | Revert bridge changes, re-test against domain modules |
-| CMS routing failure | LOW | Fix mapping function, add integration test |
-| Workflow param mismatch | LOW | Add param normalization in workflow entry |
-| Catalog bloat | LOW | Remove excess fields, enforce max token budget |
-
-## Pitfall-to-Phase Mapping
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Agent can't find endpoint | Phase 15 (Catalog) | Test: invalid endpoint → helpful error |
-| Domain test breakage | Phase 16 (Bridge) | All 293 domain tests pass unchanged |
-| CMS discovery failure | Phase 15-16 | Integration test: catalog → call → success |
-| Workflow param mismatch | Phase 17 (Workflows) | Each workflow callable with catalog-documented params |
-| Agent context loss | Phase 18 (Skills) | Skills embed endpoint references inline |
-| Catalog bloat | Phase 15 | Catalog response < 1500 tokens |
-
-## Sources
-
-- LLM agent tool selection research — accuracy drops with >25 tools; context window competition
-- Existing codebase analysis — CMS_ENDPOINTS format, domain function signatures
-- API Bridge design doc — tool classification, workflow analysis
-- pynautobot documentation — endpoint naming gotchas, pagination
-
----
-*Pitfalls research for: MCP Server API Bridge for Nautobot*
-*Researched: 2026-03-24*
+**Recommended phase order (v1.5):**
+1. **Phase 1 — Contract compatibility guardrails** (P3, P9)
+2. **Phase 2 — Batch execution engine** (P1, P2, P6)
+3. **Phase 3 — Projection and compact response layer** (P4, P5)
+4. **Phase 4 — Security hardening + resource limits** (P7, P8, P10)
+5. **Phase 5 — Integrated UAT/perf observability gate** (cross-cutting validation)

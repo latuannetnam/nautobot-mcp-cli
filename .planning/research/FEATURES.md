@@ -1,116 +1,98 @@
-# Feature Research
+# Feature Research — v1.5 MCP Server Quality & Agent Performance
 
-**Domain:** MCP Server API Bridge for Nautobot
-**Researched:** 2026-03-24
-**Confidence:** HIGH
+**Domain:** Agent-performance features for Nautobot MCP API Bridge
+**Researched:** 2026-03-26
+**Scope:** New behavior for v1.5 only (building on shipped v1.4)
 
-## Feature Landscape
+## Table Stakes
 
-### Table Stakes (Users Expect These)
+These are baseline patterns in top MCP servers for reducing round-trips, lowering token payloads, and keeping contracts predictable.
 
-Features agents expect from a Nautobot MCP server. Missing these = agents can't do their job.
+| Capability | Why it is table stakes | v1.5 behavior to add | Complexity | Depends on existing architecture |
+|---|---|---|---|---|
+| **Stable 3–5 tool surface** | Tool overload hurts model selection accuracy and increases prompt cost | Keep 3-tool surface as default; enforce “no endpoint-specific MCP tool sprawl” as a design rule | LOW | Existing `server.py` 3-tool API Bridge |
+| **Contract-first discovery** | Agents need deterministic discovery before execution | Expand catalog with explicit `contract_version`, required/optional params, and response shape summary per workflow | MEDIUM | `nautobot_api_catalog`, catalog engine |
+| **Strict input validation + typed errors** | Predictable failures are required for autonomous recovery | Standardize error envelope fields across all tools (`error_code`, `hint`, `retryable`, `field_errors`) | MEDIUM | Existing validation in `bridge.py`, existing error hint system |
+| **Bounded responses by default** | Unbounded lists are a token bomb | Make limits explicit in every list-like response and include truncation metadata consistently | LOW | Existing `limit`, hard cap, truncation behavior in `bridge.py` |
+| **Response shape consistency** | Agents need reusable parsing logic | Ensure every tool returns fixed top-level keys in stable order/type (`status`, `data`, `warnings`, `meta`) | MEDIUM | Existing workflow envelopes + partial-failure pattern |
+| **Server-side composite workflows** | Round-trip reduction is the biggest practical win | Add/expand intent-level workflows for common multi-call tasks (read-heavy diagnostics first) | MEDIUM | Existing workflow registry + `nautobot_run_workflow` |
+| **Identifier normalization** | Agents frequently pass URLs/UUIDs/names inconsistently | Extend normalization rules (already for UUID paths) to consistently accept name/UUID/URL where safe | MEDIUM | Existing endpoint normalization and device resolution paths |
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| API discovery / catalog | Agent needs to know what endpoints exist before calling them | MEDIUM | Hybrid: static core + dynamic CMS plugin discovery |
-| Universal CRUD (list/get/create/update/delete) | Core operations on any Nautobot resource | MEDIUM | Route `/api/*` → pynautobot, `cms:*` → CMS helpers |
-| Endpoint validation | Agent needs clear errors when using wrong endpoint/method | LOW | Check against catalog before dispatching |
-| Auto-pagination | Agent shouldn't manually page through results | LOW | Already handled by pynautobot; expose via `limit` param |
-| Device name → UUID resolution | CMS endpoints require device UUID, agents know names | LOW | Already implemented in existing domain modules |
-| Structured error messages | Agent needs to recover from errors without guessing | LOW | HTTP status → actionable hint mapping |
-| Composite workflows (BGP summary, routing table, etc.) | N+1 query patterns must be server-side for performance | LOW | Already implemented — just wrap in workflow registry |
+## Differentiators
 
-### Differentiators (Competitive Advantage)
+These separate “works” from “best-in-class” for agent efficiency and reliability.
 
-Features that make this MCP server better than raw API access.
+| Differentiator | Why it matters | v1.5 behavior | Complexity | Depends on existing architecture |
+|---|---|---|---|---|
+| **Workflow contract versioning** | Prevents silent breakage when workflow schemas evolve | Add per-workflow `version` + changelog metadata in catalog; optional `min_version` guard on execution | MEDIUM | Workflow registry, catalog metadata |
+| **Token-budget-aware response modes** | Lets agent choose concise vs diagnostic payloads intentionally | Add explicit `response_mode` (`minimal`, `standard`, `debug`) for workflows and bridge responses | MEDIUM | Existing `detail=False`, `limit=N`, response-size metadata |
+| **Machine-actionable partial success semantics** | Enables robust autonomous continuation despite partial failures | Unify status taxonomy across tools: `ok`, `partial`, `error`; include per-subtask warning codes | LOW-MEDIUM | Existing `WarningCollector` and 3-tier status pattern |
+| **Deterministic result ordering** | Reduces non-deterministic diffs and retry confusion | Guarantee stable sorting keys for list responses where backend ordering is ambiguous | LOW | Bridge response wrapping (`call_nautobot`) |
+| **Contract test snapshots for MCP outputs** | Keeps tool contracts predictable over time | Add snapshot tests for envelope/schema per workflow/tool (not only functional tests) | MEDIUM | Existing UAT + pytest foundation |
+| **Single-call “planner” workflows for common investigations** | Major round-trip savings in multi-step diagnostics | Add curated high-value bundles (e.g., “device health + config drift + CMS deltas”) with capped detail | MEDIUM-HIGH | Existing workflow orchestration and partial-failure handling |
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Domain-grouped catalog | Agent can discover by domain (dcim, ipam, cms, workflows) | LOW | Better than flat endpoint list |
-| Workflow registry with descriptions | Agent chooses workflows by intent, not function name | LOW | Each workflow has params + description |
-| Hybrid catalog (static + dynamic CMS) | Zero-maintenance when CMS plugin adds endpoints | MEDIUM | Reads `CMS_ENDPOINTS` at runtime |
-| Agent skills as distributed files | Cross-MCP orchestration (nautobot + jmcp) stays agent-side | LOW | Existing skills adapted to 3-tool API |
-| 96% token reduction | 50K → 1.8K tokens per request for tool descriptions | HIGH (impact) | The core value proposition |
+## Anti-features
 
-### Anti-Features (Commonly Requested, Often Problematic)
+These are commonly requested but usually reduce agent quality, inflate tokens, or increase unpredictability.
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Dynamic tool generation from catalog | "Auto-create one tool per endpoint" | Recreates the 165-tool problem, harder to debug | Universal `call_nautobot` dispatcher |
-| Real-time schema introspection from Nautobot | "Fetch field names/types live" | Adds latency, stale risk, complexity | Static catalog with curated field lists |
-| Backwards-compatible aliases | "Keep old tool names as aliases" | Doubles tool count, defeats purpose | Clean break + updated skills |
-| Caching API responses | "Cache device lists for speed" | Stale data risk in network context | Fresh queries; agent can re-query cheaply |
-| GraphQL support | "More efficient than REST for nested data" | pynautobot doesn't support it, different paradigm | REST + composite workflows for N+1 patterns |
+| Anti-feature | Why it hurts agent performance | Better alternative | Complexity impact if avoided |
+|---|---|---|---|
+| **Re-expanding into many endpoint-specific MCP tools** | Tool-selection confusion, context bloat, maintenance overhead | Keep universal bridge + catalog + workflows | Saves HIGH complexity long-term |
+| **Unbounded “return everything” defaults** | Token spikes, latency, model truncation | Default capped responses + explicit opt-in detail modes | Saves MEDIUM runtime/debug cost |
+| **Schema-less/shape-shifting responses** | Fragile agent parsers and retry loops | Fixed envelopes + versioned contracts | Saves HIGH integration cost |
+| **Overly “magic” parameter inference** | Non-deterministic behavior and hidden side effects | Explicit normalization rules + transparent metadata | Saves MEDIUM debugging cost |
+| **Client-side orchestration requirement for common tasks** | Too many round-trips and higher failure surface | Move frequent N+1 patterns into server workflows | Saves HIGH token + latency cost |
+| **Opaque error strings only** | Hard for agents to self-heal | Structured error codes + hints + retryability flags | Saves MEDIUM recovery cost |
 
-## Feature Dependencies
+## Prioritization
 
-```
-nautobot_api_catalog (discovery)
-    └──required by──> call_nautobot (needs valid endpoints)
-    └──required by──> run_workflow (catalog lists available workflows)
+### P1 (Must-have for v1.5)
 
-call_nautobot (CRUD)
-    └──used by──> run_workflow (workflows call domain functions internally)
+1. **Catalog contract metadata** (`contract_version`, params, response shape summary)
+   - **Why:** Foundation for predictable contracts.
+   - **Complexity:** MEDIUM.
+   - **Dependencies:** `nautobot_api_catalog`, catalog engine.
 
-Domain modules (devices.py, cms/routing.py, etc.)
-    └──unchanged, used by──> run_workflow (wrapper functions)
-    └──unchanged, used by──> call_nautobot (core endpoint routing)
+2. **Unified response/error envelopes across all 3 tools**
+   - **Why:** Predictable parsing + autonomous retries.
+   - **Complexity:** MEDIUM.
+   - **Dependencies:** `server.py` tool wrappers, `bridge.py` error translation, existing workflow envelopes.
 
-Agent skills (distributed files)
-    └──references──> all 3 MCP tools
-    └──references──> jmcp tools (cross-MCP orchestration)
-```
+3. **Token-budget response modes** (`minimal`/`standard`/`debug`)
+   - **Why:** Direct control of payload size by agent intent.
+   - **Complexity:** MEDIUM.
+   - **Dependencies:** Existing `detail`, `limit`, response-size metadata.
 
-### Dependency Notes
+4. **Deterministic ordering + consistent truncation metadata**
+   - **Why:** Repeatable outputs and simpler diffing.
+   - **Complexity:** LOW.
+   - **Dependencies:** `call_nautobot` result shaping.
 
-- **`nautobot_api_catalog` required first:** Agent must discover endpoints before calling them
-- **`call_nautobot` depends on catalog:** Validates endpoints against catalog registry
-- **`run_workflow` wraps domain functions:** No changes to domain modules needed
-- **Skills depend on all 3 tools:** Skills must be updated last, after API is stable
+### P2 (High-value differentiators after P1)
 
-## MVP Definition
+1. **Workflow versioning and compatibility guardrails**
+   - **Complexity:** MEDIUM.
+   - **Dependencies:** Workflow registry + catalog.
 
-### Launch With (v1.3)
+2. **Contract snapshot tests (schema-level)**
+   - **Complexity:** MEDIUM.
+   - **Dependencies:** Existing pytest/UAT setup.
 
-- [x] `nautobot_api_catalog` — endpoint + workflow discovery with domain filter
-- [x] `call_nautobot` — universal CRUD for core + CMS + plugin endpoints
-- [x] `run_workflow` — server-side composite workflows (10 workflows)
-- [x] Updated agent skills referencing 3-tool API
-- [x] Tests validating tool dispatch
-- [x] UAT against Nautobot dev server
+3. **1–2 new planner workflows for common investigations**
+   - **Complexity:** MEDIUM-HIGH.
+   - **Dependencies:** Existing composite orchestration + partial-failure model.
 
-### Add After Validation (v1.x)
+### P3 (Defer unless capacity remains)
 
-- [ ] OpenAPI-based dynamic catalog enrichment — fetch field types from Nautobot spec
-- [ ] Tool usage analytics — track which endpoints agents call most
-- [ ] Streaming responses for large result sets
+1. **Broader identifier normalization expansion across all endpoints**
+   - **Complexity:** MEDIUM-HIGH due to endpoint-specific ambiguity.
+   - **Dependencies:** Bridge routing + endpoint registries.
 
-### Future Consideration (v2+)
-
-- [ ] Multi-server MCP gateway (nautobot + jmcp + future servers as one)
-- [ ] Agent-adaptive catalog (hide endpoints agent hasn't needed)
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| API catalog with domain filter | HIGH | LOW | P1 |
-| Universal CRUD dispatcher | HIGH | MEDIUM | P1 |
-| Workflow registry | HIGH | LOW | P1 |
-| Endpoint validation + error hints | HIGH | LOW | P1 |
-| Auto-pagination | HIGH | LOW (exists) | P1 |
-| Device name → UUID resolution | MEDIUM | LOW (exists) | P1 |
-| Updated agent skills | MEDIUM | LOW | P1 |
-| Domain-grouped catalog | MEDIUM | LOW | P2 |
-| Dynamic CMS discovery | MEDIUM | MEDIUM | P1 |
-
-## Sources
-
-- API Bridge Design v2 (internal) — tool classification, workflow analysis
-- LLM tool selection research — accuracy drops >25 tools, context window impact
-- FastMCP 3.0 best practices — tool design for outcomes, not atomic operations
-- pynautobot documentation — dynamic endpoint generation, pagination
+2. **Advanced adaptive payload shaping by token budget integer target**
+   - **Complexity:** HIGH.
+   - **Dependencies:** Response-size metadata + per-workflow field-pruning rules.
 
 ---
-*Feature research for: MCP Server API Bridge for Nautobot*
-*Researched: 2026-03-24*
+
+**Bottom line:**
+For top MCP servers, **table stakes** are bounded payloads, strict contracts, and server-side composites. The strongest **v1.5 differentiators** are contract versioning, explicit response modes, and deterministic envelopes that let agents recover and continue automatically. The main **anti-feature to avoid** is any return to tool sprawl or shape-shifting outputs.

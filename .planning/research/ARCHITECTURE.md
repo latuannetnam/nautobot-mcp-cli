@@ -1,245 +1,240 @@
-# Architecture Research
+# ARCHITECTURE for v1.5 MCP Server Quality & Agent Performance
 
-**Domain:** MCP Server API Bridge for Nautobot
-**Researched:** 2026-03-24
-**Confidence:** HIGH
+## Proposed architecture
 
-## Standard Architecture
+v1.5 should keep the **3-tool surface unchanged** (`nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`) and add new capabilities as **optional behaviors behind existing tool calls**.
 
-### System Overview
+### Recommended patterns
 
+1. **Capability-advertised extension pattern (contract-safe)**
+   - Add a `capabilities` block in `nautobot_api_catalog` response.
+   - Agents discover support for `response_modes`, `field_projection`, `batch`, `observability`, `security_policies` before using them.
+   - No breaking change: existing clients ignore unknown catalog fields.
+
+2. **Execution envelope pattern (uniform observability + errors)**
+   - Standardize metadata for every tool response:
+     - `request_id`, `timestamp`, `latency_ms`
+     - `status` (`ok|partial|error`)
+     - `warnings` (already workflow-native)
+     - `response_size_bytes` (already present in workflows)
+   - Preserve current top-level keys; only add optional metadata fields.
+
+3. **Policy middleware pattern (security centralized, logic unchanged)**
+   - Introduce a pre-dispatch policy guard in bridge/workflow dispatch path:
+     - method allowlist by endpoint
+     - endpoint/domain RBAC profile checks
+     - payload redaction for sensitive fields in logs
+   - Keep domain modules unchanged; security enforced at the bridge seam.
+
+4. **Projection + mode adapter pattern (token/size control)**
+   - Add optional response shaping layer after core/CMS execution:
+     - `mode`: `full|summary|minimal`
+     - `fields`: include-list projection
+     - `exclude_fields`: deny-list projection
+   - Applies consistently to `call_nautobot` and `run_workflow` output.
+
+5. **Batch orchestration pattern (single call, isolated failures)**
+   - Add `batch` operation as an optional mode inside `nautobot_run_workflow` first (safer), then optionally in `nautobot_call_nautobot`.
+   - Use per-item result envelopes with partial-failure semantics:
+     - each item has independent `status`, `error`, `data`, `latency_ms`
+   - Reuse existing v1.4 partial/warning concepts to avoid all-or-nothing failures.
+
+### Target integration flow (v1.5)
+
+```text
+Agent
+  ├─(1) nautobot_api_catalog() → discovers capabilities + policy hints
+  ├─(2) nautobot_call_nautobot(..., options={mode, fields, trace})
+  │      └─ server.py
+  │          └─ bridge.py
+  │              ├─ policy guard (authz/method/domain)
+  │              ├─ endpoint routing (core/CMS existing)
+  │              ├─ response adapter (mode/projection)
+  │              └─ observability emitter (metrics + structured logs)
+  └─(3) nautobot_run_workflow(..., params={..., execution:{batch,...}})
+         └─ workflows.py dispatcher
+             ├─ policy guard (workflow-level)
+             ├─ registry dispatch (existing)
+             ├─ optional batch fan-out
+             ├─ envelope builder (existing + trace metadata)
+             └─ observability emitter
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  MCP Server Layer (3 tools)                                  │
-│                                                              │
-│  ┌────────────────────┐ ┌───────────────┐ ┌──────────────┐  │
-│  │ nautobot_api_catalog│ │ call_nautobot │ │ run_workflow  │  │
-│  │ Discovery           │ │ Universal CRUD│ │ Composites   │  │
-│  └────────┬───────────┘ └───────┬───────┘ └──────┬───────┘  │
-│           │                     │                 │           │
-├───────────┴─────────────────────┴─────────────────┴──────────┤
-│  Bridge Layer (NEW)                                           │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ Catalog      │  │ REST Bridge  │  │ Workflow Registry │   │
-│  │ Engine       │  │ (bridge.py)  │  │ (workflows.py)   │   │
-│  │              │  │              │  │                   │   │
-│  │ Static JSON  │  │ Endpoint     │  │ bgp_summary      │   │
-│  │ + Dynamic    │  │ routing +    │  │ routing_table     │   │
-│  │ CMS discovery│  │ validation + │  │ firewall_summary  │   │
-│  │              │  │ pagination   │  │ onboard_config    │   │
-│  │              │  │              │  │ compare_device    │   │
-│  │              │  │              │  │ ...               │   │
-│  └──────┬───────┘  └──────┬───────┘  └────────┬──────────┘  │
-│         │                 │                    │              │
-├─────────┴─────────────────┴────────────────────┴─────────────┤
-│  Domain Layer (UNCHANGED)                                     │
-│                                                              │
-│  devices │ interfaces │ ipam │ org │ circuits │ golden_config │
-│  cms/routing │ cms/interfaces │ cms/firewalls │ cms/policies  │
-│  cms/arp │ drift │ onboarding │ verification                 │
-├──────────────────────────────────────────────────────────────┤
-│  Client Layer (UNCHANGED)                                     │
-│                                                              │
-│  client.py (pynautobot) │ cms/client.py (CMS_ENDPOINTS)      │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Component Responsibilities
-
-| Component | Responsibility | Implementation |
-|-----------|----------------|----------------|
-| `server.py` | Register 3 MCP tools, handle transport | FastMCP decorators, ~200 LOC |
-| `catalog/` | Build and serve endpoint catalog | Static JSON (core) + dynamic (CMS_ENDPOINTS) |
-| `bridge.py` | Route + validate + execute API calls | Endpoint routing: `/api/*` → pynautobot, `cms:*` → CMS helpers |
-| `workflows.py` | Registry of composite workflow functions | Dict mapping name → function + params + description |
-| Domain modules | Business logic (UNCHANGED) | Existing `devices.py`, `cms/routing.py`, etc. |
-| `client.py` | Nautobot API client (UNCHANGED) | pynautobot singleton pattern |
-| `cms/client.py` | CMS plugin client (UNCHANGED) | CMS_ENDPOINTS registry + generic CRUD |
-
-## Recommended Project Structure
-
-```
-nautobot_mcp/
-├── server.py              # 3 MCP tools (~200 LOC) [REWRITTEN]
-├── catalog/               # API catalog engine [NEW]
-│   ├── __init__.py
-│   ├── engine.py          # build_catalog(), filter by domain
-│   └── core_endpoints.json # Static core endpoint definitions
-├── bridge.py              # REST execution bridge [NEW]
-├── workflows.py           # Workflow registry + dispatch [NEW]
-├── client.py              # pynautobot wrapper [UNCHANGED]
-├── devices.py             # Device domain functions [UNCHANGED]
-├── interfaces.py          # Interface domain functions [UNCHANGED]
-├── ipam.py                # IPAM domain functions [UNCHANGED]
-├── organizations.py       # Organization domain functions [UNCHANGED]
-├── circuits.py            # Circuit domain functions [UNCHANGED]
-├── golden_config.py       # Golden Config functions [UNCHANGED]
-├── cms/                   # CMS domain [UNCHANGED]
-│   ├── client.py          # CMS_ENDPOINTS + generic CRUD
-│   ├── routing.py         # Routing composites (bgp_summary, etc.)
-│   ├── interfaces.py      # Interface composites
-│   ├── firewalls.py       # Firewall composites
-│   ├── policies.py        # Policy functions
-│   └── arp.py             # ARP functions
-├── drift/                 # Drift comparison [UNCHANGED]
-├── models/                # Pydantic models [UNCHANGED]
-└── onboarding/            # Config onboarding [UNCHANGED]
-```
-
-### Structure Rationale
-
-- **`catalog/`:** Isolated from runtime code; can be updated independently
-- **`bridge.py`:** Single file for all endpoint routing logic; keeps dispatch centralized
-- **`workflows.py`:** Flat registry — no class hierarchy, just a dict of name → function
-- **Domain modules unchanged:** Zero-risk refactoring; all tests pass without modification
-
-## Architectural Patterns
-
-### Pattern 1: Catalog-Discovery Pattern
-
-**What:** Agent calls discovery tool to learn available operations before executing them.
-**When to use:** When the agent has no prior knowledge of available endpoints.
-**Trade-offs:** Extra round-trip vs. agent confidence; catalog is cheap (~400 tokens).
-
-**Example:**
-```python
-# Agent workflow:
-# 1. Discover: nautobot_api_catalog(domain="dcim")
-# 2. Execute: call_nautobot(endpoint="/api/dcim/devices/", method="GET", params={"name": "router1"})
-```
-
-### Pattern 2: Endpoint Routing Bridge
-
-**What:** Single dispatcher that routes to different backends based on endpoint prefix.
-**When to use:** When multiple APIs (core, CMS, plugins) share one MCP interface.
-**Trade-offs:** Slightly more complex routing logic vs. massive tool count reduction.
-
-**Example:**
-```python
-def route_endpoint(endpoint: str):
-    if endpoint.startswith("/api/"):
-        return use_pynautobot(endpoint)
-    elif endpoint.startswith("cms:"):
-        return use_cms_client(endpoint)
-    elif endpoint.startswith("plugins:"):
-        return use_plugin_accessor(endpoint)
-```
-
-### Pattern 3: Workflow Registry Pattern
-
-**What:** Named workflows registered in a dict, dispatched by string name.
-**When to use:** For N+1 query patterns and complex business logic that shouldn't be agent-side.
-**Trade-offs:** Fixed set of workflows vs. flexible agent; new workflow = one dict entry + one function.
-
-**Example:**
-```python
-WORKFLOW_REGISTRY = {
-    "bgp_summary": {
-        "function": cms_routing.get_device_bgp_summary,
-        "params": {"device": "str (required)", "detail": "bool"},
-        "description": "BGP groups, neighbors, address families for a device"
-    }
-}
-```
-
-## Data Flow
-
-### Request Flow
-
-```
-Agent Request (e.g. "list devices")
-    ↓
-nautobot_api_catalog(domain="dcim")  ← Agent discovers available endpoints
-    ↓
-call_nautobot(endpoint="/api/dcim/devices/", method="GET", params={...})
-    ↓
-bridge.py: validate endpoint + route
-    ↓
-pynautobot: nautobot.dcim.devices.filter(**params)  ← Existing client
-    ↓
-Nautobot REST API: /api/dcim/devices/?name=...
-    ↓
-Response → serialize → return to agent
-```
-
-### Workflow Flow
-
-```
-Agent Request (e.g. "show BGP summary for router1")
-    ↓
-run_workflow(workflow="bgp_summary", params={"device": "router1"})
-    ↓
-workflows.py: lookup "bgp_summary" in WORKFLOW_REGISTRY
-    ↓
-cms/routing.py: get_device_bgp_summary(device="router1")
-    ↓
-  ├── CMS API: get BGP groups for device
-  ├── CMS API: get neighbors per group (N calls)
-  └── CMS API: get address families per neighbor (M calls)
-    ↓
-Aggregated response → return to agent (1 tool call instead of N+1)
-```
-
-## Scaling Considerations
-
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 1-10 agents | Current 3-tool design handles this trivially |
-| 10-50 agents | Add connection pooling to pynautobot if needed |
-| 50+ agents | Consider Streamable HTTP transport (FastMCP 3.0 supports this) |
-
-### Scaling Priorities
-
-1. **First bottleneck:** Nautobot API rate limiting — solved by pagination limits and caching at agent level
-2. **Second bottleneck:** MCP server throughput — solved by async FastMCP + Streamable HTTP
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Recreating Tool Proliferation
-
-**What people do:** Generate one MCP tool per endpoint from catalog
-**Why it's wrong:** Recreates the 165-tool problem with extra steps
-**Do this instead:** Single `call_nautobot` tool with endpoint as parameter
-
-### Anti-Pattern 2: Fat Catalog
-
-**What people do:** Include full schema (all fields, types, constraints) in catalog response
-**Why it's wrong:** Bloats catalog response, agent doesn't need schema to make a request
-**Do this instead:** Include only endpoint, methods, common filters, and description
-
-### Anti-Pattern 3: Workflow Bypass
-
-**What people do:** Let agents call N individual API calls instead of using `run_workflow`
-**Why it's wrong:** N+1 round-trips are slow and error-prone
-**Do this instead:** Skills guide agents to use `run_workflow` for composite operations
-
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Nautobot REST API | pynautobot (`client.py`) | Core, IPAM, circuits, tenancy, golden config |
-| CMS Plugin API | `cms/client.py` | 49 DRF endpoints under `/api/plugins/netnam-cms-core/` |
-| jmcp (Juniper MCP) | Agent-side skills only | NOT integrated server-side; skills orchestrate cross-MCP |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| server.py ↔ catalog/ | Function call | `build_catalog(domain)` returns dict |
-| server.py ↔ bridge.py | Function call | `execute_api_call(endpoint, method, ...)` returns dict |
-| server.py ↔ workflows.py | Function call | `execute_workflow(name, params)` returns dict |
-| bridge.py ↔ domain modules | Function call via pynautobot | Existing patterns unchanged |
-
-## Sources
-
-- API Bridge Design v2 (internal) — architecture diagram, tool classification
-- FastMCP 3.0 documentation — component versioning, Streamable HTTP
-- pynautobot documentation — dynamic endpoint generation, App hierarchy
-- MCP specification — tool primitives, JSON-RPC 2.0 protocol
 
 ---
-*Architecture research for: MCP Server API Bridge for Nautobot*
-*Researched: 2026-03-24*
+
+## component changes
+
+### New components (v1.5)
+
+1. **`nautobot_mcp/response_adapter.py` (NEW)**
+   - Responsibilities:
+     - apply `mode` (`full|summary|minimal`)
+     - apply `fields` / `exclude_fields` projection
+     - compute final `response_size_bytes` consistently
+   - Integration points:
+     - called by `bridge.call_nautobot()` before return
+     - called by `workflows.run_workflow()` before envelope finalization
+
+2. **`nautobot_mcp/observability.py` (NEW)**
+   - Responsibilities:
+     - generate/propagate `request_id`
+     - timing (`latency_ms`)
+     - structured event emission (tool, endpoint/workflow, status, truncation, policy decisions)
+     - metrics hooks (counter/histogram interface)
+   - Integration points:
+     - wrapper context in `server.py` tool handlers
+     - event calls in `bridge.py` and `workflows.py`
+
+3. **`nautobot_mcp/security/policy.py` (NEW)**
+   - Responsibilities:
+     - endpoint/method allowlists
+     - workflow allowlists
+     - optional role/profile-based restrictions
+     - redaction rules for sensitive params/body fields
+   - Integration points:
+     - pre-dispatch checks in `bridge.call_nautobot()`
+     - pre-dispatch checks in `workflows.run_workflow()`
+
+4. **`nautobot_mcp/batch.py` (NEW)**
+   - Responsibilities:
+     - validate batch schema
+     - execute items serially (v1) with deterministic ordering
+     - collect per-item envelopes + aggregate status
+   - Integration points:
+     - invoked from `workflows.run_workflow()` for first rollout
+
+### Modified components
+
+1. **`nautobot_mcp/server.py` (MODIFIED)**
+   - Add optional arguments (non-breaking defaults):
+     - `nautobot_call_nautobot(..., options: dict | None = None)`
+     - `nautobot_run_workflow(..., execution: dict | None = None)`
+   - Inject request context (`request_id`, timing scope).
+   - Keep existing positional/required params untouched.
+
+2. **`nautobot_mcp/bridge.py` (MODIFIED)**
+   - Add policy guard before endpoint execution.
+   - Preserve existing routing/validation code paths.
+   - Apply response adapter after raw result.
+   - Emit observability events at validate/dispatch/return stages.
+
+3. **`nautobot_mcp/workflows.py` (MODIFIED)**
+   - Extend `run_workflow()` to accept `execution` control dict.
+   - Add batch branch for workflow-level fan-out.
+   - Keep `_build_envelope()` as canonical shape; append metadata fields.
+
+4. **`nautobot_mcp/catalog/engine.py` (MODIFIED)**
+   - Add `capabilities` section:
+     - supported response modes
+     - projection syntax
+     - batch limits
+     - observability fields availability
+     - security policy summaries (high-level)
+   - Keep current domain-filter semantics intact.
+
+### Explicit integration points
+
+- **Server ↔ Observability**: request lifecycle context per tool invocation.
+- **Bridge ↔ Security Policy**: preflight authorize/validate operation.
+- **Bridge ↔ Response Adapter**: normalize payload shaping post-dispatch.
+- **Workflows ↔ Batch Engine**: optional sub-execution orchestration.
+- **Catalog ↔ Agent**: capability negotiation channel.
+- **Observability ↔ Security**: policy decisions included in audit events.
+
+---
+
+## API contract strategy
+
+### Stability rules (must hold)
+
+1. **Do not rename/remove existing tools or required params**.
+2. **Only additive changes** in request/response schema.
+3. **Default behavior matches v1.4** when new options are absent.
+4. **Error contracts remain compatible** (`NautobotValidationError`, existing hint behavior).
+
+### Additive contract design
+
+1. `nautobot_call_nautobot`
+   - Existing:
+     - `method`, `endpoint`, `params`, `body`
+   - Additive:
+     - `options` (optional dict):
+       - `mode`: `full|summary|minimal`
+       - `fields`: `list[str]`
+       - `exclude_fields`: `list[str]`
+       - `trace`: `bool`
+
+2. `nautobot_run_workflow`
+   - Existing:
+     - `workflow_id`, `params`
+   - Additive:
+     - `execution` (optional dict):
+       - `mode`, `fields`, `exclude_fields`
+       - `batch` object (optional)
+       - `trace`
+
+3. `nautobot_api_catalog`
+   - Existing domain/workflow output unchanged.
+   - Additive:
+     - `capabilities`
+     - `limits` (max batch items, projection depth, etc.)
+     - `security` summary (non-sensitive)
+
+### Versioning and negotiation
+
+- Keep MCP tool names as v1.x stable contracts.
+- Use **catalog capability discovery** instead of forcing version bumps.
+- If a feature is unsupported, return clear validation hint:
+  - e.g., `mode='minimal' not supported; check nautobot_api_catalog.capabilities.response_modes`.
+
+### Backward compatibility tests
+
+- Golden tests for v1.4 request shapes (must still pass).
+- Snapshot tests for responses with no `options`/`execution` (must match prior structure except additive metadata allowed).
+- Feature tests gated by `capabilities` advertisement.
+
+---
+
+## rollout sequence
+
+Dependency-aware build order that minimizes regression risk:
+
+1. **Foundation: observability primitives (NEW)**
+   - Implement request context + structured events.
+   - Wire minimally in `server.py` only.
+   - Why first: needed to measure all subsequent rollout impact.
+
+2. **Security policy guard (NEW + MODIFIED bridge/workflows)**
+   - Add policy evaluation hooks with permissive defaults.
+   - Start in "audit" mode (log only), then enforce mode.
+   - Dependency: uses observability for decision trace.
+
+3. **Response adapter for mode/projection (NEW + MODIFIED bridge/workflows)**
+   - Implement shaping with strict schema validation.
+   - Apply to `run_workflow` first (already has envelope discipline), then to `call_nautobot`.
+   - Dependency: policy guard in place to prevent unsafe field exposure.
+
+4. **Catalog capability publication (MODIFIED catalog/engine)**
+   - Advertise supported modes/projection and limits.
+   - Dependency: only publish capabilities that are actually implemented.
+
+5. **Batch engine v1 in workflows (NEW + MODIFIED workflows/server)**
+   - Introduce deterministic serial batch for workflow calls.
+   - Include per-item envelope and aggregate status.
+   - Dependency: observability + response adapter required for usable diagnostics/output control.
+
+6. **Optional bridge-level batch (MODIFIED bridge/server, later phase)**
+   - If needed, add batch to raw REST bridge with stricter limits.
+   - Dependency: workflow batch proven stable under production load.
+
+7. **Hardening + compatibility gate**
+   - Run full UAT/live tests.
+   - Add regression suite for v1.4 compatibility.
+   - Release when: integration points verified, additive contract compliance proven, and partial-failure semantics validated.
+
+### Delivery checkpoints
+
+- **Checkpoint A:** observability + audit-only security live.
+- **Checkpoint B:** response modes + field projection live and catalog-advertised.
+- **Checkpoint C:** workflow batch live with partial-failure envelopes.
+- **Checkpoint D:** enforcement security mode + optional bridge batch decision.
