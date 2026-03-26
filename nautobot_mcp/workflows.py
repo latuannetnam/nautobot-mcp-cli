@@ -43,10 +43,15 @@ def _validate_registry() -> None:
     For each entry, compares the union of required + param_map keys (agent-facing names)
     against the function's actual parameters, excluding 'client' (always injected separately).
 
+    A function param is only considered an error if it has no default — optional params
+    (those with defaults) are intentionally omitted from the registry and do not cause
+    failures. Missing required registry params always raise NautobotValidationError.
+
     Raises NautobotValidationError on any mismatch — fails fast, preventing a server
     from starting with a broken registry entry.
     """
     import inspect
+    import sys
 
     for wf_id, entry in WORKFLOW_REGISTRY.items():
         func = entry.get("function")
@@ -54,28 +59,32 @@ def _validate_registry() -> None:
             continue  # skip entries without functions (shouldn't happen in practice)
 
         sig = inspect.signature(func)
-        func_params = set(sig.parameters.keys())
+        func_param_names = set(sig.parameters.keys())
+        # Compute mapped function param names (these are what get passed to the function)
+        mapped_func_params = set(entry.get("param_map", {}).values())
+        # Union of required agent params + mapped function params = all params the registry says exist
+        registry_func_params = set(entry.get("required", [])) | mapped_func_params
 
-        required = set(entry.get("required", []))
-        param_map_keys = set(entry.get("param_map", {}).keys())
-        registry_params = required | param_map_keys
+        # Check: every registry param (required agent names or mapped func names) must be in signature
+        missing_in_func = registry_func_params - func_param_names
 
-        # client is injected by run_workflow, not an agent-facing param — exclude it
-        func_params = func_params - {"client"}
-
-        missing_in_func = registry_params - func_params
-        extra_in_func = func_params - registry_params
+        # Check: every function param (minus client) must be in registry OR have a default
+        extra_no_defaults = set()
+        for name, param in sig.parameters.items():
+            if name == "client":
+                continue
+            if name not in registry_func_params and param.default is inspect.Parameter.empty:
+                extra_no_defaults.add(name)
 
         if missing_in_func:
             raise NautobotValidationError(
-                f"WORKFLOW_REGISTRY['{wf_id}'] lists {sorted(missing_in_func)} as required/mapped "
-                f"params but the function signature does not accept them. "
-                f"Fix workflows.py entry for '{wf_id}'."
+                f"WORKFLOW_REGISTRY['{wf_id}'] maps to {sorted(missing_in_func)} which are not in "
+                f"the function signature. Fix the param_map for '{wf_id}'."
             )
-        if extra_in_func:
+        if extra_no_defaults:
             raise NautobotValidationError(
-                f"WORKFLOW_REGISTRY['{wf_id}'] function accepts {sorted(extra_in_func)} "
-                f"but these are not listed in required or param_map. "
+                f"WORKFLOW_REGISTRY['{wf_id}'] function accepts {sorted(extra_no_defaults)} "
+                f"(no default) but these are not listed in required or param_map. "
                 f"Fix workflows.py entry for '{wf_id}'."
             )
 
@@ -104,13 +113,13 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
     "onboard_config": {
         "function": onboard_config,
         "param_map": {
-            "config_data": "parsed_config",
+            "parsed_config": "parsed_config",
             "device_name": "device_name",
             "dry_run": "dry_run",
         },
-        "required": ["config_data", "device_name"],
+        "required": ["parsed_config", "device_name"],
         "transforms": {
-            "config_data": lambda d: ParsedConfig.model_validate(d),
+            "parsed_config": lambda d: ParsedConfig.model_validate(d),
         },
     },
     "compare_device": {
@@ -119,7 +128,7 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
             "device_name": "device_name",
             "live_data": "interfaces_data",
         },
-        "required": ["device_name", "live_data"],
+        "required": ["device_name", "interfaces_data"],
     },
     "verify_data_model": {
         "function": verify_data_model,
@@ -154,6 +163,10 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
         "required": ["device_name", "live_routes"],
     },
 }
+
+# Validate registry entries against function signatures at import time.
+# Fails fast with NautobotValidationError if any entry is misconfigured.
+_validate_registry()
 
 
 # ---------------------------------------------------------------------------
