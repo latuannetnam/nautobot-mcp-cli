@@ -10,7 +10,7 @@
 - ✅ **v1.2 Juniper CMS Model MCP Tools** — Phases 8-14 (shipped 2026-03-21) — [Archive](milestones/v1.2-ROADMAP.md)
 - ❌ **v1.3 Generic Resource Engine** — REJECTED (superseded by API Bridge design, 2026-03-24)
 - ✅ **v1.3 API Bridge MCP Server** — Phases 15-18 (shipped 2026-03-25) — [Archive](milestones/v1.3-ROADMAP.md)
-- 🔵 **v1.4 Operational Robustness** — Phases 19-22 (in progress)
+- ✅ **v1.4 Operational Robustness** — Phases 19-22 (shipped 2026-03-26)
 
 ## Phases
 
@@ -70,7 +70,7 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 - [x] **Phase 19: Partial Failure Resilience** — Composite workflows gracefully degrade — completed 2026-03-25
 - [x] **Phase 20: Catalog Accuracy & Endpoint Dereference** — Fix filter contracts + URL follow (completed 2026-03-25)
 - [x] **Phase 21: Workflow Contracts & Error Diagnostics** — Fix param contracts + enrich errors (completed 2026-03-26)
-- [ ] **Phase 22: Response Ergonomics & UAT** — Summary modes, size metadata, live validation
+- [x] **Phase 22: Response Ergonomics & UAT** — Summary modes, size metadata, live validation — completed 2026-03-26
 
 #### Phase 19: Partial Failure Resilience
 
@@ -124,13 +124,17 @@ See: [API Bridge Design](../docs/plans/2026-03-24-api-bridge-mcp-design.md)
 
 **Requirements:** RSP-01, RSP-02, RSP-03
 
-**Files:** `nautobot_mcp/cms/interfaces.py`, `nautobot_mcp/workflows.py`, `tests/`
+**Files:** `nautobot_mcp/cms/interfaces.py`, `nautobot_mcp/cms/routing.py`, `nautobot_mcp/cms/firewalls.py`, `nautobot_mcp/workflows.py`, `nautobot_mcp/catalog/workflow_stubs.py`, `scripts/uat_smoke_test.py`, `tests/`
 
 **Success criteria:**
 1. `interface_detail` supports `detail=False` summary mode (counts only, no nested objects)
 2. Response envelopes include `response_size_bytes` metadata
 3. Composite workflows accept optional `limit` parameter
 4. All v1.4 UAT tests pass against Nautobot dev server
+
+**Plans:**
+1/1 plan complete
+- [x] Plan 01: RSP-01/02/03 + UAT — completed 2026-03-26
 
 ---
 *Last updated: 2026-03-25 — v1.4 Operational Robustness milestone roadmap created*

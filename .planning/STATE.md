@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Operational Robustness
-status: Ready to plan
-last_updated: "2026-03-26T04:10:15.259Z"
+status: Phase 22 Complete
+last_updated: "2026-03-26T10:30:00.000Z"
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  completed_phases: 4
+  total_plans: 8
+  completed_plans: 8
 ---
 
 # Project State: nautobot-mcp-cli
@@ -18,12 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** AI agents can read and write Nautobot data through standardized MCP tools
-**Current focus:** Phase 21 — workflow-contracts-error-diagnostics
+**Current focus:** Phase 22 — response-ergonomics-uat
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
+Phase: 22 (response-ergonomics-uat) — COMPLETE
+Plan: 1 of 1
+
+Milestone v1.4 Operational Robustness: ALL 4 PHASES COMPLETE
 
 ## Context
 
@@ -73,6 +75,9 @@ Plan: Not started
 - cms/client.py already has CMS_ENDPOINTS registry + generic CRUD helpers
 - User-reported pain points verified against codebase (6/6 confirmed or partially confirmed)
 - ERR-03: composite workflow exceptions now include {operation, error} warning entries in error envelope
+- RSP-01: `interface_detail(detail=False)` summary mode strips nested arrays, keeps counts
+- RSP-02: `response_size_bytes` added to all workflow envelopes (measured as `len(json.dumps(data))`)
+- RSP-03: `limit=N` added to all 4 composite functions with per-array independent caps
 
 ## Blockers
 
