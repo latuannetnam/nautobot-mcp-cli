@@ -65,7 +65,10 @@ WORKFLOW_STUBS = {
         "aggregates": ["/api/dcim/devices/", "/api/dcim/interfaces/", "/api/ipam/ip-addresses/"],
     },
     "verify_data_model": {
-        "params": {"device_name": "str (required)"},
+        "params": {
+            "device_name": "str (required)",
+            "parsed_config": "dict (required, ParsedConfig schema)",
+        },
         "description": "Verify device data model consistency in Nautobot",
         "aggregates": ["/api/dcim/devices/", "/api/dcim/interfaces/", "/api/ipam/ip-addresses/"],
     },
