@@ -84,7 +84,7 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
             "device_name": "device_name",
             "parsed_config": "parsed_config",
         },
-        "required": ["device_name"],
+        "required": ["device_name", "parsed_config"],
     },
     "verify_compliance": {
         "function": verify_config_compliance,
