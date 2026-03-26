@@ -8,11 +8,16 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: Planning v1.5
+## Current Milestone: v1.5 MCP Server Quality & Agent Performance
 
-Run `/gsd:new-milestone` to start the next milestone.
+**Goal:** Improve MCP server quality and optimize for AI agents by reducing round-trips and response token size while hardening reliability, observability, and transport security.
 
-**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → **v1.4 Operational Robustness (2026-03-26)**
+**Target features:**
+- P0: Agent-efficiency core upgrades (unified response envelope, `response_mode`, `fields` projection, workflow batch execution)
+- P1: Reliability/security/agent guidance improvements (retryable error metadata, HTTP auth hardening, catalog guidance hints)
+- P2: Ops + performance maturity (discovery caching, benchmark harness + KPI tracking, health/diagnostic endpoint)
+
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26)
 
 ## Requirements
 
@@ -53,7 +58,11 @@ Run `/gsd:new-milestone` to start the next milestone.
 
 ### Active
 
-*(Run `/gsd:new-milestone` to define v1.5 requirements)*
+- [ ] Reduce average AI task round-trips by introducing workflow-level batching and recommended call paths
+- [ ] Reduce response payload size with standardized compact modes and field projection
+- [ ] Standardize tool response envelope and error semantics for predictable agent planning and retries
+- [ ] Improve transport-level security and operational observability for interactive and headless deployments
+- [ ] Establish performance baselines and KPI tracking for latency, token footprint, and success rate
 
 ### Rejected
 
@@ -113,5 +122,22 @@ Run `/gsd:new-milestone` to start the next milestone.
 - **Vendor scope**: Juniper first, extensible VendorParser ABC for others
 - **Dependencies**: Works alongside existing jmcp — complementary, not replacing
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-03-26 after v1.4 Operational Robustness milestone shipped*
+*Last updated: 2026-03-26 after v1.5 milestone kickoff*
