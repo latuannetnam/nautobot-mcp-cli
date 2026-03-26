@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Operational Robustness
-status: Milestone complete
-last_updated: "2026-03-26T10:24:37.454Z"
+status: v1.4 milestone complete
+last_updated: "2026-03-26T11:06:51.025Z"
 progress:
   total_phases: 4
   completed_phases: 3
