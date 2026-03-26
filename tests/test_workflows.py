@@ -755,3 +755,86 @@ class TestRunWorkflowCompositeErrorOrigin:
         assert result["warnings"] == warnings_from_composite
         # Error field contains summary string (not exception)
         assert "enrichment" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# RSP-02: response_size_bytes in envelope (run_workflow integration)
+# ---------------------------------------------------------------------------
+
+
+class TestResponseSizeBytes:
+    """RSP-02: All composite workflow envelopes include response_size_bytes."""
+
+    @pytest.mark.parametrize("workflow_id", [
+        "bgp_summary",
+        "routing_table",
+        "firewall_summary",
+        "interface_detail",
+    ])
+    def test_response_size_bytes_present_in_ok_envelope(self, workflow_id):
+        """response_size_bytes must be in envelope for all composite workflows."""
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"key": "value"}
+
+        with workflow_func_mock(workflow_id, return_value=mock_result):
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id=workflow_id, params={"device": "rtr-01"}
+            )
+
+        assert "response_size_bytes" in result, (
+            f"{workflow_id}: missing response_size_bytes field"
+        )
+        assert isinstance(result["response_size_bytes"], int), (
+            f"{workflow_id}: response_size_bytes must be int"
+        )
+        assert result["response_size_bytes"] > 0, (
+            f"{workflow_id}: response_size_bytes should be > 0, got {result['response_size_bytes']}"
+        )
+
+    def test_response_size_bytes_in_partial_envelope(self):
+        """response_size_bytes present and positive in partial status envelope."""
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"x": 1}
+        w = [{"operation": "list_af", "error": "timeout"}]
+        with workflow_func_mock("bgp_summary", return_value=(mock_result, w)):
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id="bgp_summary", params={"device": "rtr-01"}
+            )
+
+        assert result["status"] == "partial"
+        assert "response_size_bytes" in result
+        assert result["response_size_bytes"] > 0
+
+    def test_response_size_bytes_equals_actual_json_bytes(self):
+        """response_size_bytes equals len(json.dumps(data)) after serialization."""
+        mock_result = MagicMock()
+        payload = {"groups": [{"id": "1", "name": "test"}], "total_groups": 1}
+        mock_result.model_dump.return_value = payload
+
+        with workflow_func_mock("bgp_summary", return_value=mock_result):
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id="bgp_summary", params={"device": "rtr-01"}
+            )
+
+        import json
+        expected = len(json.dumps(payload))
+        assert result["response_size_bytes"] == expected, (
+            f"Expected {expected}, got {result['response_size_bytes']}"
+        )
+
+    def test_response_size_bytes_zero_on_hard_error(self):
+        """response_size_bytes is 0 when the workflow raises an exception."""
+        with workflow_func_mock("bgp_summary") as mock_func:
+            mock_func.side_effect = RuntimeError("connection refused")
+
+            client = MagicMock()
+            result = run_workflow(
+                client, workflow_id="bgp_summary", params={"device": "rtr-01"}
+            )
+
+        assert result["status"] == "error"
+        assert result["data"] is None
+        assert result["response_size_bytes"] == 0

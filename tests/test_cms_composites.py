@@ -526,3 +526,236 @@ def test_interface_detail_arp_enrichment_failure():
     assert len(warnings) == 1
     assert warnings[0]["operation"] == "list_arp_entries"
     assert "arp timeout" in warnings[0]["error"]
+
+
+# ---------------------------------------------------------------------------
+# RSP-01: detail=False summary mode for interface_detail
+# ---------------------------------------------------------------------------
+
+
+def test_interface_detail_summary_mode_strips_nested_arrays():
+    """RSP-01: get_interface_detail(detail=False) returns family_count but no families/vrrp_groups."""
+    from nautobot_mcp.cms.interfaces import get_interface_detail
+
+    client = _mock_client()
+    unit = MagicMock()
+    unit.id = "unit-001"
+    unit.model_dump.return_value = {"id": "unit-001", "interface_name": "ge-0/0/0"}
+
+    fam = MagicMock()
+    fam.id = "fam-001"
+    fam.model_dump.return_value = {"id": "fam-001", "family_type": "inet"}
+
+    vrrp = MagicMock()
+    vrrp.model_dump.return_value = {"id": "vrrp-001", "group_number": 1}
+
+    with patch(
+        "nautobot_mcp.cms.interfaces.list_interface_units",
+        return_value=_mock_list_response(unit),
+    ) as mock_units, patch(
+        "nautobot_mcp.cms.interfaces.list_interface_families",
+        return_value=_mock_list_response(fam),
+    ) as mock_fams, patch(
+        "nautobot_mcp.cms.interfaces.list_vrrp_groups",
+        return_value=_mock_list_response(vrrp),
+    ) as mock_vrrp:
+        result, warnings = get_interface_detail(client, device="edge-01", detail=False)
+
+    assert isinstance(result, InterfaceDetailResponse)
+    assert result.device_name == "edge-01"
+    assert result.total_units == 1
+    assert len(result.units) == 1
+    assert result.units[0]["families"] == [], (
+        "families[] must be stripped (empty list) in detail=False mode"
+    )
+    assert "family_count" in result.units[0], "family_count must be present in summary mode"
+    assert result.units[0]["family_count"] == 1
+    assert "vrrp_group_count" in result.units[0], "vrrp_group_count must be present in summary mode"
+    assert result.units[0]["vrrp_group_count"] == 1, "vrrp_group_count should reflect actual VRRP count"
+    # VRRP query SHOULD be called (even in summary mode, we query per family for count)
+    mock_vrrp.assert_called()
+    assert warnings == []
+
+
+def test_interface_detail_summary_mode_does_not_affect_arp():
+    """RSP-01: detail=False does not affect include_arp behavior (ARP controlled by include_arp)."""
+    from nautobot_mcp.cms.interfaces import get_interface_detail
+
+    client = _mock_client()
+    unit = MagicMock()
+    unit.id = "unit-002"
+    unit.model_dump.return_value = {"id": "unit-002", "interface_name": "ge-0/0/1"}
+
+    fam = MagicMock()
+    fam.id = "fam-002"
+    fam.model_dump.return_value = {"id": "fam-002", "family_type": "inet"}
+
+    arp_entry = MagicMock()
+    arp_entry.model_dump.return_value = {
+        "id": "arp-001",
+        "mac_address": "aa:bb:cc:dd:ee:ff",
+        "ip_address": "10.0.0.1/24",
+    }
+
+    with patch(
+        "nautobot_mcp.cms.interfaces.list_interface_units",
+        return_value=_mock_list_response(unit),
+    ), patch(
+        "nautobot_mcp.cms.interfaces.list_interface_families",
+        return_value=_mock_list_response(fam),
+    ), patch(
+        "nautobot_mcp.cms.interfaces.list_vrrp_groups",
+        return_value=_mock_list_response(),
+    ), patch(
+        "nautobot_mcp.cms.arp.list_arp_entries",
+        return_value=_mock_list_response(arp_entry),
+    ):
+        result, warnings = get_interface_detail(
+            client, device="edge-02", include_arp=True, detail=False
+        )
+
+    assert result.units[0]["families"] == [], "families[] still stripped when include_arp=True"
+    assert len(result.arp_entries) == 1, "ARP entries should be present when include_arp=True"
+    assert result.arp_entries[0]["mac_address"] == "aa:bb:cc:dd:ee:ff"
+
+
+def test_interface_detail_detail_true_unchanged():
+    """RSP-01: get_interface_detail(detail=True) behavior is unchanged from default."""
+    from nautobot_mcp.cms.interfaces import get_interface_detail
+
+    client = _mock_client()
+    unit = MagicMock()
+    unit.id = "unit-003"
+    unit.model_dump.return_value = {"id": "unit-003", "interface_name": "ge-0/0/2"}
+
+    fam = MagicMock()
+    fam.id = "fam-003"
+    fam.model_dump.return_value = {"id": "fam-003", "family_type": "inet6"}
+
+    vrrp = MagicMock()
+    vrrp.model_dump.return_value = {"id": "vrrp-003", "group_number": 10}
+
+    with patch(
+        "nautobot_mcp.cms.interfaces.list_interface_units",
+        return_value=_mock_list_response(unit),
+    ) as mock_units, patch(
+        "nautobot_mcp.cms.interfaces.list_interface_families",
+        return_value=_mock_list_response(fam),
+    ) as mock_fams, patch(
+        "nautobot_mcp.cms.interfaces.list_vrrp_groups",
+        return_value=_mock_list_response(vrrp),
+    ) as mock_vrrp:
+        result, warnings = get_interface_detail(client, device="edge-03", detail=True)
+
+    assert isinstance(result, InterfaceDetailResponse)
+    assert len(result.units) == 1
+    # In detail=True mode, families should NOT be stripped
+    assert len(result.units[0]["families"]) == 1, "families[] must be populated in detail=True"
+    assert result.units[0]["families"][0]["vrrp_group_count"] == 1
+    assert "vrrp_groups" in result.units[0]["families"][0]
+    mock_vrrp.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# RSP-03: limit parameter for all 4 composites
+# ---------------------------------------------------------------------------
+
+
+def test_bgp_summary_limit_caps_groups_and_neighbors():
+    """RSP-03: bgp_summary(limit=N) caps groups[] and neighbors[] independently."""
+    from nautobot_mcp.cms.routing import get_device_bgp_summary
+
+    client = _mock_client()
+    grps = [_mock_bgp_group(id_=f"grp-{i}") for i in range(5)]
+    nbrs = [_mock_bgp_neighbor(id_=f"nbr-{i}", group_id="grp-0") for i in range(5)]
+
+    with patch(
+        "nautobot_mcp.cms.routing.list_bgp_groups",
+        return_value=_mock_list_response(*grps),
+    ), patch(
+        "nautobot_mcp.cms.routing.list_bgp_neighbors",
+        return_value=_mock_list_response(*nbrs),
+    ):
+        result, warnings = get_device_bgp_summary(client, device="rtr-01", limit=3)
+
+    assert len(result.groups) <= 3, f"groups[] must be capped at 3, got {len(result.groups)}"
+    for grp in result.groups:
+        assert len(grp.get("neighbors", [])) <= 3, (
+            f"neighbors[] per group must be capped at 3, got {len(grp.get('neighbors', []))}"
+        )
+
+
+def test_routing_table_limit_caps_routes():
+    """RSP-03: routing_table(limit=N) caps routes[]."""
+    from nautobot_mcp.cms.routing import get_device_routing_table
+
+    client = _mock_client()
+    routes = [_mock_static_route(id_=f"rt-{i}", destination=f"10.{i}.0.0/16") for i in range(5)]
+
+    with patch(
+        "nautobot_mcp.cms.routing.list_static_routes",
+        return_value=_mock_list_response(*routes),
+    ):
+        result, warnings = get_device_routing_table(client, device="rtr-01", limit=2)
+
+    assert len(result.routes) <= 2, f"routes[] must be capped at 2, got {len(result.routes)}"
+
+
+def test_firewall_summary_limit_caps_filters_and_policers():
+    """RSP-03: firewall_summary(limit=N) caps filters[] and policers[] independently."""
+    from nautobot_mcp.cms.firewalls import get_device_firewall_summary
+
+    client = _mock_client()
+    fw_filters = [_mock_fw_filter(id_=f"fw-{i}") for i in range(5)]
+    fw_policers = [_mock_fw_policer(id_=f"pol-{i}") for i in range(5)]
+
+    with patch(
+        "nautobot_mcp.cms.firewalls.list_firewall_filters",
+        return_value=_mock_list_response(*fw_filters),
+    ), patch(
+        "nautobot_mcp.cms.firewalls.list_firewall_policers",
+        return_value=_mock_list_response(*fw_policers),
+    ):
+        result, warnings = get_device_firewall_summary(client, device="fw-01", limit=2)
+
+    assert len(result.filters) <= 2, f"filters[] must be capped at 2, got {len(result.filters)}"
+    assert len(result.policers) <= 2, f"policers[] must be capped at 2, got {len(result.policers)}"
+
+
+def test_interface_detail_limit_caps_units_and_families():
+    """RSP-03: interface_detail(limit=N) caps units[] and caps families[] per unit."""
+    from nautobot_mcp.cms.interfaces import get_interface_detail
+
+    client = _mock_client()
+    units = [
+        MagicMock(
+            id=f"unit-{i}",
+            model_dump=lambda i=i: {"id": f"unit-{i}", "interface_name": f"ge-0/0/{i}"},
+        )
+        for i in range(5)
+    ]
+    # Give each unit 3 families
+    families_per_unit = [
+        MagicMock(
+            id=f"fam-{j}",
+            model_dump=lambda j=j: {"id": f"fam-{j}", "family_type": "inet"},
+        )
+        for j in range(3)
+    ]
+    with patch(
+        "nautobot_mcp.cms.interfaces.list_interface_units",
+        return_value=_mock_list_response(*units),
+    ), patch(
+        "nautobot_mcp.cms.interfaces.list_interface_families",
+        return_value=_mock_list_response(*families_per_unit),
+    ), patch(
+        "nautobot_mcp.cms.interfaces.list_vrrp_groups",
+        return_value=_mock_list_response(),
+    ):
+        result, warnings = get_interface_detail(client, device="edge-01", limit=2)
+
+    assert len(result.units) <= 2, f"units[] must be capped at 2, got {len(result.units)}"
+    for unit in result.units:
+        assert len(unit.get("families", [])) <= 2, (
+            f"families[] per unit must be capped at 2, got {len(unit.get('families', []))}"
+        )
