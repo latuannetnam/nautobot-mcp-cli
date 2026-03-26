@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import dataclasses
+import json
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -92,22 +93,22 @@ def _validate_registry() -> None:
 WORKFLOW_REGISTRY: dict[str, dict] = {
     "bgp_summary": {
         "function": get_device_bgp_summary,
-        "param_map": {"device": "device", "detail": "detail"},
+        "param_map": {"device": "device", "detail": "detail", "limit": "limit"},
         "required": ["device"],
     },
     "routing_table": {
         "function": get_device_routing_table,
-        "param_map": {"device": "device", "detail": "detail"},
+        "param_map": {"device": "device", "detail": "detail", "limit": "limit"},
         "required": ["device"],
     },
     "firewall_summary": {
         "function": get_device_firewall_summary,
-        "param_map": {"device": "device", "detail": "detail"},
+        "param_map": {"device": "device", "detail": "detail", "limit": "limit"},
         "required": ["device"],
     },
     "interface_detail": {
         "function": get_interface_detail,
-        "param_map": {"device": "device", "include_arp": "include_arp"},
+        "param_map": {"device": "device", "include_arp": "include_arp", "detail": "detail", "limit": "limit"},
         "required": ["device"],
     },
     "onboard_config": {
@@ -208,6 +209,7 @@ def _build_envelope(
     data: Any = None,
     error: Exception | str | None = None,
     warnings: list[dict[str, str]] | None = None,
+    response_size_bytes: int | None = None,
 ) -> dict:
     """Wrap a workflow result in a standard response envelope.
 
@@ -252,6 +254,7 @@ def _build_envelope(
         "error": error_str,
         "warnings": warnings if warnings is not None else [],
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "response_size_bytes": response_size_bytes,
     }
 
 
@@ -328,6 +331,7 @@ def run_workflow(
             warnings_list = []
 
         serialized = _serialize_result(result)
+        response_size_bytes = len(json.dumps(serialized))
 
         # Build envelope with warnings if present
         if warnings_list:
@@ -338,8 +342,13 @@ def run_workflow(
                 data=serialized,
                 error=error_summary,
                 warnings=warnings_list,
+                response_size_bytes=response_size_bytes,
             )
-        return _build_envelope(workflow_id, params, data=serialized)
+        return _build_envelope(
+            workflow_id, params,
+            data=serialized,
+            response_size_bytes=response_size_bytes,
+        )
     except Exception as e:
         # ERR-03: Composite workflow exceptions are captured as warnings in the
         # envelope rather than a bare error string. This gives agents visibility
@@ -357,4 +366,5 @@ def run_workflow(
             params,
             error=e,
             warnings=[exception_warning],
+            response_size_bytes=0,
         )
