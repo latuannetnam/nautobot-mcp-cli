@@ -19,6 +19,7 @@ def list_circuits(
     location: Optional[str] = None,
     q: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
     **extra_filters: str,
 ) -> ListResponse[CircuitSummary]:
     """List circuits with optional filtering."""
@@ -34,15 +35,19 @@ def list_circuits(
             filters["q"] = q
         filters.update(extra_filters)
 
+        pagination_kwargs = {}
+        if limit > 0:
+            pagination_kwargs["limit"] = limit
+        if offset > 0:
+            pagination_kwargs["offset"] = offset
+
         if filters:
-            records = list(client.api.circuits.circuits.filter(**filters))
+            records = list(client.api.circuits.circuits.filter(**filters, **pagination_kwargs))
         else:
-            records = list(client.api.circuits.circuits.all())
+            records = list(client.api.circuits.circuits.all(**pagination_kwargs))
 
         all_results = [CircuitSummary.from_nautobot(r) for r in records]
-        limited_results = all_results[:limit] if limit > 0 else all_results
-
-        return ListResponse(count=len(all_results), results=limited_results)
+        return ListResponse(count=len(all_results), results=all_results)
 
     except Exception as e:
         client._handle_api_error(e, "list", "Circuit")

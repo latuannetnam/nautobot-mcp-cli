@@ -46,6 +46,7 @@ def list_interface_units(
     client: NautobotClient,
     device: str,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[InterfaceUnitSummary]:
     """List Juniper interface units for a device (shallow — includes family_count).
 
@@ -53,17 +54,18 @@ def list_interface_units(
         client: NautobotClient instance.
         device: Device name or UUID.
         limit: Maximum number of results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[InterfaceUnitSummary] with family_count populated.
     """
     try:
         device_id = resolve_device_id(client, device)
-        units = cms_list(client, "juniper_interface_units", InterfaceUnitSummary, limit=0, device=device_id)
+        units = cms_list(client, "juniper_interface_units", InterfaceUnitSummary,
+                        limit=limit, offset=offset, device=device_id)
 
         if units.results:
             # Batch-fetch all families for all units on this device to compute family_count
-            unit_ids = [u.id for u in units.results]
             try:
                 all_families = cms_list(
                     client,
@@ -83,9 +85,7 @@ def list_interface_units(
                 # If batch fetch fails, leave family_count as 0
                 pass
 
-        all_results = units.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(units.results), results=units.results)
     except Exception as e:
         client._handle_api_error(e, "list", "InterfaceUnit")
         raise

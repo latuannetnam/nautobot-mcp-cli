@@ -148,7 +148,7 @@ def _parse_core_endpoint(endpoint: str) -> tuple[str, str]:
 
 def _execute_core(client, app_name: str, ep_name: str, method: str,
                   params: dict | None, data: dict | None,
-                  obj_id: str | None, limit: int) -> dict:
+                  obj_id: str | None, limit: int, offset: int = 0) -> dict:
     """Execute a core Nautobot API operation via pynautobot."""
     # Get pynautobot app accessor (e.g., client.api.dcim)
     app = getattr(client.api, app_name, None)
@@ -165,6 +165,14 @@ def _execute_core(client, app_name: str, ep_name: str, method: str,
             hint=f"Use nautobot_api_catalog(domain='{app_name}') to see available endpoints",
         )
 
+    # Build server-side pagination kwargs — limit > 0 stops pynautobot auto-pagination
+    pagination_kwargs = {}
+    effective_limit = min(limit, MAX_LIMIT) if limit > 0 else DEFAULT_LIMIT
+    if effective_limit > 0:
+        pagination_kwargs["limit"] = effective_limit
+    if offset > 0:
+        pagination_kwargs["offset"] = offset
+
     if method == "GET":
         if obj_id:
             record = endpoint_accessor.get(id=obj_id)
@@ -174,20 +182,13 @@ def _execute_core(client, app_name: str, ep_name: str, method: str,
                     hint="Check the UUID is correct",
                 )
             return {"count": 1, "results": [dict(record)]}
-        # List operation with optional filters
+        # List operation — pass limit/offset server-side to avoid fetching all records
         if params:
-            records = list(endpoint_accessor.filter(**params))
+            records = list(endpoint_accessor.filter(**params, **pagination_kwargs))
         else:
-            records = list(endpoint_accessor.all())
-        total = len(records)
-        capped_limit = min(limit, MAX_LIMIT)
-        truncated = total > capped_limit
-        results = [dict(r) for r in records[:capped_limit]]
-        response = {"count": len(results), "results": results}
-        if truncated:
-            response["truncated"] = True
-            response["total_available"] = total
-        return response
+            records = list(endpoint_accessor.all(**pagination_kwargs))
+        results = [dict(r) for r in records]
+        return {"count": len(results), "results": results}
 
     elif method == "POST":
         if not data:
@@ -234,7 +235,7 @@ def _execute_core(client, app_name: str, ep_name: str, method: str,
 
 def _execute_cms(client, cms_key: str, method: str,
                  params: dict | None, data: dict | None,
-                 obj_id: str | None, limit: int) -> dict:
+                 obj_id: str | None, limit: int, offset: int = 0) -> dict:
     """Execute a CMS plugin operation via pynautobot CMS accessor."""
     # Resolve device name to UUID if device param provided
     effective_params = dict(params) if params else {}
@@ -244,6 +245,14 @@ def _execute_cms(client, cms_key: str, method: str,
 
     # Get CMS endpoint accessor
     endpoint_accessor = get_cms_endpoint(client, cms_key)
+
+    # Build server-side pagination kwargs
+    pagination_kwargs = {}
+    effective_limit = min(limit, MAX_LIMIT) if limit > 0 else DEFAULT_LIMIT
+    if effective_limit > 0:
+        pagination_kwargs["limit"] = effective_limit
+    if offset > 0:
+        pagination_kwargs["offset"] = offset
 
     if method == "GET":
         if obj_id:
@@ -255,20 +264,13 @@ def _execute_cms(client, cms_key: str, method: str,
                     hint=f"Check the UUID is correct",
                 )
             return {"count": 1, "results": [dict(record)]}
-        # List with filters
+        # List with filters — pass limit/offset server-side
         if effective_params:
-            records = list(endpoint_accessor.filter(**effective_params))
+            records = list(endpoint_accessor.filter(**effective_params, **pagination_kwargs))
         else:
-            records = list(endpoint_accessor.all())
-        total = len(records)
-        capped_limit = min(limit, MAX_LIMIT)
-        truncated = total > capped_limit
-        results = [dict(r) for r in records[:capped_limit]]
-        response = {"count": len(results), "results": results}
-        if truncated:
-            response["truncated"] = True
-            response["total_available"] = total
-        return response
+            records = list(endpoint_accessor.all(**pagination_kwargs))
+        results = [dict(r) for r in records]
+        return {"count": len(results), "results": results}
 
     elif method == "POST":
         if not data:
@@ -326,6 +328,7 @@ def call_nautobot(
     data: Optional[dict] = None,
     id: Optional[str] = None,
     limit: int = DEFAULT_LIMIT,
+    offset: int = 0,
 ) -> dict:
     """Execute a Nautobot API call via the REST bridge.
 
@@ -342,6 +345,7 @@ def call_nautobot(
         data: Request body for POST/PATCH operations (legacy name; `body` takes precedence).
         id: Object UUID for single-object operations.
         limit: Max results for GET list operations (default 50, hard cap 200).
+        offset: Skip N results for pagination (default 0). Requires limit > 0.
 
     Returns:
         Wrapped response dict with count, results, endpoint, method, and optional truncation metadata.
@@ -362,19 +366,16 @@ def call_nautobot(
     # Validate and normalize method
     method = _validate_method(method, base_endpoint)
 
-    # Cap limit
-    effective_limit = min(limit, MAX_LIMIT) if limit > 0 else DEFAULT_LIMIT
-
     try:
-        # Route to correct backend
+        # Route to correct backend, passing offset
         if base_endpoint.startswith("/api/"):
             app_name, ep_name = _parse_core_endpoint(base_endpoint)
             result = _execute_core(client, app_name, ep_name, method,
-                                   params, effective_data, id, effective_limit)
+                                   params, effective_data, id, limit, offset)
         elif base_endpoint.startswith("cms:"):
             cms_key = base_endpoint[4:]  # Strip "cms:" prefix
             result = _execute_cms(client, cms_key, method,
-                                  params, effective_data, id, effective_limit)
+                                  params, effective_data, id, limit, offset)
         else:
             raise NautobotValidationError(
                 message=f"Unsupported endpoint prefix: '{endpoint}'",

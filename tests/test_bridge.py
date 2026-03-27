@@ -178,10 +178,10 @@ class TestCallNautobotCoreGET:
         assert result["method"] == "GET"
 
     def test_get_with_filters(self):
-        """GET with params calls filter()."""
+        """GET with params calls filter() with limit applied."""
         client, endpoint = self._make_mock_client(records=[])
         call_nautobot(client, "/api/dcim/devices/", "GET", params={"name": "router1"})
-        endpoint.filter.assert_called_once_with(name="router1")
+        endpoint.filter.assert_called_once_with(name="router1", limit=50)
 
     def test_get_without_filters(self):
         """GET without params calls all()."""
@@ -309,56 +309,64 @@ class TestCallNautobotCoreMutations:
 
 
 class TestPagination:
-    """Test auto-pagination and hard cap behavior."""
+    """Test server-side limit/offset are passed to pynautobot."""
 
-    def _make_records(self, n):
-        records = [MagicMock() for _ in range(n)]
-        for r in records:
-            type(r).__iter__ = lambda self: iter({"id": "x"}.items())
-        return records
+    def _make_record(self):
+        """Create a mock record that dict() can serialize."""
+        r = MagicMock()
+        type(r).__iter__ = lambda self: iter({"id": "x"}.items())
+        return r
 
     def _make_client_with_records(self, records):
         client = MagicMock()
         endpoint = MagicMock()
         endpoint.all.return_value = records
+        endpoint.filter.return_value = records
         app = MagicMock()
         setattr(app, "devices", endpoint)
         client.api.dcim = app
         return client
 
-    def test_results_capped_at_limit(self):
-        """Results truncated when exceeding limit, with truncation metadata."""
-        records = self._make_records(100)
+    def test_limit_passed_to_all(self):
+        """limit=N is passed through to endpoint_accessor.all() for server-side pagination."""
+        records = [self._make_record() for _ in range(10)]
         client = self._make_client_with_records(records)
         result = call_nautobot(client, "/api/dcim/devices/", "GET", limit=10)
+        # Verify all() was called with limit=10 (not that it returns all 100)
+        endpoint = client.api.dcim.devices
+        endpoint.all.assert_called_with(limit=10)
         assert result["count"] == 10
-        assert result["truncated"] is True
-        assert result["total_available"] == 100
+        assert "truncated" not in result
 
-    def test_hard_cap_at_200(self):
-        """Limit above 200 is silently capped."""
-        records = self._make_records(300)
+    def test_offset_passed_to_all(self):
+        """offset=N is passed through to endpoint_accessor.all() for pagination."""
+        records = [self._make_record() for _ in range(5)]
         client = self._make_client_with_records(records)
-        result = call_nautobot(client, "/api/dcim/devices/", "GET", limit=500)
-        assert result["count"] == 200
-        assert result["truncated"] is True
-        assert result["total_available"] == 300
+        result = call_nautobot(client, "/api/dcim/devices/", "GET", limit=5, offset=20)
+        endpoint = client.api.dcim.devices
+        endpoint.all.assert_called_with(limit=5, offset=20)
+        assert result["count"] == 5
 
-    def test_no_truncation_when_under_limit(self):
-        """No truncation metadata when results fit within limit."""
-        records = self._make_records(5)
+    def test_limit_and_offset_passed_to_filter(self):
+        """limit and offset are passed through to endpoint_accessor.filter() when params given."""
+        records = [self._make_record() for _ in range(3)]
+        client = self._make_client_with_records(records)
+        result = call_nautobot(
+            client, "/api/dcim/devices/", "GET",
+            params={"status": "active"}, limit=3, offset=10
+        )
+        endpoint = client.api.dcim.devices
+        endpoint.filter.assert_called_with(status="active", limit=3, offset=10)
+        assert result["count"] == 3
+
+    def test_no_truncation_metadata_added(self):
+        """Server-side limit means truncation metadata is no longer added."""
+        records = [self._make_record() for _ in range(5)]
         client = self._make_client_with_records(records)
         result = call_nautobot(client, "/api/dcim/devices/", "GET", limit=50)
         assert result["count"] == 5
         assert "truncated" not in result
-
-    def test_exact_limit_no_truncation(self):
-        """Exactly at limit does not truncate."""
-        records = self._make_records(50)
-        client = self._make_client_with_records(records)
-        result = call_nautobot(client, "/api/dcim/devices/", "GET", limit=50)
-        assert result["count"] == 50
-        assert "truncated" not in result
+        assert "total_available" not in result
 
 
 class TestCMSRouting:
@@ -383,7 +391,7 @@ class TestCMSRouting:
             call_nautobot(client, "cms:juniper_static_routes", "GET",
                          params={"device": "router1"})
         mock_resolve.assert_called_once_with(client, "router1")
-        mock_endpoint.filter.assert_called_once_with(device="uuid-123")
+        mock_endpoint.filter.assert_called_once_with(device="uuid-123", limit=50)
 
     def test_cms_get_by_id(self):
         """CMS GET with id retrieves single object."""

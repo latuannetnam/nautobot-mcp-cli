@@ -125,14 +125,15 @@ def get_cms_endpoint(client: NautobotClient, endpoint_name: str):
     return getattr(client.cms, endpoint_name)
 
 
-def cms_list(client, endpoint_name, model_cls, limit=0, **filters):
+def cms_list(client, endpoint_name, model_cls, limit=0, offset=0, **filters):
     """Generic CMS list operation.
 
     Args:
         client: NautobotClient instance.
         endpoint_name: CMS endpoint name (underscore format).
         model_cls: Pydantic model class with from_nautobot() classmethod.
-        limit: Max results. 0 = all.
+        limit: Max results. 0 = all (auto-paginate).
+        offset: Skip N results for pagination.
         **filters: Query filters to pass to pynautobot.
 
     Returns:
@@ -141,19 +142,18 @@ def cms_list(client, endpoint_name, model_cls, limit=0, **filters):
     model_name = CMS_ENDPOINTS.get(endpoint_name, endpoint_name)
     try:
         endpoint = get_cms_endpoint(client, endpoint_name)
+        pagination_kwargs = {}
+        if limit > 0:
+            pagination_kwargs["limit"] = limit
+        if offset > 0:
+            pagination_kwargs["offset"] = offset
         if filters:
-            records = list(endpoint.filter(**filters))
+            records = list(endpoint.filter(**filters, **pagination_kwargs))
         else:
-            records = list(endpoint.all())
+            records = list(endpoint.all(**pagination_kwargs))
 
         all_results = [model_cls.from_nautobot(r) for r in records]
-
-        if limit > 0:
-            limited = all_results[:limit]
-        else:
-            limited = all_results
-
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(all_results), results=all_results)
     except Exception as e:
         client._handle_api_error(e, "list", model_name)
         raise

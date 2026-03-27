@@ -24,6 +24,7 @@ def list_devices(
     platform: Optional[str] = None,
     q: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
     **extra_filters: str,
 ) -> ListResponse[DeviceSummary]:
     """List devices with optional filtering.
@@ -36,6 +37,7 @@ def list_devices(
         platform: Filter by platform name.
         q: Full-text search query.
         limit: Max results to return. 0 = all.
+        offset: Skip N results for pagination.
         **extra_filters: Additional pynautobot filter parameters.
 
     Returns:
@@ -55,19 +57,19 @@ def list_devices(
             filters["q"] = q
         filters.update(extra_filters)
 
+        pagination_kwargs = {}
+        if limit > 0:
+            pagination_kwargs["limit"] = limit
+        if offset > 0:
+            pagination_kwargs["offset"] = offset
+
         if filters:
-            records = list(client.api.dcim.devices.filter(**filters))
+            records = list(client.api.dcim.devices.filter(**filters, **pagination_kwargs))
         else:
-            records = list(client.api.dcim.devices.all())
+            records = list(client.api.dcim.devices.all(**pagination_kwargs))
 
         all_results = [DeviceSummary.from_nautobot(r) for r in records]
-
-        if limit > 0:
-            limited_results = all_results[:limit]
-        else:
-            limited_results = all_results
-
-        return ListResponse(count=len(all_results), results=limited_results)
+        return ListResponse(count=len(all_results), results=all_results)
 
     except Exception as e:
         client._handle_api_error(e, "list", "Device")

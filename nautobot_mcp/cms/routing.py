@@ -48,6 +48,7 @@ def list_static_routes(
     device: str,
     routing_instance: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[StaticRouteSummary]:
     """List Juniper static routes for a device, with inlined next-hops.
 
@@ -56,6 +57,7 @@ def list_static_routes(
         device: Device name or UUID.
         routing_instance: Optional routing instance name filter.
         limit: Maximum number of results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[StaticRouteSummary] with nexthops inlined.
@@ -66,12 +68,15 @@ def list_static_routes(
         if routing_instance:
             filters["routing_instance__name"] = routing_instance
 
-        routes = cms_list(client, "juniper_static_routes", StaticRouteSummary, limit=0, **filters)
+        # Pass limit/offset server-side for the route list
+        routes = cms_list(client, "juniper_static_routes", StaticRouteSummary,
+                          limit=limit, offset=offset, **filters)
 
-        # Inline nexthops per-route (gracefully handle API errors if filter not supported)
+        # Inline nexthops per-route (fetch all for inlined completeness)
         for route in routes.results:
             try:
-                nhs = cms_list(client, "juniper_static_route_nexthops", StaticRouteNexthopSummary, limit=0, route=route.id)
+                nhs = cms_list(client, "juniper_static_route_nexthops",
+                               StaticRouteNexthopSummary, limit=0, route=route.id)
                 route.nexthops = nhs.results
             except Exception:
                 route.nexthops = []
@@ -87,10 +92,7 @@ def list_static_routes(
             except Exception:
                 route.qualified_nexthops = []
 
-        # Apply limit after inlining
-        all_results = routes.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(routes.results), results=routes.results)
     except Exception as e:
         client._handle_api_error(e, "list", "StaticRoute")
         raise
@@ -293,6 +295,7 @@ def list_bgp_groups(
     device: str,
     routing_instance: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[BGPGroupSummary]:
     """List BGP groups for a device.
 
@@ -301,6 +304,7 @@ def list_bgp_groups(
         device: Device name or UUID.
         routing_instance: Optional routing instance name filter.
         limit: Maximum results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[BGPGroupSummary].
@@ -310,7 +314,8 @@ def list_bgp_groups(
         filters: dict = {"device": device_id}
         if routing_instance:
             filters["routing_instance__name"] = routing_instance
-        return cms_list(client, "juniper_bgp_groups", BGPGroupSummary, limit=limit, **filters)
+        return cms_list(client, "juniper_bgp_groups", BGPGroupSummary,
+                       limit=limit, offset=offset, **filters)
     except Exception as e:
         client._handle_api_error(e, "list", "BGPGroup")
         raise
@@ -388,6 +393,7 @@ def list_bgp_neighbors(
     device: Optional[str] = None,
     group_id: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[BGPNeighborSummary]:
     """List BGP neighbors, scoped by device or group.
 
@@ -400,13 +406,15 @@ def list_bgp_neighbors(
         device: Device name or UUID (device-scoped query).
         group_id: Filter by specific BGP group UUID.
         limit: Maximum results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[BGPNeighborSummary].
     """
     try:
         if group_id:
-            return cms_list(client, "juniper_bgp_neighbors", BGPNeighborSummary, limit=limit, group=group_id)
+            return cms_list(client, "juniper_bgp_neighbors", BGPNeighborSummary,
+                          limit=limit, offset=offset, group=group_id)
 
         if device:
             device_id = resolve_device_id(client, device)
@@ -415,19 +423,20 @@ def list_bgp_neighbors(
             if not groups.results:
                 return ListResponse(count=0, results=[])
 
-            # Collect all neighbors across all groups
+            # Collect all neighbors across all groups, passing limit/offset server-side
             all_neighbors: list[BGPNeighborSummary] = []
             for grp in groups.results:
                 nbrs = cms_list(
-                    client, "juniper_bgp_neighbors", BGPNeighborSummary, limit=0, group=grp.id
+                    client, "juniper_bgp_neighbors", BGPNeighborSummary,
+                    limit=limit, offset=offset, group=grp.id
                 )
                 all_neighbors.extend(nbrs.results)
 
-            limited = all_neighbors[:limit] if limit > 0 else all_neighbors
-            return ListResponse(count=len(all_neighbors), results=limited)
+            return ListResponse(count=len(all_neighbors), results=all_neighbors)
 
         # No filter — list all (not recommended for large datasets)
-        return cms_list(client, "juniper_bgp_neighbors", BGPNeighborSummary, limit=limit)
+        return cms_list(client, "juniper_bgp_neighbors", BGPNeighborSummary,
+                       limit=limit, offset=offset)
     except Exception as e:
         client._handle_api_error(e, "list", "BGPNeighbor")
         raise

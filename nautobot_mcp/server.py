@@ -107,6 +107,8 @@ def nautobot_call_nautobot(
     endpoint: str,
     params: dict[str, Any] | None = None,
     body: dict[str, Any] | None = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> dict:
     """Execute a REST CRUD operation against any Nautobot API endpoint.
 
@@ -119,14 +121,16 @@ def nautobot_call_nautobot(
         endpoint: API path (e.g., '/api/dcim/devices/', '/api/plugins/cms/bgp-groups/').
             Can be partial path; bridge performs fuzzy matching if needed.
         params: Query parameters for filtering (GET requests). Optional.
-            Example: {"device": "core-rtr-01", "limit": 50}
+            Example: {"device": "core-rtr-01"}
+            Note: prefer top-level `limit` and `offset` args over putting them in params.
         body: Request body for write operations (POST, PATCH, PUT). Optional.
             Must match Nautobot's expected schema for the endpoint.
+        limit: Server-side max results for GET list operations (default 50, hard cap 200).
+        offset: Skip N results for pagination (default 0). Requires limit > 0.
 
     Returns:
-        Dict with 'status' (ok/error), 'method', 'endpoint', 'data' (response
-        body or list for GET), 'count' (total results for paginated GET),
-        and 'error' (message if status=error).
+        Dict with 'count' (returned record count), 'results' (list of records),
+        'endpoint', and 'method'.
     """
     try:
         client = get_client()
@@ -136,6 +140,8 @@ def nautobot_call_nautobot(
             endpoint=endpoint,
             params=params,
             body=body,
+            limit=limit,
+            offset=offset,
         )
     except Exception as e:
         handle_error(e)

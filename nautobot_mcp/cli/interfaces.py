@@ -18,13 +18,17 @@ def interfaces_list(
     ctx: typer.Context,
     device: Optional[str] = typer.Option(None, help="Filter by device name"),
     device_id: Optional[str] = typer.Option(None, help="Filter by device UUID"),
-    limit: int = typer.Option(50, help="Max results (0=all)"),
+    limit: Optional[int] = typer.Option(None, help="Server-side max results (0=all, default=default_limit from config)"),
+    offset: int = typer.Option(0, help="Skip N results for pagination"),
 ) -> None:
     """List interfaces with optional device filtering."""
     try:
         client = get_client_from_ctx(ctx)
+        settings = ctx.obj.get("settings")
+        effective_limit = limit if limit is not None else (settings.default_limit if settings else 50)
         result = interfaces.list_interfaces(
-            client, device_name=device, device_id=device_id, limit=limit,
+            client, device_name=device, device_id=device_id,
+            limit=effective_limit, offset=offset,
         )
         output(result.model_dump(), ctx.obj.get("json", False), INTERFACE_COLUMNS)
     except Exception as e:

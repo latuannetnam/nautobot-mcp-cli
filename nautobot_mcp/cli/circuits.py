@@ -20,14 +20,17 @@ def circuits_list(
     circuit_type: Optional[str] = typer.Option(None, "--type", help="Filter by circuit type"),
     location: Optional[str] = typer.Option(None, help="Filter by location"),
     q: Optional[str] = typer.Option(None, help="Search query"),
-    limit: int = typer.Option(50, help="Max results (0=all)"),
+    limit: Optional[int] = typer.Option(None, help="Server-side max results (0=all, default=default_limit from config)"),
+    offset: int = typer.Option(0, help="Skip N results for pagination"),
 ) -> None:
     """List circuits."""
     try:
         client = get_client_from_ctx(ctx)
+        settings = ctx.obj.get("settings")
+        effective_limit = limit if limit is not None else (settings.default_limit if settings else 50)
         result = circuits.list_circuits(
             client, provider=provider, circuit_type=circuit_type,
-            location=location, q=q, limit=limit,
+            location=location, q=q, limit=effective_limit, offset=offset,
         )
         output(result.model_dump(), ctx.obj.get("json", False), CIRCUIT_COLUMNS)
     except Exception as e:

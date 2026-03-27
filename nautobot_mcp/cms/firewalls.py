@@ -47,6 +47,7 @@ def list_firewall_filters(
     device: str,
     family: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[FirewallFilterSummary]:
     """List firewall filters for a device. Populates term_count per filter.
 
@@ -55,6 +56,7 @@ def list_firewall_filters(
         device: Device name or UUID.
         family: Optional address family filter (inet, inet6, vpls, etc.).
         limit: Maximum number of results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[FirewallFilterSummary] with term_count populated.
@@ -64,7 +66,8 @@ def list_firewall_filters(
         extra: dict = {"device": device_id}
         if family:
             extra["family"] = family
-        filters = cms_list(client, "juniper_firewall_filters", FirewallFilterSummary, limit=0, **extra)
+        filters = cms_list(client, "juniper_firewall_filters", FirewallFilterSummary,
+                        limit=limit, offset=offset, **extra)
 
         if filters.results:
             for f in filters.results:
@@ -80,9 +83,7 @@ def list_firewall_filters(
                 except Exception:
                     pass
 
-        all_results = filters.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(filters.results), results=filters.results)
     except Exception as e:
         client._handle_api_error(e, "list", "FirewallFilter")
         raise
@@ -221,6 +222,7 @@ def list_firewall_policers(
     client: NautobotClient,
     device: str,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[FirewallPolicerSummary]:
     """List firewall policers for a device. Populates action_count per policer.
 
@@ -228,13 +230,15 @@ def list_firewall_policers(
         client: NautobotClient instance.
         device: Device name or UUID.
         limit: Maximum number of results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[FirewallPolicerSummary] with action_count populated.
     """
     try:
         device_id = resolve_device_id(client, device)
-        policers = cms_list(client, "juniper_firewall_policers", FirewallPolicerSummary, limit=0, device=device_id)
+        policers = cms_list(client, "juniper_firewall_policers", FirewallPolicerSummary,
+                          limit=limit, offset=offset, device=device_id)
 
         if policers.results:
             for p in policers.results:
@@ -250,9 +254,7 @@ def list_firewall_policers(
                 except Exception:
                     pass
 
-        all_results = policers.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(policers.results), results=policers.results)
     except Exception as e:
         client._handle_api_error(e, "list", "FirewallPolicer")
         raise
@@ -361,6 +363,7 @@ def list_firewall_terms(
     client: NautobotClient,
     filter_id: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[FirewallTermSummary]:
     """List firewall terms, optionally filtered by parent filter.
 
@@ -368,6 +371,7 @@ def list_firewall_terms(
         client: NautobotClient instance.
         filter_id: Filter by parent firewall filter UUID.
         limit: Maximum results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[FirewallTermSummary] with match_count and action_count populated.
@@ -376,11 +380,11 @@ def list_firewall_terms(
         extra: dict = {}
         if filter_id:
             extra["filter"] = filter_id
-        terms = cms_list(client, "juniper_firewall_terms", FirewallTermSummary, limit=0, **extra)
+        terms = cms_list(client, "juniper_firewall_terms", FirewallTermSummary,
+                        limit=limit, offset=offset, **extra)
 
         if terms.results:
             try:
-                term_ids = [t.id for t in terms.results]
                 all_mc = cms_list(
                     client,
                     "juniper_firewall_match_conditions",
@@ -411,9 +415,7 @@ def list_firewall_terms(
             except Exception:
                 pass
 
-        all_results = terms.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(terms.results), results=terms.results)
     except Exception as e:
         client._handle_api_error(e, "list", "FirewallTerm")
         raise

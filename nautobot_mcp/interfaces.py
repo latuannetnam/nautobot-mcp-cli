@@ -23,6 +23,7 @@ def list_interfaces(
     device_id: Optional[str] = None,
     include_ips: bool = False,
     limit: int = 0,
+    offset: int = 0,
     **extra_filters: str,
 ) -> ListResponse[InterfaceSummary]:
     """List interfaces with optional device filtering and IP enrichment.
@@ -35,6 +36,7 @@ def list_interfaces(
                      via M2M batch query. Changes ip_addresses from
                      list[str] to list[dict] with DeviceIPEntry structure.
         limit: Max results to return. 0 = all.
+        offset: Skip N results for pagination.
         **extra_filters: Additional filter parameters.
 
     Returns:
@@ -48,10 +50,16 @@ def list_interfaces(
             filters["device_id"] = device_id
         filters.update(extra_filters)
 
+        pagination_kwargs = {}
+        if limit > 0:
+            pagination_kwargs["limit"] = limit
+        if offset > 0:
+            pagination_kwargs["offset"] = offset
+
         if filters:
-            records = list(client.api.dcim.interfaces.filter(**filters))
+            records = list(client.api.dcim.interfaces.filter(**filters, **pagination_kwargs))
         else:
-            records = list(client.api.dcim.interfaces.all())
+            records = list(client.api.dcim.interfaces.all(**pagination_kwargs))
 
         all_results = [InterfaceSummary.from_nautobot(r) for r in records]
 
@@ -93,12 +101,7 @@ def list_interfaces(
                 for idx in indices:
                     all_results[idx].ip_addresses = ip_entries
 
-        if limit > 0:
-            limited_results = all_results[:limit]
-        else:
-            limited_results = all_results
-
-        return ListResponse(count=len(all_results), results=limited_results)
+        return ListResponse(count=len(all_results), results=all_results)
 
     except Exception as e:
         client._handle_api_error(e, "list", "Interface")

@@ -173,20 +173,16 @@ class TestCMSList:
         )
 
     def test_list_with_limit(self, mock_client_with_cms, mock_cms_record):
-        """cms_list respects limit parameter."""
-        record2 = MagicMock()
-        record2.id = "cms-2222-3333-4444-5555"
-        record2.display = "r2"
-        record2.url = None
-        record2.device = None
-        records = [mock_cms_record, record2]
-        mock_client_with_cms.cms.juniper_static_routes.all.return_value = records
+        """cms_list passes limit to pynautobot for server-side pagination."""
+        # When limit=1, pynautobot's all(limit=1) returns only 1 record
+        mock_client_with_cms.cms.juniper_static_routes.all.return_value = [mock_cms_record]
 
         result = cms_list(
             mock_client_with_cms, "juniper_static_routes", CMSBaseSummary, limit=1
         )
-        assert result.count == 2  # total count is unlimited
-        assert len(result.results) == 1  # but only 1 returned
+        mock_client_with_cms.cms.juniper_static_routes.all.assert_called_once_with(limit=1)
+        assert result.count == 1
+        assert len(result.results) == 1
 
 
 class TestCMSGet:

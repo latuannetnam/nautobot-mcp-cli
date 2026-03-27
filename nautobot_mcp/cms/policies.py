@@ -56,6 +56,7 @@ def list_policy_statements(
     client: NautobotClient,
     device: str,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[PolicyStatementSummary]:
     """List policy statements for a device. Populates term_count per statement.
 
@@ -63,6 +64,7 @@ def list_policy_statements(
         client: NautobotClient instance.
         device: Device name or UUID.
         limit: Maximum results (0 = all).
+        offset: Skip N results for pagination.
 
     Returns:
         ListResponse[PolicyStatementSummary] with term_count populated.
@@ -70,7 +72,8 @@ def list_policy_statements(
     try:
         device_id = resolve_device_id(client, device)
         statements = cms_list(
-            client, "juniper_policy_statements", PolicyStatementSummary, limit=0, device=device_id
+            client, "juniper_policy_statements", PolicyStatementSummary,
+            limit=limit, offset=offset, device=device_id
         )
 
         if statements.results:
@@ -87,9 +90,7 @@ def list_policy_statements(
                 except Exception:
                     pass
 
-        all_results = statements.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(statements.results), results=statements.results)
     except Exception as e:
         client._handle_api_error(e, "list", "PolicyStatement")
         raise
@@ -170,25 +171,26 @@ def list_policy_prefix_lists(
     client: NautobotClient,
     device: str,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[PolicyPrefixListSummary]:
     """List policy prefix lists for a device. Populates prefix_count per list."""
     try:
         device_id = resolve_device_id(client, device)
-        pls = cms_list(client, "juniper_policy_prefix_lists", PolicyPrefixListSummary, limit=0, device=device_id)
+        pls = cms_list(client, "juniper_policy_prefix_lists", PolicyPrefixListSummary,
+                       limit=limit, offset=offset, device=device_id)
 
         if pls.results:
             for pl in pls.results:
                 try:
                     prefixes = cms_list(
-                        client, "juniper_policy_prefixes", PolicyPrefixSummary, limit=0, prefix_list=pl.id
+                        client, "juniper_policy_prefixes", PolicyPrefixSummary,
+                        limit=0, prefix_list=pl.id
                     )
                     pl.prefix_count = len(prefixes.results)
                 except Exception:
                     pass
 
-        all_results = pls.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(pls.results), results=pls.results)
     except Exception as e:
         client._handle_api_error(e, "list", "PolicyPrefixList")
         raise
@@ -416,13 +418,15 @@ def list_policy_prefixes(
     client: NautobotClient,
     prefix_list_id: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[PolicyPrefixSummary]:
     """List policy prefixes, optionally filtered by parent prefix list."""
     try:
         extra: dict = {}
         if prefix_list_id:
             extra["prefix_list"] = prefix_list_id
-        return cms_list(client, "juniper_policy_prefixes", PolicyPrefixSummary, limit=limit, **extra)
+        return cms_list(client, "juniper_policy_prefixes", PolicyPrefixSummary,
+                       limit=limit, offset=offset, **extra)
     except Exception as e:
         client._handle_api_error(e, "list", "PolicyPrefix")
         raise
@@ -446,13 +450,15 @@ def list_jps_terms(
     client: NautobotClient,
     statement_id: Optional[str] = None,
     limit: int = 0,
+    offset: int = 0,
 ) -> ListResponse[JPSTermSummary]:
     """List JPS terms, optionally filtered by parent policy statement."""
     try:
         extra: dict = {}
         if statement_id:
             extra["policy_statement"] = statement_id
-        terms = cms_list(client, "jps_terms", JPSTermSummary, limit=0, **extra)
+        terms = cms_list(client, "jps_terms", JPSTermSummary,
+                        limit=limit, offset=offset, **extra)
 
         if terms.results:
             try:
@@ -480,9 +486,7 @@ def list_jps_terms(
             except Exception:
                 pass
 
-        all_results = terms.results
-        limited = all_results[:limit] if limit > 0 else all_results
-        return ListResponse(count=len(all_results), results=limited)
+        return ListResponse(count=len(terms.results), results=terms.results)
     except Exception as e:
         client._handle_api_error(e, "list", "JPSTerm")
         raise

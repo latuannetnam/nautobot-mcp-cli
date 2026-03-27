@@ -73,6 +73,7 @@ def get_client_from_ctx(ctx: typer.Context) -> NautobotClient:
     if profile_name:
         settings.active_profile = profile_name
     client = NautobotClient(settings=settings)
+    ctx.obj["settings"] = settings
 
     # Apply verify override if specified
     if no_verify and client._profile:

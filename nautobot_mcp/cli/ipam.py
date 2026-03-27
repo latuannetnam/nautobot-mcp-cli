@@ -29,13 +29,17 @@ def prefixes_list(
     namespace: Optional[str] = typer.Option(None, help="Filter by namespace"),
     location: Optional[str] = typer.Option(None, help="Filter by location"),
     tenant: Optional[str] = typer.Option(None, help="Filter by tenant"),
-    limit: int = typer.Option(50, help="Max results (0=all)"),
+    limit: Optional[int] = typer.Option(None, help="Server-side max results (0=all, default=default_limit from config)"),
+    offset: int = typer.Option(0, help="Skip N results for pagination"),
 ) -> None:
     """List IP prefixes."""
     try:
         client = get_client_from_ctx(ctx)
+        settings = ctx.obj.get("settings")
+        effective_limit = limit if limit is not None else (settings.default_limit if settings else 50)
         result = ipam.list_prefixes(
-            client, namespace=namespace, location=location, tenant=tenant, limit=limit,
+            client, namespace=namespace, location=location, tenant=tenant,
+            limit=effective_limit, offset=offset,
         )
         output(result.model_dump(), ctx.obj.get("json", False), PREFIX_COLUMNS)
     except Exception as e:
@@ -71,13 +75,17 @@ def addresses_list(
     device: Optional[str] = typer.Option(None, help="Filter by device"),
     interface: Optional[str] = typer.Option(None, help="Filter by interface"),
     prefix: Optional[str] = typer.Option(None, help="Filter by prefix"),
-    limit: int = typer.Option(50, help="Max results (0=all)"),
+    limit: Optional[int] = typer.Option(None, help="Server-side max results (0=all, default=default_limit from config)"),
+    offset: int = typer.Option(0, help="Skip N results for pagination"),
 ) -> None:
     """List IP addresses."""
     try:
         client = get_client_from_ctx(ctx)
+        settings = ctx.obj.get("settings")
+        effective_limit = limit if limit is not None else (settings.default_limit if settings else 50)
         result = ipam.list_ip_addresses(
-            client, device=device, interface=interface, prefix=prefix, limit=limit,
+            client, device=device, interface=interface, prefix=prefix,
+            limit=effective_limit, offset=offset,
         )
         output(result.model_dump(), ctx.obj.get("json", False), IP_COLUMNS)
     except Exception as e:
@@ -106,11 +114,14 @@ def addresses_create(
 def addresses_device_ips(
     ctx: typer.Context,
     device: str = typer.Argument(help="Device name to query"),
+    limit: Optional[int] = typer.Option(None, help="Limit interfaces fetched (0=all, default=default_limit from config)"),
 ) -> None:
     """Get all IPs assigned to a device's interfaces."""
     try:
         client = get_client_from_ctx(ctx)
-        result = ipam.get_device_ips(client, device_name=device)
+        settings = ctx.obj.get("settings")
+        effective_limit = limit if limit is not None else (settings.default_limit if settings else 50)
+        result = ipam.get_device_ips(client, device_name=device, limit=effective_limit)
         data = result.model_dump()
         if ctx.obj.get("json", False):
             import json
@@ -138,14 +149,17 @@ def vlans_list(
     location: Optional[str] = typer.Option(None, help="Filter by location"),
     tenant: Optional[str] = typer.Option(None, help="Filter by tenant"),
     device: Optional[str] = typer.Option(None, help="Filter by device name"),
-    limit: int = typer.Option(50, help="Max results (0=all)"),
+    limit: Optional[int] = typer.Option(None, help="Server-side max results (0=all, default=default_limit from config)"),
+    offset: int = typer.Option(0, help="Skip N results for pagination"),
 ) -> None:
     """List VLANs."""
     try:
         client = get_client_from_ctx(ctx)
+        settings = ctx.obj.get("settings")
+        effective_limit = limit if limit is not None else (settings.default_limit if settings else 50)
         result = ipam.list_vlans(
             client, location=location, tenant=tenant,
-            device=device, limit=limit,
+            device=device, limit=effective_limit, offset=offset,
         )
         output(result.model_dump(), ctx.obj.get("json", False), VLAN_COLUMNS)
     except Exception as e:

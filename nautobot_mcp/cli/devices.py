@@ -21,14 +21,17 @@ def devices_list(
     role: Optional[str] = typer.Option(None, help="Filter by device role"),
     platform: Optional[str] = typer.Option(None, help="Filter by platform"),
     q: Optional[str] = typer.Option(None, help="Search query"),
-    limit: int = typer.Option(50, help="Max results (0=all)"),
+    limit: Optional[int] = typer.Option(None, help="Server-side max results (0=all, default=default_limit from config)"),
+    offset: int = typer.Option(0, help="Skip N results for pagination"),
 ) -> None:
     """List devices with optional filtering."""
     try:
         client = get_client_from_ctx(ctx)
+        settings = ctx.obj.get("settings")
+        effective_limit = limit if limit is not None else (settings.default_limit if settings else 50)
         result = devices.list_devices(
             client, location=location, tenant=tenant, role=role,
-            platform=platform, q=q, limit=limit,
+            platform=platform, q=q, limit=effective_limit, offset=offset,
         )
         output(result.model_dump(), ctx.obj.get("json", False), DEVICE_COLUMNS)
     except Exception as e:
