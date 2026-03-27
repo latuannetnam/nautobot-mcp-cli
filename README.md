@@ -79,6 +79,16 @@ pip install -e ".[dev]"
 
 After installation the `nautobot-mcp` CLI entry point is available in your environment.
 
+### Install Claude Code Skills (optional)
+
+The repo ships reusable Claude Code skills under `.claude/skills/`. Run once to install them into your Claude Code profile:
+
+```powershell
+pwsh scripts/install-skills.ps1
+```
+
+This copies all skills from `.claude/skills/` to `$HOME/.claude/skills/`. Re-run after `git pull` to pick up skill updates.
+
 ---
 
 ## Configuration
