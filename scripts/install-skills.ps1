@@ -36,6 +36,9 @@ foreach ($skill in $Skills) {
     if ($WhatIf) {
         Write-Host "[WhatIf] Would copy $($skill.Name) -> $dest"
     } else {
+        if (Test-Path $dest) {
+            Remove-Item $dest -Recurse -Force
+        }
         Copy-Item $skill.FullName $dest -Recurse -Force
         Write-Host "[OK] Installed skill: $($skill.Name)"
     }

@@ -20,48 +20,79 @@ Two distinct Unicode characters crash the CLI on Windows:
 
 **Rule: For agentic/structured use, always use `--json`.** For human-readable terminal output, prefix with `PYTHONIOENCODING=utf-8`.
 
+## Pagination
+
+All list commands support server-side `--limit` and `--offset` — Nautobot returns only the requested page, not all records.
+
+```bash
+# --limit N: server-side max results (default from config, typically 50)
+# --offset N: skip N results for pagination
+
+# Page 1 of 20
+nautobot-mcp --json devices list --limit 20
+
+# Page 2
+nautobot-mcp --json devices list --limit 20 --offset 20
+
+# Page 3
+nautobot-mcp --json devices list --limit 20 --offset 40
+
+# --limit 0 means "no limit" — fetches all (auto-paginated by pynautobot)
+nautobot-mcp --json devices list --limit 0
+```
+
+**`count` field in JSON output** reflects the number of records in the current page, not the total matching records. Use `--offset` to paginate through results.
+
 ## Core Commands
 
 ```bash
 # === DEVICES ===
-# List all devices
-uv run nautobot-mcp --json devices list
+# List all devices (paginated — default 50)
+nautobot-mcp --json devices list
 
-# Filter by location and/or role
-uv run nautobot-mcp --json devices list --location "HQV" --role "Router"
+# Paginate through all devices
+nautobot-mcp --json devices list --limit 20 --offset 0
+nautobot-mcp --json devices list --limit 20 --offset 20
+
+# Filter + paginate
+nautobot-mcp --json devices list --location "HQV" --role "Router" --limit 10
 
 # Get a single device
-uv run nautobot-mcp --json devices get --name "HNI-HITC-PE1"
+nautobot-mcp --json devices get --name "HNI-HITC-PE1"
 
 # Device summary (interface + IP counts)
-uv run nautobot-mcp --json devices summary "HNI-HITC-PE1"
+nautobot-mcp --json devices summary "HNI-HITC-PE1"
 
 # Full detail: interfaces, IPs, VLANs
-uv run nautobot-mcp --json devices summary "HNI-HITC-PE1" --detail
+nautobot-mcp --json devices summary "HNI-HITC-PE1" --detail
 
 # === INTERFACES ===
-# All interfaces on a device
-uv run nautobot-mcp --json interfaces list --device "HNI-HITC-PE1"
+# All interfaces on a device (paginated)
+nautobot-mcp --json interfaces list --device "HNI-HITC-PE1" --limit 20
 
 # Single interface
-uv run nautobot-mcp --json interfaces get --device-name "HNI-HITC-PE1" --name "ae31.1256"
+nautobot-mcp --json interfaces get --device-name "HNI-HITC-PE1" --name "ae31.1256"
 
 # === IPAM ===
-# IPs assigned to a device
-uv run nautobot-mcp --json ipam ips list --device "HNI-HITC-PE1"
+# IPs assigned to a device — server-side limited (e.g. first 20 IPs)
+nautobot-mcp --json ipam addresses list --device "HNI-HITC-PE1" --limit 20
 
-# All IP prefixes
-uv run nautobot-mcp --json ipam prefixes list
+# Page 2 of IPs
+nautobot-mcp --json ipam addresses list --device "HNI-HITC-PE1" --limit 20 --offset 20
 
-# VLANs at a location
-uv run nautobot-mcp --json ipam vlans list --location "HQV"
+# All IP prefixes (paginated)
+nautobot-mcp --json ipam prefixes list --limit 10
+nautobot-mcp --json ipam prefixes list --limit 10 --offset 10
+
+# VLANs at a location (paginated)
+nautobot-mcp --json ipam vlans list --location "HQV" --limit 10
 
 # === ORGANIZATION ===
 # All locations
-uv run nautobot-mcp --json org locations list
+nautobot-mcp --json org locations list
 
 # All tenants
-uv run nautobot-mcp --json org tenants list
+nautobot-mcp --json org tenants list
 ```
 
 ## Human-Readable Output
@@ -69,7 +100,7 @@ uv run nautobot-mcp --json org tenants list
 When a user explicitly wants a formatted table on Windows:
 
 ```bash
-PYTHONIOENCODING=utf-8 uv run nautobot-mcp devices summary "HNI-HITC-PE1" --detail
+PYTHONIOENCODING=utf-8 nautobot-mcp devices summary "HNI-HITC-PE1" --detail
 ```
 
 Note: `interfaces list` does not use Unicode arrows and renders fine without the prefix.
@@ -89,7 +120,7 @@ Note: `interfaces list` does not use Unicode arrows and renders fine without the
 **`--json devices list`**:
 ```json
 {
-  "count": 31,
+  "count": 20,
   "results": [
     {
       "id": "uuid",
@@ -106,6 +137,8 @@ Note: `interfaces list` does not use Unicode arrows and renders fine without the
 }
 ```
 
+> **Note:** `count` = number of records in this page. Use `--offset` to paginate.
+
 **`--json devices summary`**:
 ```json
 {
@@ -118,6 +151,17 @@ Note: `interfaces list` does not use Unicode arrows and renders fine without the
   "vlan_count": 0,
   "enabled_count": 200,
   "disabled_count": 2
+}
+```
+
+**`--json ipam addresses list --device X --limit 20`**:
+```json
+{
+  "count": 20,
+  "results": [
+    { "id": "uuid", "address": "192.168.69.186/30", "status": "Active", ... },
+    ...
+  ]
 }
 ```
 
@@ -135,6 +179,9 @@ Note: `interfaces list` does not use Unicode arrows and renders fine without the
 - **Ignoring exit code**: Exit 1 often means encoding error, not API failure
   **Fix:** Check exit code first; retry with `--json` if code is 1
 
+- **Expecting `count` to be the total**: With server-side pagination, `count` reflects records in the current page only
+  **Fix:** Use `--limit` and `--offset` to page through results; `--limit 0` to fetch all
+
 ## Configuration
 
 The CLI auto-discovers config from:
@@ -144,6 +191,20 @@ The CLI auto-discovers config from:
 
 Override at runtime:
 ```bash
-uv run nautobot-mcp --profile prod --json devices list
-uv run nautobot-mcp --url https://nautobot.example.com --token abc123 --json devices list
+nautobot-mcp --profile prod --json devices list
+nautobot-mcp --url https://nautobot.example.com --token abc123 --json devices list
+```
+
+### `default_limit` in `.nautobot-mcp.yaml`
+
+The `default_limit` setting controls how many results are fetched when `--limit` is not specified. Set it in your config:
+
+```yaml
+profiles:
+  prod:
+    url: "https://nautobot.example.com"
+    token: "..."
+    verify_ssl: true
+active_profile: prod
+default_limit: 50   # applied to --limit when not specified
 ```
