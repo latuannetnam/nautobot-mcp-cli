@@ -10,6 +10,8 @@ import logging
 from typing import TYPE_CHECKING, Any, Optional
 
 import pynautobot
+import requests
+
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from nautobot_mcp.config import NautobotProfile, NautobotSettings
@@ -329,6 +331,48 @@ class NautobotClient:
                 message="Golden Config plugin not available",
                 hint="Ensure nautobot-golden-config is installed on your Nautobot instance",
             ) from e
+
+    def count(self, app: str, endpoint: str, **filters) -> int:
+        """O(1) count via Nautobot's /count/ endpoint.
+
+        Calls GET /api/{app}/{endpoint}/count/?... directly, bypassing
+        pynautobot's .count() which auto-paginates through all records.
+
+        Falls back to pynautobot's .count() (O(n)) if the endpoint does not
+        support /count/ (e.g., some plugin endpoints return 404).
+
+        Args:
+            app: Nautobot app name (e.g., "dcim", "ipam").
+            endpoint: Endpoint name (e.g., "interfaces", "ip_addresses", "vlans").
+            **filters: Query-string filters passed to the /count/ endpoint.
+
+        Returns:
+            Integer count of matching records.
+
+        Raises:
+            NautobotValidationError: For 400 errors or invalid filters.
+            NautobotAuthenticationError: For 401/403 errors.
+            NautobotAPIError: For 5xx errors or other API failures.
+            NautobotConnectionError: For network-level failures.
+        """
+        url = f"{self._profile.url}/api/{app}/{endpoint}/count/"
+        try:
+            resp = self.api.http_session.get(url, params=filters)
+            if resp.ok:
+                return resp.json()["count"]
+            if resp.status_code == 404:
+                # Endpoint does not support /count/ — fall back to pynautobot
+                pass
+            else:
+                resp.raise_for_status()
+        except requests.exceptions.HTTPError:
+            # Pass through to _handle_api_error
+            pass
+
+        # Fallback: pynautobot .count() — O(n) auto-pagination, but works everywhere
+        app_obj = getattr(self.api, app)
+        ep_obj = getattr(app_obj, endpoint)
+        return ep_obj.count(**filters)
 
     @property
     def cms(self):
