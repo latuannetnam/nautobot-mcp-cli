@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Query Performance Optimization
-status: Requirements defined
+status: Phase 28 context gathered
 last_updated: "2026-03-28T00:00:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,14 +18,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** v1.6 — Query Performance Optimization
+**Current focus:** Phase 28 — Adaptive Count & Fast Pagination
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 28 — Adaptive Count & Fast Pagination
 Plan: —
-Status: Requirements defined
-Last activity: 2026-03-28 — v1.6 milestone defined
+Status: Context gathered
+Last activity: 2026-03-28 — Phase 28 context captured (6 decisions made)
+
+## Context
+
+**Phase 28 scope:** Skip count() when paginating; infer has_more; add --no-count; add timing
+**Phase 29 scope:** Replace all count() with direct /count/ endpoint; add latency to MCP bridge
 
 ## Context
 
