@@ -67,6 +67,34 @@ uv run nautobot-mcp --json devices list --limit 0
 
 The `default_limit` setting in your config (`.nautobot-mcp.yaml`) controls behavior when `--limit` is omitted.
 
+## Performance: `devices inventory` Pagination
+
+`--limit N` on large devices is now fast (~3s for 700+ interfaces) thanks to direct HTTP bypass of pynautobot's auto-pagination.
+
+```bash
+# Fast: paginated interface list, ~3s for 700+ interfaces
+uv run nautobot-mcp --profile prod --json devices inventory HQV-PE1-NEW --detail interfaces --limit 5
+
+# Faster: skip the count call entirely (~2.3s) when you only need data
+uv run nautobot-mcp --profile prod --json devices inventory HQV-PE1-NEW --detail interfaces --limit 5 --no-count
+
+# --limit 0 also auto-skips count (unlimited, no count overhead)
+uv run nautobot-mcp --profile prod --json devices inventory HQV-PE1-NEW --detail interfaces --limit 0
+```
+
+**How `has_more` works:**
+- When count is fetched: `has_more` = `count > len(results)`
+- When count is skipped (`--no-count` or `limit > 0`): `has_more` is inferred: `has_more = len(results) == limit`
+  - Returned exactly `N` records with `limit=N` → more exist (`has_more: true`)
+  - Returned fewer than `N` records → last page (`has_more: false`)
+  - `total_*` fields are `null` when count is skipped
+
+**Per-section timing fields** (in JSON output):
+- `interfaces_latency_ms`: wall-clock time for interface fetch
+- `ips_latency_ms`: wall-clock time for IP fetch
+- `vlans_latency_ms`: wall-clock time for VLAN fetch
+- `total_latency_ms`: end-to-end wall-clock time
+
 ## Core Commands
 
 ### Devices
@@ -94,6 +122,14 @@ uv run nautobot-mcp --json devices inventory "Router" --detail ips       --limit
 uv run nautobot-mcp --json devices inventory "Router" --detail vlans      --limit 50
 uv run nautobot-mcp --json devices inventory "Router" --detail all        --limit 50 --offset 0
 # Returns: device + paginated section + total_*/has_more metadata
+
+# Fast pagination for large devices (e.g. 700+ interfaces)
+uv run nautobot-mcp --json devices inventory "HQV-PE1-NEW" --detail interfaces --limit 5
+# ~3s — direct HTTP bypasses pynautobot auto-pagination
+
+# Skip count overhead entirely when you don't need total counts
+uv run nautobot-mcp --json devices inventory "HQV-PE1-NEW" --detail interfaces --limit 5 --no-count
+# ~2.3s — count is skipped, has_more inferred from result count
 ```
 
 > **`devices summary --detail` was removed in v1.5.** Use `devices inventory --detail interfaces|ips|vlans|all` instead for paginated full detail.
@@ -253,11 +289,16 @@ uv run nautobot-mcp --json onboard config config.json "Router" --commit \
   "total_interfaces": 202,
   "total_ips": 214,
   "total_vlans": 0,
+  "interfaces_latency_ms": 3421.1,
+  "ips_latency_ms": null,
+  "vlans_latency_ms": null,
+  "total_latency_ms": 5543.8,
   "limit": 50,
   "offset": 0,
   "has_more": true
 }
 ```
+> **Timing fields:** `*_latency_ms` are wall-clock times. `null` when that section is not fetched. `total_*` fields are `null` when count is skipped (`--no-count` or `limit > 0` without count).
 
 **`--json ipam addresses device-ips DEVICE`**:
 ```json
