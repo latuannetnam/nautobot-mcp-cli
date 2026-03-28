@@ -1,5 +1,18 @@
 # Milestones
 
+## v1.6 Query Performance Optimization (Shipped: 2026-03-28)
+
+**Phases completed:** 24 phases, 56 plans, 44 tasks
+
+**Key accomplishments:**
+
+- [Rule 3 - Blocking] Hatchling build backend
+- `tests/test_cms_arp.py`
+- Adaptive count skipping with has_more inference, per-section timing, and parallel counts for detail=all
+- O(1) /count/ via direct HTTP, latency instrumentation in bridge, all 8 call sites migrated
+
+---
+
 ## v1.4 Operational Robustness (Shipped: 2026-03-26)
 
 **Phases completed:** 4 phases, 7 plans, 18 tasks | 55 commits | 371 files changed | +60,732 / -959 lines

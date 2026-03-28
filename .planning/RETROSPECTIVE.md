@@ -155,6 +155,52 @@ Living milestone retrospective for nautobot-mcp-cli.
 
 ---
 
+## Milestone: v1.6 — Query Performance Optimization
+
+**Shipped:** 2026-03-28
+**Phases:** 2 (Phases 28-29) | **Plans:** 2 | **Commits:** 14 | **Duration:** ~1 day
+
+### What Was Built
+
+- **Adaptive count skipping (Phase 28)** — `skip_count` plumbed through CLI → MCP tool → bridge → `get_device_inventory()`; paginated requests no longer waste O(n) count fetches; `has_more` inferred from `len(results) == limit`
+- **Per-section timing instrumentation (Phase 28)** — `interfaces_latency_ms`, `ips_latency_ms`, `vlans_latency_ms`, `total_latency_ms` in `DeviceInventoryResponse`; parallel counts via `ThreadPoolExecutor(max_workers=3)` for `detail=all`
+- **`NautobotClient.count()` O(1) (Phase 29)** — `NautobotClient.count(app, endpoint, **filters)` calls `GET /api/{app}/{endpoint}/count/?...` directly via `http_session.get`, bypassing pynautobot's O(n) auto-pagination; 404 fallback to pynautobot for plugin endpoints
+- **`latency_ms` in bridge (Phase 29)** — wall-clock timing added to every `call_nautobot` success response via `t_start = time.time()` before try block; covers full execution including `resolve_device_id` for CMS calls
+- **All 8 call sites migrated (Phase 29)** — `devices.py` fully migrated from `.count()` to `client.count()`; zero raw `.count()` occurrences remain
+
+### What Worked
+
+- **Root-cause driven scope** — v1.6 scope was derived from a single concrete performance problem (`--limit 5` slow for large devices); having a reproducible benchmark target made success unambiguous
+- **v1.5 skipped cleanly** — Phase 23-27 (Contract, Batch, Projection, Security, KPI) were never planned/built; accepted this and focused on what was actually needed; avoided scope pollution
+- **Exact code in plans** — Phase 29 plan contained exact method implementations (the `count()` method code); eliminated implementation ambiguity, reduced task-level back-and-forth
+
+### What Was Inefficient
+
+- **Requirements traceability still lagging** — PERF-01..PERF-04, OBS-01..OBS-02, UX-01..UX-02 were all implemented across phases 28-29 but not ticked in REQUIREMENTS.md until milestone close; this is the 4th consecutive milestone with this problem
+- **Two-phase execution for one feature** — count optimization could have been a single phase (28) with all three implementations: skip in `get_device_inventory`, `client.count()`, and `latency_ms`; splitting across phases added planning overhead with no benefit
+- **No live performance benchmark** — the performance improvement was verified via code inspection and unit tests; no actual before/after latency comparison against a real Nautobot server
+
+### Patterns Established
+
+- `NautobotClient.count()` pattern: `http_session.get` → check `resp.ok` → return `resp.json()["count"]` → 404 fallback → non-404 `raise_for_status()`
+- `ThreadPoolExecutor(max_workers=3)` for parallel count fan-out — shared with Phase 28 parallel counts
+- Wall-clock timing: `t_start = time.time()` before try block, `latency_ms = round((time.time() - t_start) * 1000, 1)` after success
+- `skip_count` as first-class parameter: CLI flag → MCP tool param → bridge param → function param (never optional in the wrong layer)
+
+### Key Lessons
+
+- **Write live benchmarks** — add a simple `time.time()` measurement against the real Nautobot server before and after performance work; validates the improvement actually matters
+- **Tick REQUIREMENTS.md checkboxes at plan close** — this has been a known problem since v1.2 and is still unresolved; make it a hard requirement in the plan execution workflow checklist
+- **Two-phase for one feature = overhead** — Phase 28 and 29 were functionally the same feature split artificially; consolidate similar work into single phases
+- **Scope must match execution** — planning 23-27 for v1.5 and shipping 28-29 for v1.6 meant milestone scope never matched what was built; always align ROADMAP with what you plan to build, not aspirational goals
+
+### Cost Observations
+
+- Sessions: ~3 conversations across 1 day (2026-03-28)
+- Notable: 14 commits, 17 files, +1,193 / -63 lines — lean milestone; concentrated single-focus work with minimal overhead
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Duration | Commits | Files | Lines Added | MCP Tools | Tests |
@@ -164,5 +210,6 @@ Living milestone retrospective for nautobot-mcp-cli.
 | v1.2 | 2 days | 62 | 98 | +21,735 | 164 | 293 |
 | v1.3 | 1 day | 38 | 54 | +8,169 | 3 (+ 10 workflows) | 397+11 UAT |
 | v1.4 | 2 days | 55 | 371 | +60,732 | 3 (+ 10 workflows) | 476+11 UAT |
+| v1.6 | 1 day | 14 | 17 | +1,193 | 3 (+ 10 workflows) | 478+11 UAT |
 
 **Trend:** v1.4 expanded test coverage aggressively (476 unit tests, 79 new tests) while keeping MCP tool count flat at 3. The API Bridge pattern from v1.3 means all new features are additive workflows, never new tools. Error diagnostics and registry validation added infrastructure depth rather than surface area.

@@ -8,18 +8,11 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.6 Query Performance Optimization
+## Current Milestone: v1.7 (Starting)
 
-**Goal:** Fix slow CLI and MCP queries for devices with large interface/IP counts by eliminating wasteful count fetches and adding adaptive pagination strategies.
+No milestone defined yet. Run `/gsd:new-milestone` to start planning.
 
-**Target features:**
-- P0: Skip expensive `count()` calls when requesting paginated results — infer `has_more` from returned count
-- P0: Add direct `/count/` endpoint usage as fallback for true O(1) count
-- P1: Adaptive count strategy — only fetch total counts when explicitly needed (`detail=all`, `--limit 0`)
-- P1: Per-operation timing instrumentation for observable performance
-- P2: Consistent count discipline across all modules; `--no-count` CLI flag
-
-**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28) → v1.6 Query Performance (in progress)
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only, not built) → v1.6 Query Performance (2026-03-28)
 
 ## Requirements
 
@@ -60,11 +53,19 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 
 ### Active
 
-- [ ] Eliminate wasteful `count()` auto-pagination in `devices inventory` and related queries — partial (Phase 28: skip in `get_device_inventory()`, Phase 29: eliminate remaining `count()` calls in `_execute_core()`)
-- [ ] Add direct `/count/` endpoint for O(1) count operations
-- [ ] Adaptive count strategy across all query paths
-- [ ] Per-operation timing instrumentation in CLI and MCP output — partial (Phase 28: `get_device_inventory()` timing, Phase 29+: extend to all composite workflows)
-- [ ] `--no-count` flag for pagination-only fast output — partial (Phase 28: `devices inventory` CLI + MCP, Phase 29+: extend to all relevant endpoints)
+- [ ] v1.5 requirements: ENV-01..ENV-05 (Contract & Envelope), BAT-01..BAT-05 (Batch), PRT-01..PRT-06 (Projection), SEC-01..SEC-06 (Security), KPI-01..KPI-04 (KPI Benchmarks) — all planned for v1.5 but not built; deferred to next milestone
+
+### Validated (v1.6 — Query Performance)
+
+- ✓ Eliminate wasteful `count()` auto-pagination — `skip_count` plumbed through CLI, MCP tool, bridge, `get_device_inventory()` — v1.6
+- ✓ `has_more` inference from `len(results) == limit` when count skipped — v1.6
+- ✓ Direct `/count/` endpoint for O(1) count — `NautobotClient.count()` via `http_session.get`, 404 fallback to pynautobot — v1.6
+- ✓ All `count()` call sites replaced throughout codebase — `devices.py` fully migrated — v1.6
+- ✓ Per-section timing instrumentation — `interfaces_latency_ms`, `ips_latency_ms`, `vlans_latency_ms` in `DeviceInventoryResponse` — v1.6
+- ✓ Parallel counts via `ThreadPoolExecutor` for `detail=all` — v1.6
+- ✓ `latency_ms` in `call_nautobot` response envelope — wall-clock timing for all operations — v1.6
+- ✓ `--no-count` CLI flag — skips all count operations regardless of detail — v1.6
+- ✓ `--limit 0` auto-enables `skip_count` — unlimited mode with zero count overhead — v1.6
 
 ### Rejected
 
@@ -114,9 +115,12 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 | Per-endpoint filter registry | Each CMS endpoint advertises correct FK filter(s); not domain-level | ✓ 43 entries; replaced 1-size-fits-all |
 | UUID path normalization | REST bridge strips UUID segments; linked object URLs work directly | ✓ Agents can pass full URLs |
 | Summary mode + limit ergonomics | `detail=False` strips nested arrays; `limit=N` caps all arrays independently | ✓ Ships in v1.4 |
-| Skip count for paginated results | `count()` wastes O(n) fetches when users only want a page | Ship in v1.6 |
-| Direct `/count/` endpoint for O(1) counts | pynautobot's `.count()` uses auto-pagination; Nautobot has fast `/count/` endpoint | Ship in v1.6 |
-| Infer `has_more` from result count | When limit is respected, `returned_count == limit` → more available | Ship in v1.6 |
+| Skip count for paginated results | `count()` wastes O(n) fetches when users only want a page | ✓ Shipped v1.6 |
+| Direct `/count/` endpoint for O(1) counts | pynautobot's `.count()` uses auto-pagination; Nautobot has fast `/count/` endpoint | ✓ Shipped v1.6 |
+| Infer `has_more` from result count | When limit is respected, `returned_count == limit` → more available | ✓ Shipped v1.6 |
+| 404 fallback to pynautobot | Some plugin endpoints don't expose `/count/`; 404 is not an error, it's a signal to use O(n) fallback | ✓ Shipped v1.6 |
+| Wall-clock `latency_ms` in bridge | `_execute_core`/`_execute_cms` time, not ORM-to-dict time; covers full call path including `resolve_device_id` | ✓ Shipped v1.6 |
+| Parallel counts via `ThreadPoolExecutor(max_workers=3)` | Max of 3 latencies instead of sum when `detail=all`; sequential fallback on any failure | ✓ Shipped v1.6 |
 
 ## Constraints
 
@@ -145,4 +149,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 28 complete — v1.5 milestone closed, v1.6 in progress*
+*Last updated: 2026-03-28 after v1.6 milestone shipped*
