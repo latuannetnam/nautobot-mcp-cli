@@ -329,6 +329,7 @@ def call_nautobot(
     id: Optional[str] = None,
     limit: int = DEFAULT_LIMIT,
     offset: int = 0,
+    skip_count: bool = False,
 ) -> dict:
     """Execute a Nautobot API call via the REST bridge.
 
@@ -346,6 +347,8 @@ def call_nautobot(
         id: Object UUID for single-object operations.
         limit: Max results for GET list operations (default 50, hard cap 200).
         offset: Skip N results for pagination (default 0). Requires limit > 0.
+        skip_count: If True, skip count() calls where applicable (default False).
+            For Phase 28 this is accepted but not wired; Phase 29 uses it.
 
     Returns:
         Wrapped response dict with count, results, endpoint, method, and optional truncation metadata.
