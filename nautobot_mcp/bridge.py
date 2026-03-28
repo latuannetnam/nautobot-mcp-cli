@@ -9,6 +9,7 @@ from __future__ import annotations
 import difflib
 import logging
 import re
+import time
 from typing import Optional
 
 from nautobot_mcp.catalog.engine import get_catalog
@@ -369,6 +370,7 @@ def call_nautobot(
     # Validate and normalize method
     method = _validate_method(method, base_endpoint)
 
+    t_start = time.time()
     try:
         # Route to correct backend, passing offset
         if base_endpoint.startswith("/api/"):
@@ -386,13 +388,18 @@ def call_nautobot(
                      "Use nautobot_api_catalog() to see available endpoints.",
             )
 
-        # Add request context to response (use original endpoint for transparency)
+        # Add request context and latency to response
+        latency_ms = round((time.time() - t_start) * 1000, 1)
         result["endpoint"] = endpoint
         result["method"] = method
+        result["latency_ms"] = latency_ms
         return result
 
     except NautobotMCPError:
-        raise  # Re-raise our structured errors
+        # Record latency even on known errors
+        result = {"endpoint": endpoint, "method": method}
+        result["latency_ms"] = round((time.time() - t_start) * 1000, 1)
+        raise
     except Exception as e:
         # Translate unexpected errors
         client._handle_api_error(e, method.lower(), endpoint)
