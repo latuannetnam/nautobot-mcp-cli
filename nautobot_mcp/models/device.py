@@ -96,9 +96,25 @@ class DeviceInventoryResponse(BaseModel):
         default=None,
         description="VLANs on device interfaces",
     )
-    total_interfaces: int = Field(default=0, description="Total interface count")
-    total_ips: int = Field(default=0, description="Total IP count")
-    total_vlans: int = Field(default=0, description="Total VLAN count")
+    total_interfaces: Optional[int] = Field(default=None, description="Total interface count (null if count skipped)")
+    total_ips: Optional[int] = Field(default=None, description="Total IP count (null if count skipped)")
+    total_vlans: Optional[int] = Field(default=None, description="Total VLAN count (null if count skipped)")
+    interfaces_latency_ms: Optional[float] = Field(
+        default=None,
+        description="Wall-clock ms for interfaces section fetch (null if section not fetched)"
+    )
+    ips_latency_ms: Optional[float] = Field(
+        default=None,
+        description="Wall-clock ms for IPs section fetch (null if section not fetched)"
+    )
+    vlans_latency_ms: Optional[float] = Field(
+        default=None,
+        description="Wall-clock ms for VLANs section fetch (null if section not fetched)"
+    )
+    total_latency_ms: Optional[float] = Field(
+        default=None,
+        description="Total wall-clock ms from first API call to response return"
+    )
     limit: int = Field(default=0, description="Max results per page")
     offset: int = Field(default=0, description="Offset applied")
     has_more: bool = Field(default=False, description="More results available")
