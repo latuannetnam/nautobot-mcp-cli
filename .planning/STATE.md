@@ -19,19 +19,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** Phase 28 — adaptive-count-fast-pagination
+**Current focus:** Phase 29 — direct-count-endpoint
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
-Status: Phase 28 plan 01 complete — all 6 tasks executed and committed
+Phase: 29
+Status: Context gathered — ready for planning
 Last activity: 2026-03-28
 
 ## Context
 
 **Phase 28 status:** ✅ COMPLETE — all 6 tasks committed; skip_count plumbed through all layers
-**Phase 29 scope:** Replace all pynautobot count() calls with direct /count/ endpoint; wire skip_count in bridge
+**Phase 29 status:** Context gathered — ready for planning
+**Phase 29 scope:** Replace all pynautobot count() calls with direct /count/ endpoint via NautobotClient.count(); add latency_ms to call_nautobot response; wire skip_count through _execute_core
 
 ## Context
 
