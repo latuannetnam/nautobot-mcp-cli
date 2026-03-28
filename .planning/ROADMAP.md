@@ -76,7 +76,7 @@
 | 25 | Projection & Token Efficiency | Response modes, field projection, minimal compact output | PRT-01, PRT-02, PRT-03, PRT-04, PRT-05, PRT-06 | 6 |
 | 26 | Security & Resource Guardrails | Endpoint allowlist, auth hardening, resource limits | SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06 | 6 |
 | 27 | KPI Benchmarks & Verification | Observability, metrics endpoint, benchmark harness, UAT | KPI-01, KPI-02, KPI-03, KPI-04 | 4 |
-| 28 | Adaptive Count & Fast Pagination | Skip count when paginating; infer has_more; add timing instrumentation | PERF-01, PERF-02, OBS-01, UX-01, UX-02 | 5 |
+| 28 | Adaptive Count & Fast Pagination | Skip count when paginating; infer has_more; add timing instrumentation | Complete    | 2026-03-28 |
 | 29 | Direct /count/ Endpoint & Consistency | O(1) count fallback; replace all count() calls; add latency to bridge | PERF-03, PERF-04, OBS-02 | 3 |
 
 #### Phase Details
