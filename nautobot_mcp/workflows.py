@@ -171,6 +171,7 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
             "detail": "detail",
             "limit": "limit",
             "offset": "offset",
+            "skip_count": "skip_count",
         },
         "required": ["device"],
     },
