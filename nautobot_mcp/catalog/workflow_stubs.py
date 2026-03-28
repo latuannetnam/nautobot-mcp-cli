@@ -95,4 +95,18 @@ WORKFLOW_STUBS = {
             "cms:juniper_static_route_nexthops",
         ],
     },
+    "devices_inventory": {
+        "params": {
+            "device": "str (required)",
+            "detail": "str (optional, 'interfaces'|'ips'|'vlans'|'all', default: 'interfaces')",
+            "limit": "int (optional, default 50)",
+            "offset": "int (optional, default 0)",
+        },
+        "description": "Paginated device inventory: interfaces, IPs, VLANs with bulk fetches",
+        "aggregates": [
+            "/api/dcim/interfaces/",
+            "/api/ipam/ip-addresses/",
+            "/api/ipam/vlans/",
+        ],
+    },
 }

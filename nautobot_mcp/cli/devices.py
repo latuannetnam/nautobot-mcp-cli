@@ -116,9 +116,8 @@ def devices_delete(
 def devices_summary(
     ctx: typer.Context,
     name: str = typer.Argument(help="Device name"),
-    detail: bool = typer.Option(False, "--detail", help="Show full interface/IP breakdown"),
 ) -> None:
-    """Get complete device overview with counts and stats."""
+    """Get device metadata and counts — fast, no N+1."""
     try:
         client = get_client_from_ctx(ctx)
         result = devices.get_device_summary(client, name=name)
@@ -129,7 +128,6 @@ def devices_summary(
             typer.echo(json.dumps(data, indent=2))
             return
 
-        # Always show compact overview
         d = data["device"]
         typer.echo(f"Device: {d['name']} ({d['status']})")
         typer.echo(f"  Type: {d['device_type']['name']} | Location: {d['location']['name']}")
@@ -141,20 +139,56 @@ def devices_summary(
         typer.echo(f"  IP Addresses: {data['ip_count']}")
         typer.echo(f"  VLANs: {data['vlan_count']}")
 
-        if detail:
+    except Exception as e:
+        handle_cli_error(e)
+
+
+@devices_app.command("inventory")
+def devices_inventory(
+    ctx: typer.Context,
+    name: str = typer.Argument(help="Device name"),
+    detail: str = typer.Option("interfaces", "--detail",
+        help="interfaces|ips|vlans|all  [default: interfaces]"),
+    limit: int = typer.Option(50, "--limit", help="Max results per page"),
+    offset: int = typer.Option(0, "--offset", help="Skip N results"),
+) -> None:
+    """Get full device inventory: interfaces, IPs, VLANs with pagination."""
+    try:
+        client = get_client_from_ctx(ctx)
+        result = devices.get_device_inventory(
+            client, name=name, detail=detail, limit=limit, offset=offset,
+        )
+        data = result.model_dump()
+
+        if ctx.obj.get("json", False):
+            import json
+            typer.echo(json.dumps(data, indent=2))
+            return
+
+        d = data["device"]
+        typer.echo(f"Device: {d['name']} ({d['status']})")
+        typer.echo(f"  Type: {d['device_type']['name']} | Location: {d['location']['name']}")
+        typer.echo(f"\n  Interfaces: {data['total_interfaces']} total")
+        typer.echo(f"  IP Addresses: {data['total_ips']} total")
+        typer.echo(f"  VLANs: {data['total_vlans']} total")
+        typer.echo(f"  Pagination: limit={data['limit']} offset={data['offset']} has_more={data['has_more']}")
+
+        if data.get("interfaces"):
             typer.echo("\n  --- Interfaces ---")
             for iface in data["interfaces"]:
                 status = "↑" if iface["enabled"] else "↓"
                 desc = f" — {iface['description']}" if iface.get("description") else ""
                 typer.echo(f"  {status} {iface['name']} ({iface['type']}){desc}")
-            if data["interface_ips"]:
-                typer.echo("\n  --- IP Assignments ---")
-                for ip in data["interface_ips"]:
-                    typer.echo(f"  {ip['interface_name']}: {ip['address']} ({ip['status']})")
-            if data["vlans"]:
-                typer.echo("\n  --- VLANs ---")
-                for vlan in data["vlans"]:
-                    typer.echo(f"  VLAN {vlan['vid']}: {vlan['name']} ({vlan['status']})")
+
+        if data.get("interface_ips"):
+            typer.echo("\n  --- IP Assignments ---")
+            for ip in data["interface_ips"]:
+                typer.echo(f"  {ip['interface_name']}: {ip['address']} ({ip['status']})")
+
+        if data.get("vlans"):
+            typer.echo("\n  --- VLANs ---")
+            for vlan in data["vlans"]:
+                typer.echo(f"  VLAN {vlan['vid']}: {vlan['name']} ({vlan['status']})")
 
     except Exception as e:
         handle_cli_error(e)

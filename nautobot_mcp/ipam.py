@@ -202,11 +202,8 @@ def list_vlans(
     """
     try:
         if device:
-            # Device filter: walk interfaces → extract VLAN IDs → fetch each
-            iface_kwargs: dict = {"device": device}
-            if limit > 0:
-                iface_kwargs["limit"] = limit
-            iface_records = list(client.api.dcim.interfaces.filter(**iface_kwargs))
+            # Device filter: collect all VLAN IDs from interfaces (must fetch all for accuracy)
+            iface_records = list(client.api.dcim.interfaces.filter(device=device))
             vlan_ids: set[str] = set()
             for iface in iface_records:
                 if hasattr(iface, "untagged_vlan") and iface.untagged_vlan:
@@ -218,11 +215,17 @@ def list_vlans(
             if not vlan_ids:
                 return ListResponse(count=0, results=[])
 
-            all_results = []
-            for vlan_id in vlan_ids:
-                record = client.api.ipam.vlans.get(id=vlan_id)
-                if record:
+            # Bulk fetch VLANs by ID — O(1) API calls instead of N
+            from nautobot_mcp.utils import chunked
+            vlan_ids_list = list(vlan_ids)
+            total_count = len(vlan_ids_list)
+            # Apply offset/limit at result level
+            paginated_ids = vlan_ids_list[offset:offset + limit] if limit > 0 else vlan_ids_list
+            all_results: list[VLANSummary] = []
+            for chunk in chunked(paginated_ids, 500):
+                for record in client.api.ipam.vlans.filter(id__in=chunk):
                     all_results.append(VLANSummary.from_nautobot(record))
+            return ListResponse(count=total_count, results=all_results)
         else:
             filters = {}
             if location:
@@ -259,53 +262,86 @@ def get_device_ips(
     client: NautobotClient,
     device_name: str,
     limit: int = 0,
+    offset: int = 0,
 ) -> DeviceIPsResponse:
     """Get all IPs assigned to a device's interfaces via the M2M table.
 
-    Strategy:
-    1. Get all interfaces for the device (server-side limited if limit > 0)
-    2. For each interface, fetch ip_address_to_interface M2M records
-    3. Collect IP details for each assignment
+    Bulk strategy — O(3) API calls regardless of interface count:
+    1. Collect all interface IDs for the device
+    2. Bulk fetch all M2M records in one call (chunked if many interfaces)
+    3. Bulk fetch all IP details in one call (chunked)
 
     Args:
         client: NautobotClient instance.
         device_name: Device name to query.
-        limit: Server-side limit on interfaces fetched (0 = no limit).
+        limit: Max total entries to return (0 = all).
+        offset: Skip N entries for pagination.
 
     Returns:
         DeviceIPsResponse with interface_ips and unlinked_ips.
     """
-    try:
-        iface_kwargs: dict = {"device": device_name}
-        if limit > 0:
-            iface_kwargs["limit"] = limit
-        iface_records = list(client.api.dcim.interfaces.filter(**iface_kwargs))
+    from nautobot_mcp.utils import chunked
 
-        interface_ips = []
-        for iface in iface_records:
-            m2m_records = list(
-                client.api.ipam.ip_address_to_interface.filter(interface=str(iface.id))
+    try:
+        # Pass 1: collect all interface IDs
+        iface_records = list(client.api.dcim.interfaces.filter(device=device_name))
+        iface_ids = [str(i.id) for i in iface_records]
+        iface_map = {str(i.id): i.name for i in iface_records}
+
+        if not iface_ids:
+            return DeviceIPsResponse(
+                device_name=device_name,
+                total_ips=0,
+                interface_ips=[],
+                unlinked_ips=[],
             )
-            for m2m in m2m_records:
-                ip_record = client.api.ipam.ip_addresses.get(id=str(m2m.ip_address.id))
-                if ip_record:
-                    status = "Unknown"
-                    if hasattr(ip_record, "status") and ip_record.status:
-                        status = getattr(ip_record.status, "display", str(ip_record.status))
-                    interface_ips.append(
-                        DeviceIPEntry(
-                            interface_name=iface.name,
-                            interface_id=str(iface.id),
-                            address=str(ip_record.address),
-                            ip_id=str(ip_record.id),
-                            status=status,
-                        )
-                    )
+
+        # Pass 2: bulk M2M — try all IDs at once, chunk if too many
+        CHUNK = 500
+        m2m_records: list = []
+        for chunk in chunked(iface_ids, CHUNK):
+            chunk_records = list(
+                client.api.ipam.ip_address_to_interface.filter(interface=chunk)
+            )
+            m2m_records.extend(chunk_records)
+
+        # Collect all IP IDs from M2M results
+        ip_ids = list({str(m.ip_address.id) for m in m2m_records})
+
+        # Pass 3: bulk IP lookup — chunk if many IDs
+        ip_map: dict = {}
+        for chunk in chunked(ip_ids, CHUNK):
+            for ip in client.api.ipam.ip_addresses.filter(id__in=chunk):
+                ip_map[str(ip.id)] = ip
+
+        # Build entries using O(1) lookups
+        all_entries: list[DeviceIPEntry] = []
+        for m2m in m2m_records:
+            ip_id = str(m2m.ip_address.id)
+            ip_record = ip_map.get(ip_id)
+            if not ip_record:
+                continue
+            status = "Unknown"
+            if hasattr(ip_record, "status") and ip_record.status:
+                status = getattr(ip_record.status, "display", str(ip_record.status))
+            all_entries.append(
+                DeviceIPEntry(
+                    interface_name=iface_map.get(str(m2m.interface.id), str(m2m.interface.id)),
+                    interface_id=str(m2m.interface.id),
+                    address=str(ip_record.address),
+                    ip_id=ip_id,
+                    status=status,
+                )
+            )
+
+        total_ips = len(all_entries)
+        # Apply offset/limit at the M2M result level
+        paginated = all_entries[offset:offset + limit] if limit > 0 else all_entries[offset:]
 
         return DeviceIPsResponse(
             device_name=device_name,
-            total_ips=len(interface_ips),
-            interface_ips=interface_ips,
+            total_ips=total_ips,
+            interface_ips=paginated,
             unlinked_ips=[],
         )
 

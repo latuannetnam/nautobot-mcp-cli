@@ -165,8 +165,8 @@ class TestWorkflowStubs:
     """Test workflow stub entries."""
 
     def test_workflow_count(self):
-        """All 10 workflows are registered."""
-        assert len(WORKFLOW_STUBS) == 10
+        """All workflows are registered."""
+        assert len(WORKFLOW_STUBS) == 11
 
     def test_expected_workflows_present(self):
         """All expected workflow names are present."""
@@ -181,6 +181,7 @@ class TestWorkflowStubs:
             "verify_compliance",
             "compare_bgp",
             "compare_routes",
+            "devices_inventory",
         ]
         for wf in expected:
             assert wf in WORKFLOW_STUBS, f"Workflow '{wf}' missing from WORKFLOW_STUBS"

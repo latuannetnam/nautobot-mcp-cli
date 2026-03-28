@@ -6,11 +6,11 @@ returning curated DeviceSummary pydantic models.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 from nautobot_mcp.exceptions import NautobotNotFoundError
 from nautobot_mcp.models.base import ListResponse
-from nautobot_mcp.models.device import DeviceSummary, DeviceSummaryResponse
+from nautobot_mcp.models.device import DeviceSummary, DeviceStatsResponse, DeviceInventoryResponse
 
 if TYPE_CHECKING:
     from nautobot_mcp.client import NautobotClient
@@ -228,47 +228,127 @@ def delete_device(
 def get_device_summary(
     client: NautobotClient,
     name: str,
-) -> DeviceSummaryResponse:
-    """Get complete device overview: info + interfaces + IPs + VLANs + counts.
+) -> DeviceStatsResponse:
+    """Get device metadata + counts — fast, 4 API calls max.
 
-    Composes get_device, list_interfaces, get_device_ips, and list_vlans
-    into a single response. Uses existing functions — no duplicate API logic.
+    Does NOT fetch interface/IP/VLAN detail. Use get_device_inventory() for
+    full inventory with pagination.
 
     Args:
         client: NautobotClient instance.
         name: Device hostname.
 
     Returns:
-        DeviceSummaryResponse with all device data and counts.
+        DeviceStatsResponse with device info and 5 counts.
+    """
+    # Step 1: Get device info (1 API call)
+    device = get_device(client, name=name)
+
+    # Step 2: Interface counts (1 API call — pynautobot returns .count on response)
+    iface_resp = client.api.dcim.interfaces.filter(device=name)
+    iface_list = list(iface_resp)  # pynautobot auto-paginates; count is on the response object
+    interface_count = len(iface_list)
+    enabled_count = sum(1 for i in iface_list if getattr(i, "enabled", False))
+    disabled_count = interface_count - enabled_count
+
+    # Step 3: IP count (1 API call — pynautobot returns .count on response)
+    ip_resp = client.api.ipam.ip_addresses.filter(device=name)
+    ip_list = list(ip_resp)
+    ip_count = len(ip_list)
+
+    # Step 4: VLAN count (1 API call — pynautobot returns .count on response)
+    vlan_resp = client.api.ipam.vlans.filter(device=name)
+    vlan_list = list(vlan_resp)
+    vlan_count = len(vlan_list)
+
+    return DeviceStatsResponse(
+        device=device,
+        interface_count=interface_count,
+        ip_count=ip_count,
+        vlan_count=vlan_count,
+        enabled_count=enabled_count,
+        disabled_count=disabled_count,
+    )
+
+
+def get_device_inventory(
+    client: NautobotClient,
+    name: Optional[str] = None,
+    device: Optional[str] = None,
+    detail: Literal["interfaces", "ips", "vlans", "all"] = "interfaces",
+    limit: int = 50,
+    offset: int = 0,
+) -> DeviceInventoryResponse:
+    """Get full device inventory with pagination.
+
+    Uses bulk fetches for IPs and VLANs — no N+1.
+
+    Args:
+        client: NautobotClient instance.
+        name: Device hostname (CLI style).
+        device: Device hostname (workflow style alias of `name`).
+        detail: Which data to fetch: 'interfaces', 'ips', 'vlans', or 'all'.
+        limit: Max results per section (0 = all).
+        offset: Skip N results for pagination.
+
+    Returns:
+        DeviceInventoryResponse with paginated device data.
     """
     from nautobot_mcp import interfaces as iface_mod  # noqa: PLC0415
     from nautobot_mcp import ipam as ipam_mod  # noqa: PLC0415
 
-    # Step 1: Get device info
-    device = get_device(client, name=name)
+    device_name = device or name
+    if not device_name:
+        raise ValueError("Either 'name' or 'device' must be provided")
 
-    # Step 2: Get interfaces
-    iface_result = iface_mod.list_interfaces(client, device_name=name, limit=0)
-    iface_list = iface_result.results
+    if detail not in {"interfaces", "ips", "vlans", "all"}:
+        raise ValueError("detail must be one of: interfaces, ips, vlans, all")
+    if limit < 0 or offset < 0:
+        raise ValueError("limit and offset must be >= 0")
 
-    # Step 3: Get IPs via M2M
-    ip_result = ipam_mod.get_device_ips(client, device_name=name)
+    # Always get device info
+    device_obj = get_device(client, name=device_name)
 
-    # Step 4: Get VLANs via interfaces
-    vlan_result = ipam_mod.list_vlans(client, device=name, limit=0)
+    # Always fetch core totals for consistent metadata
+    total_interfaces = len(iface_mod.list_interfaces(client, device_name=device_name, limit=0).results)
+    total_ips = ipam_mod.get_device_ips(client, device_name=device_name, limit=0, offset=0).total_ips
+    total_vlans = ipam_mod.list_vlans(client, device=device_name, limit=0, offset=0).count
 
-    # Step 5: Compute counts
-    enabled_count = sum(1 for i in iface_list if i.enabled)
-    disabled_count = len(iface_list) - enabled_count
+    interfaces_data: list | None = None
+    interface_ips_data: list | None = None
+    vlans_data: list | None = None
 
-    return DeviceSummaryResponse(
-        device=device,
-        interfaces=iface_list,
-        interface_ips=ip_result.interface_ips,
-        vlans=vlan_result.results,
-        interface_count=len(iface_list),
-        ip_count=ip_result.total_ips,
-        vlan_count=vlan_result.count,
-        enabled_count=enabled_count,
-        disabled_count=disabled_count,
+    if detail in ("interfaces", "all"):
+        interfaces_data = iface_mod.list_interfaces(
+            client, device_name=device_name, limit=limit, offset=offset
+        ).results
+
+    if detail in ("ips", "all"):
+        interface_ips_data = ipam_mod.get_device_ips(
+            client, device_name=device_name, limit=limit, offset=offset
+        ).interface_ips
+
+    if detail in ("vlans", "all"):
+        vlans_data = ipam_mod.list_vlans(
+            client, device=device_name, limit=limit, offset=offset
+        ).results
+
+    has_more = (
+        (detail in ("interfaces", "all") and offset + (len(interfaces_data) if interfaces_data else 0) < total_interfaces)
+        or (detail in ("ips", "all") and offset + (len(interface_ips_data) if interface_ips_data else 0) < total_ips)
+        or (detail in ("vlans", "all") and offset + (len(vlans_data) if vlans_data else 0) < total_vlans)
     )
+
+    return DeviceInventoryResponse(
+        device=device_obj,
+        interfaces=interfaces_data,
+        interface_ips=interface_ips_data,
+        vlans=vlans_data,
+        total_interfaces=total_interfaces,
+        total_ips=total_ips,
+        total_vlans=total_vlans,
+        limit=limit,
+        offset=offset,
+        has_more=has_more,
+    )
+

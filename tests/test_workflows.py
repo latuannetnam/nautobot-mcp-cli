@@ -40,8 +40,8 @@ class TestRegistryMatchesStubs:
         )
 
     def test_registry_has_ten_entries(self):
-        """Should have exactly 10 workflow entries."""
-        assert len(WORKFLOW_REGISTRY) == 10
+        """Should have exactly 11 workflow entries."""
+        assert len(WORKFLOW_REGISTRY) == 11
 
     def test_all_registry_entries_have_function(self):
         """Every entry must have a callable 'function'."""

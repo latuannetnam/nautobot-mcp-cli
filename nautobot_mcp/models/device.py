@@ -69,24 +69,36 @@ class DeviceSummary(BaseModel):
         )
 
 
-class DeviceSummaryResponse(BaseModel):
-    """Complete device overview: info + interfaces + IPs + VLANs + counts."""
+class DeviceStatsResponse(BaseModel):
+    """Stats-only device overview — fast, 4 API calls max."""
 
     device: DeviceSummary = Field(description="Core device info")
-    interfaces: list[InterfaceSummary] = Field(
-        default_factory=list,
-        description="All interfaces on this device",
-    )
-    interface_ips: list[DeviceIPEntry] = Field(
-        default_factory=list,
-        description="IPs assigned to interfaces via M2M",
-    )
-    vlans: list[VLANSummary] = Field(
-        default_factory=list,
-        description="VLANs on device interfaces",
-    )
     interface_count: int = Field(default=0, description="Total interface count")
     ip_count: int = Field(default=0, description="Total IP count")
     vlan_count: int = Field(default=0, description="Total VLAN count")
     enabled_count: int = Field(default=0, description="Enabled interfaces")
     disabled_count: int = Field(default=0, description="Disabled interfaces")
+
+
+class DeviceInventoryResponse(BaseModel):
+    """Full device inventory: interfaces, IPs, VLANs with pagination."""
+
+    device: DeviceSummary = Field(description="Core device info")
+    interfaces: list[InterfaceSummary] | None = Field(
+        default=None,
+        description="Interfaces on this device",
+    )
+    interface_ips: list[DeviceIPEntry] | None = Field(
+        default=None,
+        description="IPs assigned to interfaces via M2M",
+    )
+    vlans: list[VLANSummary] | None = Field(
+        default=None,
+        description="VLANs on device interfaces",
+    )
+    total_interfaces: int = Field(default=0, description="Total interface count")
+    total_ips: int = Field(default=0, description="Total IP count")
+    total_vlans: int = Field(default=0, description="Total VLAN count")
+    limit: int = Field(default=0, description="Max results per page")
+    offset: int = Field(default=0, description="Offset applied")
+    has_more: bool = Field(default=False, description="More results available")

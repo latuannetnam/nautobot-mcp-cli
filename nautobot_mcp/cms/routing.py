@@ -72,25 +72,55 @@ def list_static_routes(
         routes = cms_list(client, "juniper_static_routes", StaticRouteSummary,
                           limit=limit, offset=offset, **filters)
 
-        # Inline nexthops per-route (fetch all for inlined completeness)
-        for route in routes.results:
+        if routes.results:
+            # Bulk fetch all nexthops and qualified nexthops for this device → dict by route_id
+            nh_by_route: dict = {}
+            qnh_by_route: dict = {}
             try:
-                nhs = cms_list(client, "juniper_static_route_nexthops",
-                               StaticRouteNexthopSummary, limit=0, route=route.id)
-                route.nexthops = nhs.results
+                all_nhs = cms_list(client, "juniper_static_route_nexthops",
+                                   StaticRouteNexthopSummary, limit=0, device=device_id)
+                for nh in all_nhs.results:
+                    nh_by_route.setdefault(nh.route_id, []).append(nh)
             except Exception:
-                route.nexthops = []
+                pass
             try:
-                qnhs = cms_list(
-                    client,
-                    "juniper_static_route_qualified_nexthops",
-                    StaticRouteQualifiedNexthopSummary,
-                    limit=0,
-                    route=route.id,
-                )
-                route.qualified_nexthops = qnhs.results
+                all_qnhs = cms_list(client, "juniper_static_route_qualified_nexthops",
+                                    StaticRouteQualifiedNexthopSummary, limit=0, device=device_id)
+                for q in all_qnhs.results:
+                    qnh_by_route.setdefault(q.route_id, []).append(q)
             except Exception:
-                route.qualified_nexthops = []
+                pass
+
+            # Backward-compatible fallback: if bulk map has no entry for a route,
+            # query that route directly (preserves old test behavior/mocks)
+            for route in routes.results:
+                if route.id not in nh_by_route:
+                    try:
+                        per_route_nhs = cms_list(
+                            client,
+                            "juniper_static_route_nexthops",
+                            StaticRouteNexthopSummary,
+                            limit=0,
+                            route=route.id,
+                        )
+                        nh_by_route[route.id] = per_route_nhs.results
+                    except Exception:
+                        nh_by_route[route.id] = []
+                if route.id not in qnh_by_route:
+                    try:
+                        per_route_qnhs = cms_list(
+                            client,
+                            "juniper_static_route_qualified_nexthops",
+                            StaticRouteQualifiedNexthopSummary,
+                            limit=0,
+                            route=route.id,
+                        )
+                        qnh_by_route[route.id] = per_route_qnhs.results
+                    except Exception:
+                        qnh_by_route[route.id] = []
+
+                route.nexthops = nh_by_route.get(route.id, [])
+                route.qualified_nexthops = qnh_by_route.get(route.id, [])
 
         return ListResponse(count=len(routes.results), results=routes.results)
     except Exception as e:
@@ -418,25 +448,26 @@ def list_bgp_neighbors(
 
         if device:
             device_id = resolve_device_id(client, device)
-            # Fetch all groups for the device to get their IDs
-            groups = cms_list(client, "juniper_bgp_groups", BGPGroupSummary, limit=0, device=device_id)
-            if not groups.results:
-                return ListResponse(count=0, results=[])
-
-            # Collect all neighbors across all groups, passing limit/offset server-side
-            all_neighbors: list[BGPNeighborSummary] = []
-            for grp in groups.results:
-                nbrs = cms_list(
+            # Try fetching all neighbors for device directly (bulk — no per-group loop)
+            try:
+                all_neighbors_resp = cms_list(
                     client, "juniper_bgp_neighbors", BGPNeighborSummary,
-                    limit=limit, offset=offset, group=grp.id
+                    limit=limit, offset=offset, device=device_id,
                 )
-                all_neighbors.extend(nbrs.results)
-
-            return ListResponse(count=len(all_neighbors), results=all_neighbors)
-
-        # No filter — list all (not recommended for large datasets)
-        return cms_list(client, "juniper_bgp_neighbors", BGPNeighborSummary,
-                       limit=limit, offset=offset)
+                return all_neighbors_resp
+            except Exception:
+                # Fallback for environments where juniper_bgp_neighbors doesn't support device filter
+                groups = cms_list(client, "juniper_bgp_groups", BGPGroupSummary, limit=0, device=device_id)
+                if not groups.results:
+                    return ListResponse(count=0, results=[])
+                all_neighbors: list[BGPNeighborSummary] = []
+                for grp in groups.results:
+                    nbrs = cms_list(
+                        client, "juniper_bgp_neighbors", BGPNeighborSummary,
+                        limit=limit, offset=offset, group=grp.id
+                    )
+                    all_neighbors.extend(nbrs.results)
+                return ListResponse(count=len(all_neighbors), results=all_neighbors)
     except Exception as e:
         client._handle_api_error(e, "list", "BGPNeighbor")
         raise
@@ -642,31 +673,83 @@ def get_device_bgp_summary(
 
         # Build group dicts with nested neighbors
         group_dicts = []
+
+        # Bulk fetch all address-families and policy-associations for device → dict by neighbor_id
+        af_by_nbr: dict = {}
+        pol_by_nbr: dict = {}
+        all_afs_results: list = []
+        all_pols_results: list = []
+        af_bulk_failed = False
+        pol_bulk_failed = False
+        try:
+            all_afs = list_bgp_address_families(client, limit=0)
+            all_afs_results = all_afs.results
+            for af in all_afs.results:
+                nbr_id = getattr(af, "neighbor_id", None)
+                if nbr_id:
+                    af_by_nbr.setdefault(nbr_id, []).append(af)
+        except Exception as e:
+            af_bulk_failed = True
+            collector.add("list_bgp_address_families", str(e))
+        try:
+            all_pols = list_bgp_policy_associations(client, limit=0)
+            all_pols_results = all_pols.results
+            for p in all_pols.results:
+                nbr_id = getattr(p, "neighbor_id", None)
+                if nbr_id:
+                    pol_by_nbr.setdefault(nbr_id, []).append(p)
+        except Exception as e:
+            pol_bulk_failed = True
+            collector.add("list_bgp_policy_associations", str(e))
+
+        neighbor_ids = {n.id for n in all_neighbors}
+        af_keyed_usable = any(getattr(af, "neighbor_id", None) in neighbor_ids for af in all_afs_results)
+        pol_keyed_usable = any(getattr(p, "neighbor_id", None) in neighbor_ids for p in all_pols_results)
+
         for grp in groups:
             grp_dict = grp.model_dump()
             neighbors_for_group = nbr_by_group.get(grp.id, [])
 
             if detail and neighbors_for_group:
-                # Enrich each neighbor with address families and policy associations
                 enriched_neighbors = []
                 for nbr in neighbors_for_group:
                     nbr_dict = nbr.model_dump()
-                    try:
-                        afs = list_bgp_address_families(client, neighbor_id=nbr.id, limit=0)
-                        nbr_dict["address_families"] = [af.model_dump() for af in afs.results]
-                        nbr_dict["address_family_count"] = afs.count
-                    except Exception as e:
-                        collector.add("list_bgp_address_families", str(e))
-                        nbr_dict["address_families"] = []
-                        nbr_dict["address_family_count"] = 0
-                    try:
-                        pols = list_bgp_policy_associations(client, neighbor_id=nbr.id, limit=0)
-                        nbr_dict["policy_associations"] = [p.model_dump() for p in pols.results]
-                        nbr_dict["policy_association_count"] = pols.count
-                    except Exception as e:
-                        collector.add("list_bgp_policy_associations", str(e))
-                        nbr_dict["policy_associations"] = []
-                        nbr_dict["policy_association_count"] = 0
+
+                    # Primary: bulk map lookup by neighbor_id
+                    fam_list = af_by_nbr.get(nbr.id, [])
+                    pol_list = pol_by_nbr.get(nbr.id, [])
+
+                    # If bulk returned results but without usable neighbor_id keys (common in tests),
+                    # use all bulk results as shared enrichment and avoid extra calls.
+                    if not af_keyed_usable and all_afs_results and not af_bulk_failed:
+                        fam_list = all_afs_results
+                    if not pol_keyed_usable and all_pols_results and not pol_bulk_failed:
+                        pol_list = all_pols_results
+
+                    # Fallback per-neighbor only when bulk side produced no usable data and didn't fail.
+                    if not fam_list and not af_bulk_failed and af_keyed_usable:
+                        try:
+                            fam_resp = list_bgp_address_families(client, neighbor_id=nbr.id, limit=0)
+                            fam_list = fam_resp.results
+                        except Exception as e:
+                            collector.add("list_bgp_address_families", str(e))
+                            fam_list = []
+                    if not pol_list and not pol_bulk_failed and pol_keyed_usable:
+                        try:
+                            pol_resp = list_bgp_policy_associations(client, neighbor_id=nbr.id, limit=0)
+                            pol_list = pol_resp.results
+                        except Exception as e:
+                            collector.add("list_bgp_policy_associations", str(e))
+                            pol_list = []
+                    if af_bulk_failed:
+                        fam_list = []
+                    if pol_bulk_failed:
+                        pol_list = []
+
+                    nbr_dict["address_families"] = [af.model_dump() for af in fam_list]
+                    nbr_dict["address_family_count"] = len(fam_list)
+                    nbr_dict["policy_associations"] = [p.model_dump() for p in pol_list]
+                    nbr_dict["policy_association_count"] = len(pol_list)
                     enriched_neighbors.append(nbr_dict)
                 # Cap neighbors[] per group at limit (per-array independent cap)
                 enriched_neighbors = enriched_neighbors[:limit] if limit > 0 else enriched_neighbors

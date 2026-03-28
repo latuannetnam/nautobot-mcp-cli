@@ -70,18 +70,19 @@ def list_firewall_filters(
                         limit=limit, offset=offset, **extra)
 
         if filters.results:
+            # Bulk fetch all terms for all filters in one call → dict by filter_id
+            all_terms = cms_list(
+                client,
+                "juniper_firewall_terms",
+                FirewallTermSummary,
+                limit=0,
+                device=device_id,
+            )
+            term_count: dict = {}
+            for t in all_terms.results:
+                term_count[t.filter_id] = term_count.get(t.filter_id, 0) + 1
             for f in filters.results:
-                try:
-                    terms = cms_list(
-                        client,
-                        "juniper_firewall_terms",
-                        FirewallTermSummary,
-                        limit=0,
-                        filter=f.id,
-                    )
-                    f.term_count = len(terms.results)
-                except Exception:
-                    pass
+                f.term_count = term_count.get(f.id, 0)
 
         return ListResponse(count=len(filters.results), results=filters.results)
     except Exception as e:
@@ -111,30 +112,32 @@ def get_firewall_filter(client: NautobotClient, id: str) -> FirewallFilterSummar
         )
         fw_filter.term_count = len(terms.results)
 
-        # Populate match_count and action_count for each term
+        # Bulk fetch all match-conditions and all actions for this filter → dict by term_id
+        all_mc = cms_list(
+            client,
+            "juniper_firewall_match_conditions",
+            FirewallMatchConditionSummary,
+            limit=0,
+            filter=id,
+        )
+        all_actions = cms_list(
+            client,
+            "juniper_firewall_actions",
+            FirewallFilterActionSummary,
+            limit=0,
+            filter=id,
+        )
+        mc_count: dict = {}
+        for mc in all_mc.results:
+            mc_count[mc.term_id] = mc_count.get(mc.term_id, 0) + 1
+        action_count: dict = {}
+        for a in all_actions.results:
+            action_count[a.term_id] = action_count.get(a.term_id, 0) + 1
+
+        # Populate counts for each term
         for term in terms.results:
-            try:
-                mc = cms_list(
-                    client,
-                    "juniper_firewall_match_conditions",
-                    FirewallMatchConditionSummary,
-                    limit=0,
-                    term=term.id,
-                )
-                term.match_count = len(mc.results)
-            except Exception:
-                pass
-            try:
-                actions = cms_list(
-                    client,
-                    "juniper_firewall_actions",
-                    FirewallFilterActionSummary,
-                    limit=0,
-                    term=term.id,
-                )
-                term.action_count = len(actions.results)
-            except Exception:
-                pass
+            term.match_count = mc_count.get(term.id, 0)
+            term.action_count = action_count.get(term.id, 0)
 
         object.__setattr__(fw_filter, "terms", terms.results)
         return fw_filter
@@ -241,18 +244,19 @@ def list_firewall_policers(
                           limit=limit, offset=offset, device=device_id)
 
         if policers.results:
+            # Bulk fetch all policer-actions for this device → dict by policer_id
+            all_actions = cms_list(
+                client,
+                "juniper_firewall_policer_actions",
+                FirewallPolicerActionSummary,
+                limit=0,
+                device=device_id,
+            )
+            action_count: dict = {}
+            for a in all_actions.results:
+                action_count[a.policer_id] = action_count.get(a.policer_id, 0) + 1
             for p in policers.results:
-                try:
-                    actions = cms_list(
-                        client,
-                        "juniper_firewall_policer_actions",
-                        FirewallPolicerActionSummary,
-                        limit=0,
-                        policer=p.id,
-                    )
-                    p.action_count = len(actions.results)
-                except Exception:
-                    pass
+                p.action_count = action_count.get(p.id, 0)
 
         return ListResponse(count=len(policers.results), results=policers.results)
     except Exception as e:

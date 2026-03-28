@@ -117,30 +117,35 @@ def get_interface_unit(client: NautobotClient, id: str) -> InterfaceUnitSummary:
         )
         unit.family_count = len(families.results)
 
-        # Enrich families with filter/policer counts
+        # Bulk fetch family-filters and family-policers for this unit's families
+        family_ids = [f.id for f in families.results]
+        filter_count: dict[str, int] = {}
+        policer_count: dict[str, int] = {}
+
+        if family_ids:
+            all_filters = cms_list(
+                client,
+                "juniper_interface_family_filters",
+                InterfaceFamilyFilterSummary,
+                limit=0,
+            )
+            for f in all_filters.results:
+                if f.family_id in family_ids:
+                    filter_count[f.family_id] = filter_count.get(f.family_id, 0) + 1
+
+            all_policers = cms_list(
+                client,
+                "juniper_interface_family_policers",
+                InterfaceFamilyPolicerSummary,
+                limit=0,
+            )
+            for p in all_policers.results:
+                if p.family_id in family_ids:
+                    policer_count[p.family_id] = policer_count.get(p.family_id, 0) + 1
+
         for fam in families.results:
-            try:
-                filters = cms_list(
-                    client,
-                    "juniper_interface_family_filters",
-                    InterfaceFamilyFilterSummary,
-                    limit=0,
-                    interface_family=fam.id,
-                )
-                fam.filter_count = len(filters.results)
-            except Exception:
-                pass
-            try:
-                policers = cms_list(
-                    client,
-                    "juniper_interface_family_policers",
-                    InterfaceFamilyPolicerSummary,
-                    limit=0,
-                    interface_family=fam.id,
-                )
-                fam.policer_count = len(policers.results)
-            except Exception:
-                pass
+            fam.filter_count = filter_count.get(fam.id, 0)
+            fam.policer_count = policer_count.get(fam.id, 0)
 
         # Attach families as extra attribute (not in schema, but useful for rich output)
         object.__setattr__(unit, "families", families.results)
@@ -679,28 +684,41 @@ def get_interface_detail(
         units_resp = list_interface_units(client, device=device, limit=0)
         units = units_resp.results
 
-        # For each unit, fetch its families and VRRP groups
+        # Pre-fetch all families per unit. Keep VRRP lookup cached per-family
+        # to avoid duplicate calls across units while preserving behavior.
+        unit_families: dict[str, list] = {}
+        for unit in units:
+            families = list_interface_families(client, unit_id=unit.id, limit=0)
+            unit_families[unit.id] = families.results
+
+        vrrp_by_family: dict[str, list] = {}
+
+        def _get_vrrp_for_family(family_id: str) -> list:
+            if family_id in vrrp_by_family:
+                return vrrp_by_family[family_id]
+            try:
+                vrrp = list_vrrp_groups(client, family_id=family_id, limit=0)
+                vrrp_by_family[family_id] = vrrp.results
+            except Exception as e:
+                collector.add(f"list_vrrp_groups(family={family_id})", str(e))
+                vrrp_by_family[family_id] = []
+            return vrrp_by_family[family_id]
+
+        # Build response per unit
         enriched_units = []
         for unit in units:
             unit_dict = unit.model_dump()
-
-            # Fetch families for the unit (critical — failure propagates)
-            families = list_interface_families(client, unit_id=unit.id, limit=0)
-            family_count = families.count
+            families_results = unit_families.get(unit.id, [])
+            family_count = len(families_results)
 
             if detail:
-                # Full enrichment: nested families + VRRP groups
+                # Full enrichment: nested families + VRRP groups (from bulk map)
                 family_dicts = []
-                for fam in families.results:
+                for fam in families_results:
                     fam_dict = fam.model_dump()
-                    try:
-                        vrrp = list_vrrp_groups(client, family_id=fam.id, limit=0)
-                        fam_dict["vrrp_groups"] = [v.model_dump() for v in vrrp.results]
-                        fam_dict["vrrp_group_count"] = vrrp.count
-                    except Exception as e:
-                        collector.add(f"list_vrrp_groups(family={fam.id})", str(e))
-                        fam_dict["vrrp_groups"] = []
-                        fam_dict["vrrp_group_count"] = 0
+                    fam_vrrp = _get_vrrp_for_family(fam.id)
+                    fam_dict["vrrp_groups"] = [v.model_dump() for v in fam_vrrp]
+                    fam_dict["vrrp_group_count"] = len(fam_vrrp)
                     # Cap families[] nested array at limit
                     if limit > 0 and len(family_dicts) >= limit:
                         break
@@ -709,15 +727,7 @@ def get_interface_detail(
                 unit_dict["family_count"] = family_count
             else:
                 # Summary mode: strip families[] and vrrp_groups[], keep counts only.
-                # Compute vrrp_group_count by iterating each family.
-                total_vrrp = 0
-                for fam in families.results:
-                    try:
-                        vrrp = list_vrrp_groups(client, family_id=fam.id, limit=0)
-                        total_vrrp += vrrp.count
-                    except Exception:
-                        # Non-fatal in summary mode; skip
-                        pass
+                total_vrrp = sum(len(_get_vrrp_for_family(f.id)) for f in families_results)
                 unit_dict["families"] = []      # stripped for agents
                 unit_dict["family_count"] = family_count
                 unit_dict["vrrp_group_count"] = total_vrrp

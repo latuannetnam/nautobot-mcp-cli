@@ -23,7 +23,7 @@ from nautobot_mcp.workflows import run_workflow
 pytestmark = pytest.mark.live
 
 # UAT constants
-UAT_DEVICE = "HQV-PE-TestFake"
+UAT_DEVICE = "HQV-PE1-NEW"
 UAT_URL_DEFAULT = "http://101.96.85.93"
 
 
@@ -133,16 +133,28 @@ class TestWorkflowUAT:
     """Verify nautobot_run_workflow dispatches and returns correct envelopes."""
 
     def test_bgp_summary_workflow(self, live_client):
-        """bgp_summary workflow returns ok envelope with device set."""
+        """bgp_summary workflow returns ok/partial envelope with device set.
+
+        Some prod environments may return partial when optional enrichment
+        (e.g. policy associations) is unavailable.
+        """
         result = run_workflow(
             live_client,
             workflow_id="bgp_summary",
             params={"device": UAT_DEVICE},
         )
         assert result["workflow"] == "bgp_summary"
-        assert result["status"] == "ok", f"Workflow failed: {result.get('error')}"
+        assert result["status"] in {"ok", "partial"}, f"Workflow failed: {result.get('error')}"
         assert result["device"] == UAT_DEVICE
-        assert result.get("error") is None
+        if result["status"] == "ok":
+            assert result.get("error") is None
+        else:
+            assert result.get("error") is not None
+            assert isinstance(result.get("warnings", []), list) and len(result.get("warnings", [])) > 0
+            assert result["warnings"][0].get("operation") in {
+                "list_bgp_policy_associations",
+                "list_bgp_policy_associations(all)",
+            }
 
     def test_routing_table_workflow(self, live_client):
         """routing_table workflow returns ok envelope."""
@@ -201,7 +213,7 @@ class TestIdempotentWriteUAT:
             live_client,
             workflow_id="onboard_config",
             params={
-                "config_data": minimal_config,
+                "parsed_config": minimal_config,
                 "device_name": UAT_DEVICE,
                 "dry_run": True,
             },

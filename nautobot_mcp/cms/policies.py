@@ -77,18 +77,19 @@ def list_policy_statements(
         )
 
         if statements.results:
+            # Bulk fetch all terms for this device → dict by policy_statement_id
+            all_terms = cms_list(
+                client,
+                "jps_terms",
+                JPSTermSummary,
+                limit=0,
+                device=device_id,
+            )
+            term_count: dict = {}
+            for t in all_terms.results:
+                term_count[t.policy_statement_id] = term_count.get(t.policy_statement_id, 0) + 1
             for s in statements.results:
-                try:
-                    terms = cms_list(
-                        client,
-                        "jps_terms",
-                        JPSTermSummary,
-                        limit=0,
-                        policy_statement=s.id,
-                    )
-                    s.term_count = len(terms.results)
-                except Exception:
-                    pass
+                s.term_count = term_count.get(s.id, 0)
 
         return ListResponse(count=len(statements.results), results=statements.results)
     except Exception as e:
@@ -103,17 +104,31 @@ def get_policy_statement(client: NautobotClient, id: str) -> PolicyStatementSumm
         terms = cms_list(client, "jps_terms", JPSTermSummary, limit=0, policy_statement=id)
         statement.term_count = len(terms.results)
 
+        # Bulk fetch all match conditions and actions for this statement
+        all_mc = cms_list(
+            client,
+            "jps_match_conditions",
+            JPSMatchConditionSummary,
+            limit=0,
+            policy_statement=id,
+        )
+        all_actions = cms_list(
+            client,
+            "jps_actions",
+            JPSActionSummary,
+            limit=0,
+            policy_statement=id,
+        )
+        mc_count: dict = {}
+        for mc in all_mc.results:
+            mc_count[mc.term_id] = mc_count.get(mc.term_id, 0) + 1
+        action_count: dict = {}
+        for a in all_actions.results:
+            action_count[a.term_id] = action_count.get(a.term_id, 0) + 1
+
         for term in terms.results:
-            try:
-                mc = cms_list(client, "jps_match_conditions", JPSMatchConditionSummary, limit=0, jps_term=term.id)
-                term.match_count = len(mc.results)
-            except Exception:
-                pass
-            try:
-                actions = cms_list(client, "jps_actions", JPSActionSummary, limit=0, jps_term=term.id)
-                term.action_count = len(actions.results)
-            except Exception:
-                pass
+            term.match_count = mc_count.get(term.id, 0)
+            term.action_count = action_count.get(term.id, 0)
 
         object.__setattr__(statement, "terms", terms.results)
         return statement
@@ -180,15 +195,19 @@ def list_policy_prefix_lists(
                        limit=limit, offset=offset, device=device_id)
 
         if pls.results:
+            # Bulk fetch all prefixes for this device → dict by prefix_list_id
+            all_prefixes = cms_list(
+                client,
+                "juniper_policy_prefixes",
+                PolicyPrefixSummary,
+                limit=0,
+                device=device_id,
+            )
+            prefix_count: dict = {}
+            for p in all_prefixes.results:
+                prefix_count[p.prefix_list_id] = prefix_count.get(p.prefix_list_id, 0) + 1
             for pl in pls.results:
-                try:
-                    prefixes = cms_list(
-                        client, "juniper_policy_prefixes", PolicyPrefixSummary,
-                        limit=0, prefix_list=pl.id
-                    )
-                    pl.prefix_count = len(prefixes.results)
-                except Exception:
-                    pass
+                pl.prefix_count = prefix_count.get(pl.id, 0)
 
         return ListResponse(count=len(pls.results), results=pls.results)
     except Exception as e:

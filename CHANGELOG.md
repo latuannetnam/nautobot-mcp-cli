@@ -17,6 +17,32 @@ Candidates:
 - Config remediation suggestions based on drift reports
 - Extended drift coverage (interfaces, firewalls)
 
+### Performance & Device Inventory
+
+- `devices summary` is now stats-only (device metadata + interface/IP/VLAN counts) to avoid expensive detail fetches on high-interface devices.
+- Added `devices inventory` command for paginated full detail (`interfaces|ips|vlans|all`) with `--limit` and `--offset`.
+- Refactored `ipam.get_device_ips()` from per-interface/per-IP N+1 lookups to chunked bulk M2M + bulk `id__in` IP fetches.
+- Refactored `ipam.list_vlans(device=...)` from per-VLAN `get()` N+1 to chunked bulk `id__in` fetches.
+- Added `devices_inventory` workflow to MCP (`nautobot_run_workflow`) and workflow catalog.
+- Fixed CMS N+1 query patterns across Juniper modules (`firewalls.py`, `routing.py`, `interfaces.py`, `policies.py`) using bulk-fetch + dictionary grouping.
+- Added shared helpers in `nautobot_mcp/utils.py` (`chunked`, `group_by_attr`) for batch operations.
+
+⚠️ **Breaking behavior change**: `devices summary --detail` has been removed. Use `devices inventory` for detailed interface/IP/VLAN data.
+
+
+### Performance & Device Inventory
+
+- `devices summary` is now stats-only (device metadata + interface/IP/VLAN counts) to avoid expensive detail fetches on high-interface devices.
+- Added `devices inventory` command for paginated full detail (`interfaces|ips|vlans|all`) with `--limit` and `--offset`.
+- Refactored `ipam.get_device_ips()` from per-interface/per-IP N+1 lookups to chunked bulk M2M + bulk `id__in` IP fetches.
+- Refactored `ipam.list_vlans(device=...)` from per-VLAN `get()` N+1 to chunked bulk `id__in` fetches.
+- Added `devices_inventory` workflow to MCP (`nautobot_run_workflow`) and workflow catalog.
+- Fixed CMS N+1 query patterns across Juniper modules (`firewalls.py`, `routing.py`, `interfaces.py`, `policies.py`) using bulk-fetch + dictionary grouping.
+- Added shared helpers in `nautobot_mcp/utils.py` (`chunked`, `group_by_attr`) for batch operations.
+
+⚠️ **Breaking behavior change**: `devices summary --detail` has been removed. Use `devices inventory` for detailed interface/IP/VLAN data.
+
+
 ---
 
 ## [v1.4] — 2026-03-26

@@ -23,6 +23,8 @@ from nautobot_mcp.cms.cms_drift import compare_bgp_neighbors, compare_static_rou
 from nautobot_mcp.cms.firewalls import get_device_firewall_summary
 from nautobot_mcp.cms.interfaces import get_interface_detail
 from nautobot_mcp.cms.routing import get_device_bgp_summary, get_device_routing_table
+from nautobot_mcp.devices import get_device_inventory
+from nautobot_mcp.devices import get_device_inventory
 from nautobot_mcp.drift import compare_device
 from nautobot_mcp.exceptions import NautobotValidationError
 from nautobot_mcp.models.parser import ParsedConfig
@@ -162,6 +164,16 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
             "live_routes": "live_routes",
         },
         "required": ["device_name", "live_routes"],
+    },
+    "devices_inventory": {
+        "function": get_device_inventory,
+        "param_map": {
+            "device": "name",
+            "detail": "detail",
+            "limit": "limit",
+            "offset": "offset",
+        },
+        "required": ["device"],
     },
 }
 
