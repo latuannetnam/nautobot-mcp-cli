@@ -135,7 +135,7 @@ def devices_summary(
             typer.echo(f"  Platform: {d['platform']}")
         if d.get("primary_ip"):
             typer.echo(f"  Primary IP: {d['primary_ip']}")
-        typer.echo(f"\n  Interfaces: {data['interface_count']} (↑{data['enabled_count']} ↓{data['disabled_count']})")
+        typer.echo(f"\n  Interfaces: {data['interface_count']}")
         typer.echo(f"  IP Addresses: {data['ip_count']}")
         typer.echo(f"  VLANs: {data['vlan_count']}")
 

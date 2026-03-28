@@ -244,30 +244,23 @@ def get_device_summary(
     # Step 1: Get device info (1 API call)
     device = get_device(client, name=name)
 
-    # Step 2: Interface counts (1 API call — pynautobot returns .count on response)
-    iface_resp = client.api.dcim.interfaces.filter(device=name)
-    iface_list = list(iface_resp)  # pynautobot auto-paginates; count is on the response object
-    interface_count = len(iface_list)
-    enabled_count = sum(1 for i in iface_list if getattr(i, "enabled", False))
-    disabled_count = interface_count - enabled_count
+    # Step 2: Interface count — .count(device=name) hits /count/?device=... (OK)
+    interface_count = client.api.dcim.interfaces.count(device=name)
 
-    # Step 3: IP count (1 API call — pynautobot returns .count on response)
-    ip_resp = client.api.ipam.ip_addresses.filter(device=name)
-    ip_list = list(ip_resp)
-    ip_count = len(ip_list)
+    # Step 3: IP count — .count(device_id=uuid) hits /count/?device_id=... (OK)
+    device_uuid = device.id
+    ip_count = client.api.ipam.ip_addresses.count(device_id=device_uuid)
 
-    # Step 4: VLAN count (1 API call — pynautobot returns .count on response)
-    vlan_resp = client.api.ipam.vlans.filter(device=name)
-    vlan_list = list(vlan_resp)
-    vlan_count = len(vlan_list)
+    # Step 4: VLAN count — .count(device=...) is NOT supported on /ipam/vlans/count/.
+    # VLANs don't track a device FK. Use the device's location as the closest proxy.
+    device_location = device.location.name if device.location else None
+    vlan_count = client.api.ipam.vlans.count(location=device_location) if device_location else 0
 
     return DeviceStatsResponse(
         device=device,
         interface_count=interface_count,
         ip_count=ip_count,
         vlan_count=vlan_count,
-        enabled_count=enabled_count,
-        disabled_count=disabled_count,
     )
 
 
@@ -309,10 +302,22 @@ def get_device_inventory(
     # Always get device info
     device_obj = get_device(client, name=device_name)
 
-    # Always fetch core totals for consistent metadata
-    total_interfaces = len(iface_mod.list_interfaces(client, device_name=device_name, limit=0).results)
-    total_ips = ipam_mod.get_device_ips(client, device_name=device_name, limit=0, offset=0).total_ips
-    total_vlans = ipam_mod.list_vlans(client, device=device_name, limit=0, offset=0).count
+    # Only compute totals for the data being fetched — avoids O(N) API calls
+    # when user only asked for one section (e.g. interfaces only).
+    total_interfaces = 0
+    total_ips = 0
+    total_vlans = 0
+
+    if detail in ("interfaces", "all"):
+        total_interfaces = client.api.dcim.interfaces.count(device=device_name)
+
+    if detail in ("ips", "all"):
+        total_ips = ipam_mod.get_device_ips(client, device_name=device_name, limit=0, offset=0).total_ips
+
+    if detail in ("vlans", "all"):
+        # VLAN /count/ doesn't support device filter — use location as proxy
+        device_location = device_obj.location.name if device_obj.location else None
+        total_vlans = client.api.ipam.vlans.count(location=device_location) if device_location else 0
 
     interfaces_data: list | None = None
     interface_ips_data: list | None = None

@@ -156,6 +156,7 @@ class NautobotClient:
                 token=self._profile.token,
                 retries=3,
             )
+            self._api.http_session.timeout = (10, 60)  # connect=10s, read=60s
             self._api.http_session.verify = self._profile.verify_ssl
 
             if self._profile.api_version:
