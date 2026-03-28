@@ -6,12 +6,35 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Resolve paths relative to script location (not cwd)
-$SourceRoot = Join-Path $PSScriptRoot "..\.claude\skills"
+$RepoRoot   = Join-Path $PSScriptRoot ".."
+$SourceDirs = @(
+    (Join-Path $RepoRoot ".claude\skills")    
+)
 $DestRoot   = Join-Path $env:USERPROFILE ".claude\skills"
 
-# Validate source skills directory exists in repo
-if (-not (Test-Path $SourceRoot -PathType Container)) {
-    Write-Error "Source skills directory not found: $SourceRoot"
+# ---------------------------------------------------------------------------
+# Step 1 — Install uv if not already present
+# ---------------------------------------------------------------------------
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Host "[INFO] Installing uv..."
+    Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+    # Refresh PATH so uv is available in the rest of this session
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+
+# ---------------------------------------------------------------------------
+# Step 2 — Sync project dependencies with uv
+# ---------------------------------------------------------------------------
+Write-Host "[INFO] Syncing project dependencies with uv..."
+uv sync --directory $RepoRoot
+
+# ---------------------------------------------------------------------------
+# Step 3 — Install skills from each source directory
+# ---------------------------------------------------------------------------
+# Validate at least one source skills directory exists in repo
+$validSources = $SourceDirs | Where-Object { Test-Path $_ -PathType Container }
+if ($validSources.Count -eq 0) {
+    Write-Error "No skills directories found in $RepoRoot"
     exit 1
 }
 
@@ -24,10 +47,12 @@ if (-not (Test-Path $DestRoot)) {
     }
 }
 
-# Copy each skill from repo -> profile
-$Skills = Get-ChildItem $SourceRoot -Directory -ErrorAction SilentlyContinue
+# Copy each skill from all source directories -> profile
+$Skills = $validSources | ForEach-Object {
+    Get-ChildItem $_ -Directory -ErrorAction SilentlyContinue
+}
 if ($null -eq $Skills -or $Skills.Count -eq 0) {
-    Write-Warning "No skill directories found in $SourceRoot"
+    Write-Warning "No skill directories found in $RepoRoot"
     exit 0
 }
 
