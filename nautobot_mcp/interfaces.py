@@ -56,10 +56,28 @@ def list_interfaces(
         if offset > 0:
             pagination_kwargs["offset"] = offset
 
-        if filters:
-            records = list(client.api.dcim.interfaces.filter(**filters, **pagination_kwargs))
+        if limit > 0 or offset > 0:
+            # Bypass pynautobot auto-pagination: use direct http_session.get()
+            # with auth headers. pynautobot's .filter() sends limit as page_size
+            # (number of records per page), not result count — causing it to fetch
+            # ALL pages when count >> limit. Direct GET returns only what we ask.
+            params = {**filters, **pagination_kwargs}
+            resp = client.api.http_session.get(
+                f"{client._profile.url}/api/dcim/interfaces/",
+                params=params,
+            )
+            if not resp.ok:
+                resp.raise_for_status()
+            data = resp.json()
+            # Construct pynautobot Records: Record(raw_dict, api, endpoint)
+            records = [
+                client.api.dcim.interfaces.return_obj(r, client.api, client.api.dcim.interfaces)
+                for r in data.get("results", [])
+            ]
+        elif filters:
+            records = list(client.api.dcim.interfaces.filter(**filters))
         else:
-            records = list(client.api.dcim.interfaces.all(**pagination_kwargs))
+            records = list(client.api.dcim.interfaces.all())
 
         all_results = [InterfaceSummary.from_nautobot(r) for r in records]
 

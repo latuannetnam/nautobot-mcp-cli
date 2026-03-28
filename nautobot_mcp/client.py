@@ -160,6 +160,14 @@ class NautobotClient:
             )
             self._api.http_session.timeout = (10, 60)  # connect=10s, read=60s
             self._api.http_session.verify = self._profile.verify_ssl
+            # Add auth headers so http_session.get() calls work directly without
+            # going through pynautobot's per-request _make_call (which ignores
+            # limit for auto-pagination). With auth on the session, our
+            # count() method's direct GET to /count/ will work (bypassing
+            # pynautobot's O(n) .count() auto-pagination), and list operations
+            # using direct http_session.get() will also carry auth.
+            self._api.http_session.headers["Authorization"] = f"Token {self._profile.token}"
+            self._api.http_session.headers["Accept"] = "application/json"
 
             if self._profile.api_version:
                 self._api.api_version = self._profile.api_version

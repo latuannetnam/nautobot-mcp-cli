@@ -104,11 +104,21 @@ def list_ip_addresses(
     try:
         if device:
             # Device filter: walk interfaces → M2M → IPs
-            # Build pagination kwargs — limit > 0 stops auto-pagination
-            iface_kwargs: dict = {"device": device}
+            # Use direct HTTP to bypass pynautobot auto-pagination bug
+            params: dict = {"device": device}
             if limit > 0:
-                iface_kwargs["limit"] = limit
-            iface_records = list(client.api.dcim.interfaces.filter(**iface_kwargs))
+                params["limit"] = limit
+            resp = client.api.http_session.get(
+                f"{client._profile.url}/api/dcim/interfaces/",
+                params=params,
+            )
+            if not resp.ok:
+                resp.raise_for_status()
+            iface_data = resp.json()
+            iface_records = [
+                client.api.dcim.interfaces.return_obj(r, client.api, client.api.dcim.interfaces)
+                for r in iface_data.get("results", [])
+            ]
             seen_ip_ids: set[str] = set()
             all_results = []
             fetched_count = 0
@@ -116,11 +126,18 @@ def list_ip_addresses(
                 # Stop if we've hit the limit (avoid fetching IPs for interfaces we don't need)
                 if limit > 0 and fetched_count >= limit:
                     break
-                # Fetch M2M records for this interface
-                m2m_kwargs: dict = {"interface": str(iface.id)}
-                if limit > 0:
-                    m2m_kwargs["limit"] = limit
-                m2m_records = list(client.api.ipam.ip_address_to_interface.filter(**m2m_kwargs))
+                # Fetch M2M records for this interface — also use direct HTTP
+                m2m_resp = client.api.http_session.get(
+                    f"{client._profile.url}/api/ipam/ip_address_to_interface/",
+                    params={"interface": str(iface.id), **( {"limit": limit} if limit > 0 else {} )},
+                )
+                if not m2m_resp.ok:
+                    m2m_resp.raise_for_status()
+                m2m_data = m2m_resp.json()
+                m2m_records = [
+                    client.api.ipam.ip_address_to_interface.return_obj(r, client.api, client.api.ipam.ip_address_to_interface)
+                    for r in m2m_data.get("results", [])
+                ]
                 for m2m in m2m_records:
                     if limit > 0 and fetched_count >= limit:
                         break
@@ -147,10 +164,24 @@ def list_ip_addresses(
             if offset > 0:
                 pagination_kwargs["offset"] = offset
 
-            if filters:
-                records = list(client.api.ipam.ip_addresses.filter(**filters, **pagination_kwargs))
+            if limit > 0 or offset > 0:
+                # Bypass pynautobot auto-pagination: use direct http_session.get()
+                params = {**filters, **pagination_kwargs}
+                resp = client.api.http_session.get(
+                    f"{client._profile.url}/api/ipam/ip_addresses/",
+                    params=params,
+                )
+                if not resp.ok:
+                    resp.raise_for_status()
+                data = resp.json()
+                records = [
+                    client.api.ipam.ip_addresses.return_obj(r, client.api, client.api.ipam.ip_addresses)
+                    for r in data.get("results", [])
+                ]
+            elif filters:
+                records = list(client.api.ipam.ip_addresses.filter(**filters))
             else:
-                records = list(client.api.ipam.ip_addresses.all(**pagination_kwargs))
+                records = list(client.api.ipam.ip_addresses.all())
 
             all_results = [IPAddressSummary.from_nautobot(r) for r in records]
 
@@ -203,7 +234,19 @@ def list_vlans(
     try:
         if device:
             # Device filter: collect all VLAN IDs from interfaces (must fetch all for accuracy)
-            iface_records = list(client.api.dcim.interfaces.filter(device=device))
+            # Use direct HTTP to bypass pynautobot auto-pagination bug
+            resp = client.api.http_session.get(
+                f"{client._profile.url}/api/dcim/interfaces/",
+                params={"device": device},
+            )
+            if not resp.ok:
+                resp.raise_for_status()
+            iface_data = resp.json()
+            # pynautobot Records from raw dicts: Record(raw_dict, api, endpoint)
+            iface_records = [
+                client.api.dcim.interfaces.return_obj(r, client.api, client.api.dcim.interfaces)
+                for r in iface_data.get("results", [])
+            ]
             vlan_ids: set[str] = set()
             for iface in iface_records:
                 if hasattr(iface, "untagged_vlan") and iface.untagged_vlan:
@@ -244,10 +287,24 @@ def list_vlans(
             if offset > 0:
                 pagination_kwargs["offset"] = offset
 
-            if filters:
-                records = list(client.api.ipam.vlans.filter(**filters, **pagination_kwargs))
+            if limit > 0 or offset > 0:
+                # Bypass pynautobot auto-pagination: use direct http_session.get()
+                params = {**filters, **pagination_kwargs}
+                resp = client.api.http_session.get(
+                    f"{client._profile.url}/api/ipam/vlans/",
+                    params=params,
+                )
+                if not resp.ok:
+                    resp.raise_for_status()
+                data = resp.json()
+                records = [
+                    client.api.ipam.vlans.return_obj(r, client.api, client.api.ipam.vlans)
+                    for r in data.get("results", [])
+                ]
+            elif filters:
+                records = list(client.api.ipam.vlans.filter(**filters))
             else:
-                records = list(client.api.ipam.vlans.all(**pagination_kwargs))
+                records = list(client.api.ipam.vlans.all())
 
             all_results = [VLANSummary.from_nautobot(r) for r in records]
 
