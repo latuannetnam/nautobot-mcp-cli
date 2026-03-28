@@ -151,12 +151,14 @@ def devices_inventory(
         help="interfaces|ips|vlans|all  [default: interfaces]"),
     limit: int = typer.Option(50, "--limit", help="Max results per page"),
     offset: int = typer.Option(0, "--offset", help="Skip N results"),
+    no_count: bool = typer.Option(False, "--no-count", help="Skip count() calls for faster pagination"),
 ) -> None:
     """Get full device inventory: interfaces, IPs, VLANs with pagination."""
     try:
         client = get_client_from_ctx(ctx)
         result = devices.get_device_inventory(
             client, name=name, detail=detail, limit=limit, offset=offset,
+            skip_count=no_count or limit == 0,
         )
         data = result.model_dump()
 
@@ -168,9 +170,12 @@ def devices_inventory(
         d = data["device"]
         typer.echo(f"Device: {d['name']} ({d['status']})")
         typer.echo(f"  Type: {d['device_type']['name']} | Location: {d['location']['name']}")
-        typer.echo(f"\n  Interfaces: {data['total_interfaces']} total")
-        typer.echo(f"  IP Addresses: {data['total_ips']} total")
-        typer.echo(f"  VLANs: {data['total_vlans']} total")
+        iface_total = data['total_interfaces'] if data['total_interfaces'] is not None else "?"
+        ips_total   = data['total_ips']        if data['total_ips']        is not None else "?"
+        vlans_total = data['total_vlans']      if data['total_vlans']      is not None else "?"
+        typer.echo(f"  Interfaces: {iface_total} total")
+        typer.echo(f"  IP Addresses: {ips_total} total")
+        typer.echo(f"  VLANs: {vlans_total} total")
         typer.echo(f"  Pagination: limit={data['limit']} offset={data['offset']} has_more={data['has_more']}")
 
         if data.get("interfaces"):
