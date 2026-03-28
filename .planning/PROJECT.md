@@ -19,7 +19,7 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - P1: Per-operation timing instrumentation for observable performance
 - P2: Consistent count discipline across all modules; `--no-count` CLI flag
 
-**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28)
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28) → v1.6 Query Performance (in progress)
 
 ## Requirements
 
@@ -60,11 +60,11 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 
 ### Active
 
-- [ ] Eliminate wasteful `count()` auto-pagination in `devices inventory` and related queries
+- [ ] Eliminate wasteful `count()` auto-pagination in `devices inventory` and related queries — partial (Phase 28: skip in `get_device_inventory()`, Phase 29: eliminate remaining `count()` calls in `_execute_core()`)
 - [ ] Add direct `/count/` endpoint for O(1) count operations
 - [ ] Adaptive count strategy across all query paths
-- [ ] Per-operation timing instrumentation in CLI and MCP output
-- [ ] `--no-count` flag for pagination-only fast output
+- [ ] Per-operation timing instrumentation in CLI and MCP output — partial (Phase 28: `get_device_inventory()` timing, Phase 29+: extend to all composite workflows)
+- [ ] `--no-count` flag for pagination-only fast output — partial (Phase 28: `devices inventory` CLI + MCP, Phase 29+: extend to all relevant endpoints)
 
 ### Rejected
 
@@ -145,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after v1.6 milestone kickoff*
+*Last updated: 2026-03-28 after Phase 28 complete — v1.5 milestone closed, v1.6 in progress*
