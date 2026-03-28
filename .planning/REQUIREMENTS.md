@@ -3,6 +3,27 @@
 **Defined:** 2026-03-26
 **Core Value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools — with predictable contracts, minimal round-trips, compact responses, and production-grade reliability.
 
+## v1.6 Requirements
+
+Requirements for query performance optimization. All rooted in root-cause analysis of the `--limit 5` slow response for large devices.
+
+### Count Optimization (PERF)
+
+- [ ] **PERF-01**: `devices inventory` skips `count()` call when `detail=interfaces|ips|vlans` AND `limit > 0`; `has_more` inferred from `returned_count == limit`
+- [ ] **PERF-02**: `devices inventory --detail all` fetches all three counts concurrently via parallel API calls
+- [ ] **PERF-03**: Direct Nautobot `/count/` endpoint as fallback when count IS needed — bypasses pynautobot's auto-pagination; returns O(1) result
+- [ ] **PERF-04**: All `count()` calls replaced with direct `/count/` endpoint usage throughout codebase (devices.py, ipam.py, cms/client.py)
+
+### Observability (OBS)
+
+- [ ] **OBS-01**: `devices inventory` output includes per-section `api_calls` count and total `latency_ms` when `--json` is used
+- [ ] **OBS-02**: `nautobot_call_nautobot` response envelope includes `latency_ms` per operation
+
+### CLI UX (UX)
+
+- [ ] **UX-01**: `--no-count` flag on `devices inventory` skips all count operations regardless of `detail` value
+- [ ] **UX-02**: `devices inventory --limit 0` (unlimited) fetches all records with zero count overhead
+
 ## v1.5 Requirements
 
 Requirements for MCP server quality and AI-agent performance optimization. All built on existing 3-tool API Bridge architecture.
@@ -90,6 +111,15 @@ Requirements derived from verified user-reported pain points (see analysis repor
 - [x] **RSP-02**: Composite workflow envelopes include `response_size_bytes` metadata
 - [x] **RSP-03**: Composite workflows support optional `limit` parameter to cap items in response
 
+## v2 Requirements
+
+Deferred to future release.
+
+### Performance at Scale
+
+- **PERF-09**: Streaming response support for `--limit 0` (yields results page-by-page without buffering all in memory)
+- **PERF-10**: Bulk IP enrichment via batch M2M query (currently N+1 for `include_ips=True`)
+
 ## Future Requirements
 
 ### Multi-Domain Scaling
@@ -107,15 +137,24 @@ Requirements derived from verified user-reported pain points (see analysis repor
 
 | Feature | Reason |
 |---------|--------|
+| pynautobot upstream fix | We work around pynautobot's behavior; fixing upstream is out-of-scope |
+| Nautobot server changes | This tool consumes the existing Nautobot API; server-side changes not applicable |
+| Real-time streaming/WebSocket | Adds complexity; HTTP pagination is sufficient for current needs |
 | CMS plugin server-side filter changes | We consume REST API as-is; fix is on our catalog metadata |
 | Response streaming / chunked transfer | MCP protocol limitation; use summary mode + limit instead |
-| Schema validation at catalog level | Bloats catalog response; agents learn params from skills |
-| Retry logic for failed child queries | Partial data is sufficient; retries add latency |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| PERF-01 | Phase 28 | Pending |
+| PERF-02 | Phase 28 | Pending |
+| PERF-03 | Phase 29 | Pending |
+| PERF-04 | Phase 29 | Pending |
+| OBS-01 | Phase 28 | Pending |
+| OBS-02 | Phase 29 | Pending |
+| UX-01 | Phase 28 | Pending |
+| UX-02 | Phase 28 | Pending |
 | PFR-01 | Phase 19 | Complete |
 | PFR-02 | Phase 19 | Complete |
 | PFR-03 | Phase 19 | Complete |
@@ -166,7 +205,8 @@ Requirements derived from verified user-reported pain points (see analysis repor
 **Coverage:**
 - v1.4 requirements: 20 total — all complete ✓
 - v1.5 requirements: 24 total — pending roadmap
+- v1.6 requirements: 8 total — Phases 28-29 defined
 
 ---
-*Requirements defined: 2026-03-25*
-*Last updated: 2026-03-26 after v1.5 requirements defined*
+*Requirements defined: 2026-03-28*
+*Last updated: 2026-03-28 after v1.6 milestone kickoff*

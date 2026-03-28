@@ -11,6 +11,7 @@
 - ✅ **v1.3 API Bridge MCP Server** — Phases 15-18 (shipped 2026-03-25) — [Archive](milestones/v1.3-ROADMAP.md)
 - ✅ **v1.4 Operational Robustness** — Phases 19-22 (shipped 2026-03-26) — [Archive](milestones/v1.4-ROADMAP.md)
 - 🔄 **v1.5 Agent Performance & Quality** — Phases 23-27 (planning) — [Current](ROADMAP.md)
+- ⏳ **v1.6 Query Performance Optimization** — Phases 28-29 — [Current](ROADMAP.md)
 
 ## Phases
 
@@ -75,6 +76,8 @@
 | 25 | Projection & Token Efficiency | Response modes, field projection, minimal compact output | PRT-01, PRT-02, PRT-03, PRT-04, PRT-05, PRT-06 | 6 |
 | 26 | Security & Resource Guardrails | Endpoint allowlist, auth hardening, resource limits | SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06 | 6 |
 | 27 | KPI Benchmarks & Verification | Observability, metrics endpoint, benchmark harness, UAT | KPI-01, KPI-02, KPI-03, KPI-04 | 4 |
+| 28 | Adaptive Count & Fast Pagination | Skip count when paginating; infer has_more; add timing instrumentation | PERF-01, PERF-02, OBS-01, UX-01, UX-02 | 5 |
+| 29 | Direct /count/ Endpoint & Consistency | O(1) count fallback; replace all count() calls; add latency to bridge | PERF-03, PERF-04, OBS-02 | 3 |
 
 #### Phase Details
 
@@ -129,5 +132,25 @@ Success criteria:
 3. KPI targets met: round-trips reduced 40-60%, token footprint reduced 35-55%, p95 < 3s
 4. `/metrics` endpoint exposes Prometheus counters and histograms for all tracked dimensions
 
+**Phase 28: Adaptive Count & Fast Pagination**
+Goal: Fix `devices inventory` slow performance for large devices by skipping expensive `count()` calls when paginating and adding `--no-count` flag.
+Requirements: PERF-01, PERF-02, OBS-01, UX-01, UX-02
+Success criteria:
+1. `devices inventory DEVICE --limit N --detail interfaces` returns in <1s for any device (no count fetch)
+2. `has_more` is inferred from `len(results) == limit` when count is skipped
+3. `devices inventory DEVICE --detail all` fetches all 3 counts concurrently (parallel)
+4. `--no-count` flag skips all count operations regardless of detail
+5. `devices inventory --json` output includes `api_calls` count and `latency_ms`
+
+**Phase 29: Direct /count/ Endpoint & Consistency**
+Goal: Replace all pynautobot `.count()` calls with direct `/count/` endpoint usage for O(1) counts; add latency tracking to bridge.
+Requirements: PERF-03, PERF-04, OBS-02
+Success criteria:
+1. `NautobotClient` exposes `count(endpoint, **filters)` method using direct `/count/` endpoint
+2. All `client.api.dcim.interfaces.count(...)` calls in devices.py replaced with direct count method
+3. All `client.api.ipam.*.count(...)` calls in ipam.py replaced with direct count method
+4. All `count()` in cms/client.py replaced with direct count method
+5. `nautobot_call_nautobot` response includes `latency_ms` field
+
 ---
-*Last updated: 2026-03-26 — v1.5 roadmap created*
+*Last updated: 2026-03-28 — v1.6 roadmap created (2 phases)*

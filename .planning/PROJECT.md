@@ -8,16 +8,18 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.5 MCP Server Quality & Agent Performance
+## Current Milestone: v1.6 Query Performance Optimization
 
-**Goal:** Improve MCP server quality and optimize for AI agents by reducing round-trips and response token size while hardening reliability, observability, and transport security.
+**Goal:** Fix slow CLI and MCP queries for devices with large interface/IP counts by eliminating wasteful count fetches and adding adaptive pagination strategies.
 
 **Target features:**
-- P0: Agent-efficiency core upgrades (unified response envelope, `response_mode`, `fields` projection, workflow batch execution)
-- P1: Reliability/security/agent guidance improvements (retryable error metadata, HTTP auth hardening, catalog guidance hints)
-- P2: Ops + performance maturity (discovery caching, benchmark harness + KPI tracking, health/diagnostic endpoint)
+- P0: Skip expensive `count()` calls when requesting paginated results — infer `has_more` from returned count
+- P0: Add direct `/count/` endpoint usage as fallback for true O(1) count
+- P1: Adaptive count strategy — only fetch total counts when explicitly needed (`detail=all`, `--limit 0`)
+- P1: Per-operation timing instrumentation for observable performance
+- P2: Consistent count discipline across all modules; `--no-count` CLI flag
 
-**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26)
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28)
 
 ## Requirements
 
@@ -58,11 +60,11 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 
 ### Active
 
-- [ ] Reduce average AI task round-trips by introducing workflow-level batching and recommended call paths
-- [ ] Reduce response payload size with standardized compact modes and field projection
-- [ ] Standardize tool response envelope and error semantics for predictable agent planning and retries
-- [ ] Improve transport-level security and operational observability for interactive and headless deployments
-- [ ] Establish performance baselines and KPI tracking for latency, token footprint, and success rate
+- [ ] Eliminate wasteful `count()` auto-pagination in `devices inventory` and related queries
+- [ ] Add direct `/count/` endpoint for O(1) count operations
+- [ ] Adaptive count strategy across all query paths
+- [ ] Per-operation timing instrumentation in CLI and MCP output
+- [ ] `--no-count` flag for pagination-only fast output
 
 ### Rejected
 
@@ -112,6 +114,9 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 | Per-endpoint filter registry | Each CMS endpoint advertises correct FK filter(s); not domain-level | ✓ 43 entries; replaced 1-size-fits-all |
 | UUID path normalization | REST bridge strips UUID segments; linked object URLs work directly | ✓ Agents can pass full URLs |
 | Summary mode + limit ergonomics | `detail=False` strips nested arrays; `limit=N` caps all arrays independently | ✓ Ships in v1.4 |
+| Skip count for paginated results | `count()` wastes O(n) fetches when users only want a page | Ship in v1.6 |
+| Direct `/count/` endpoint for O(1) counts | pynautobot's `.count()` uses auto-pagination; Nautobot has fast `/count/` endpoint | Ship in v1.6 |
+| Infer `has_more` from result count | When limit is respected, `returned_count == limit` → more available | Ship in v1.6 |
 
 ## Constraints
 
@@ -140,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 after v1.5 milestone kickoff*
+*Last updated: 2026-03-28 after v1.6 milestone kickoff*
