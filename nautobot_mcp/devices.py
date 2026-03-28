@@ -244,17 +244,16 @@ def get_device_summary(
     # Step 1: Get device info (1 API call)
     device = get_device(client, name=name)
 
-    # Step 2: Interface count — .count(device=name) hits /count/?device=... (OK)
-    interface_count = client.api.dcim.interfaces.count(device=name)
+    # Step 2: Interface count — direct /count/ endpoint (O(1))
+    interface_count = client.count("dcim", "interfaces", device=name)
 
-    # Step 3: IP count — .count(device_id=uuid) hits /count/?device_id=... (OK)
+    # Step 3: IP count — direct /count/ endpoint (O(1))
     device_uuid = device.id
-    ip_count = client.api.ipam.ip_addresses.count(device_id=device_uuid)
+    ip_count = client.count("ipam", "ip_addresses", device_id=device_uuid)
 
-    # Step 4: VLAN count — .count(device=...) is NOT supported on /ipam/vlans/count/.
-    # VLANs don't track a device FK. Use the device's location as the closest proxy.
+    # Step 4: VLAN count — scoped to device's location (VLANs have no device FK)
     device_location = device.location.name if device.location else None
-    vlan_count = client.api.ipam.vlans.count(location=device_location) if device_location else 0
+    vlan_count = client.count("ipam", "vlans", location=device_location) if device_location else 0
 
     return DeviceStatsResponse(
         device=device,
@@ -329,7 +328,7 @@ def get_device_inventory(
             # D-03: Sequential single-count (only the section being requested)
             if detail == "interfaces":
                 t_iface_count = time.time()
-                total_interfaces = client.api.dcim.interfaces.count(device=device_name)
+                total_interfaces = client.count("dcim", "interfaces", device=device_name)
                 interfaces_latency_ms = (time.time() - t_iface_count) * 1000
             elif detail == "ips":
                 t_ips = time.time()
@@ -339,21 +338,21 @@ def get_device_inventory(
             elif detail == "vlans":
                 t_vlans = time.time()
                 loc_name = device_obj.location.name if device_obj.location else None
-                total_vlans = client.api.ipam.vlans.count(location=loc_name) if loc_name else 0
+                total_vlans = client.count("ipam", "vlans", location=loc_name) if loc_name else 0
                 vlans_latency_ms = (time.time() - t_vlans) * 1000
 
         elif detail == "all":
             # D-05: Parallel counts for detail=all — all 3 counts fire simultaneously
             def _count_vlans_by_loc(client_: NautobotClient, loc: str | None) -> int:
                 if loc:
-                    return client_.api.ipam.vlans.count(location=loc)
+                    return client_.count("ipam", "vlans", location=loc)
                 return 0
 
             try:
                 loc_name = device_obj.location.name if device_obj.location else None
                 with ThreadPoolExecutor(max_workers=3) as ex:
                     t_parallel_start = time.time()
-                    f_iface = ex.submit(client.api.dcim.interfaces.count, device=device_name)
+                    f_iface = ex.submit(client.count, "dcim", "interfaces", device=device_name)
                     f_ips   = ex.submit(
                         ipam_mod.get_device_ips,
                         client, device_name=device_name, limit=0, offset=0
@@ -372,7 +371,7 @@ def get_device_inventory(
             except Exception:
                 # D-05: Sequential fallback on any parallel failure
                 t_iface_count = time.time()
-                total_interfaces = client.api.dcim.interfaces.count(device=device_name)
+                total_interfaces = client.count("dcim", "interfaces", device=device_name)
                 interfaces_latency_ms = (time.time() - t_iface_count) * 1000
                 t_ips = time.time()
                 ips_resp = ipam_mod.get_device_ips(client, device_name=device_name, limit=0, offset=0)
@@ -380,7 +379,7 @@ def get_device_inventory(
                 ips_latency_ms = (time.time() - t_ips) * 1000
                 t_vlans = time.time()
                 loc_name = device_obj.location.name if device_obj.location else None
-                total_vlans = client.api.ipam.vlans.count(location=loc_name) if loc_name else 0
+                total_vlans = client.count("ipam", "vlans", location=loc_name) if loc_name else 0
                 vlans_latency_ms = (time.time() - t_vlans) * 1000
 
     # -------------------------------------------------------------------------
