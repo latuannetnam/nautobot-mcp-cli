@@ -1,14 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Query Performance Optimization
-status: Phase 28 context gathered
-last_updated: "2026-03-28T00:00:00.000Z"
+milestone: v1.5
+milestone_name: Agent Performance & Quality
+status: executing
+last_updated: "2026-03-28T09:40:54.304Z"
+last_activity: 2026-03-28 -- Phase 28 execution started
 progress:
-  total_phases: 2
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 23
+  completed_phases: 21
+  total_plans: 55
+  completed_plans: 53
 ---
 
 # Project State: nautobot-mcp-cli
@@ -18,25 +19,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** Phase 28 — Adaptive Count & Fast Pagination
+**Current focus:** Phase 28 — adaptive-count-fast-pagination
 
 ## Current Position
 
-Phase: 28 — Adaptive Count & Fast Pagination
-Plan: —
-Status: Context gathered
-Last activity: 2026-03-28 — Phase 28 context captured (6 decisions made)
+Phase: 28 (adaptive-count-fast-pagination) — COMPLETE
+Plan: 1 of 1 — COMPLETED 2026-03-28
+Status: Phase 28 plan 01 complete — all 6 tasks executed and committed
+Last activity: 2026-03-28 -- Phase 28 execution started → Plan 01 complete
 
 ## Context
 
-**Phase 28 scope:** Skip count() when paginating; infer has_more; add --no-count; add timing
-**Phase 29 scope:** Replace all count() with direct /count/ endpoint; add latency to MCP bridge
+**Phase 28 status:** ✅ COMPLETE — all 6 tasks committed; skip_count plumbed through all layers
+**Phase 29 scope:** Replace all pynautobot count() calls with direct /count/ endpoint; wire skip_count in bridge
 
 ## Context
 
 **Goal:** Fix slow CLI and MCP queries for devices with large interface/IP counts.
 
 **Root cause identified:**
+
 - `pynautobot.count(device=name)` does NOT use `/count/` endpoint
 - Instead calls `.filter()` → auto-paginates through ALL pages → returns `len(results)`
 - For HQV-PE1-NEW (700+ interfaces): wastes ~700+ record fetches + Record→dict conversions
@@ -56,6 +58,17 @@ Last activity: 2026-03-28 — Phase 28 context captured (6 decisions made)
 | Direct `/count/` endpoint fallback | v1.6 | When count IS needed, bypass pynautobot for true O(1) |
 | Adaptive count strategy | v1.6 | Only count when `detail=all` or `limit=0` |
 | Instrument timing in output | v1.6 | Observable performance for users and agents |
+
+## Phase 28 Decisions (completed 2026-03-28)
+
+| Decision | Rationale |
+|----------|-----------|
+| D-01: `has_more = len(results) == limit` when count skipped | Exact `limit` results → `has_more=True`; fewer → `has_more=False` |
+| D-02: Null totals when count skipped | Honest signal — `total_*` fields are `None` in JSON when counts not fetched |
+| D-03: `skip_count` param plumbed through CLI + workflow + bridge + MCP tool | Unified across all interfaces, not just CLI |
+| D-04: Per-section timing granularity | `interfaces_latency_ms`, `ips_latency_ms`, `vlans_latency_ms`, `total_latency_ms` |
+| D-05: Parallel counts for `detail=all` via `ThreadPoolExecutor(max_workers=3)` | Max of 3 latencies instead of sum; sequential fallback on any failure |
+| D-06: `limit=0` auto-enables `skip_count` | Unlimited mode should never pay count overhead |
 
 ## Accumulated Context
 

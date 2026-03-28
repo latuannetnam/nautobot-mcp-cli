@@ -135,12 +135,14 @@ Success criteria:
 **Phase 28: Adaptive Count & Fast Pagination**
 Goal: Fix `devices inventory` slow performance for large devices by skipping expensive `count()` calls when paginating and adding `--no-count` flag.
 Requirements: PERF-01, PERF-02, OBS-01, UX-01, UX-02
+Status: ✅ Plan 01 COMPLETE (1/1 plans, 2026-03-28)
+Commits: `92cb90f`, `27ea778`, `c68e5ed`, `78620b3`, `498fe80`, `c7206bd`, `1cd0305`
 Success criteria:
 1. `devices inventory DEVICE --limit N --detail interfaces` returns in <1s for any device (no count fetch)
 2. `has_more` is inferred from `len(results) == limit` when count is skipped
 3. `devices inventory DEVICE --detail all` fetches all 3 counts concurrently (parallel)
 4. `--no-count` flag skips all count operations regardless of detail
-5. `devices inventory --json` output includes `api_calls` count and `latency_ms`
+5. `devices inventory --json` output includes `interfaces_latency_ms`, `ips_latency_ms`, `vlans_latency_ms`, `total_latency_ms`
 
 **Phase 29: Direct /count/ Endpoint & Consistency**
 Goal: Replace all pynautobot `.count()` calls with direct `/count/` endpoint usage for O(1) counts; add latency tracking to bridge.
