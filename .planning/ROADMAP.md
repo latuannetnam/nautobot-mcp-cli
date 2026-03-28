@@ -77,7 +77,7 @@
 | 26 | Security & Resource Guardrails | Endpoint allowlist, auth hardening, resource limits | SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06 | 6 |
 | 27 | KPI Benchmarks & Verification | Observability, metrics endpoint, benchmark harness, UAT | KPI-01, KPI-02, KPI-03, KPI-04 | 4 |
 | 28 | Adaptive Count & Fast Pagination | Skip count when paginating; infer has_more; add timing instrumentation | Complete    | 2026-03-28 |
-| 29 | Direct /count/ Endpoint & Consistency | O(1) count fallback; replace all count() calls; add latency to bridge | PERF-03, PERF-04, OBS-02 | 3 |
+| 29 | Direct /count/ Endpoint & Consistency | O(1) count fallback; replace all count() calls; add latency to bridge | Complete    | 2026-03-28 |
 
 #### Phase Details
 
