@@ -376,6 +376,10 @@ class NautobotClient:
         except requests.exceptions.HTTPError:
             # Pass through to _handle_api_error
             pass
+        except requests.exceptions.RetryError:
+            # Exhausted retries on 500/502/etc — fall back to pynautobot which
+            # uses /filter/?limit=1 and checks count header instead
+            pass
 
         # Fallback: pynautobot .count() — O(n) auto-pagination, but works everywhere
         # Also convert pynautobot RequestError → NautobotAPIError so callers get consistent errors
