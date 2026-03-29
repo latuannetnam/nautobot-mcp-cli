@@ -1,53 +1,70 @@
-# STACK for v1.5 MCP Server Quality & Agent Performance
+# Research: Stack — v1.7 URI Limit Fix
 
-**Scope:** New capabilities only (response modes/projection, batching, observability, auth hardening, KPI benchmarking).
-**Baseline:** Keep v1.4 architecture (FastMCP + pynautobot + Pydantic) and extend it.
+**Domain:** Bug fix — eliminate 414 Request-URI Too Large errors
+**Researched:** 2026-03-29
 
-## Required additions
+## No new libraries needed
 
-| Capability | Library | Version | Integration points | Why this is needed / impact |
-|---|---|---:|---|---|
-| Response modes + field projection | `jmespath` | `==1.0.1` | `nautobot_mcp/bridge.py` (post-fetch projection), `nautobot_mcp/server.py` tool args (`response_mode`, `fields`), `nautobot_mcp/config.py` defaults | Gives a safe, standard projection syntax for agents (reduce payload/tokens without custom parser complexity). |
-| High-volume batching safety | `aiolimiter` | `==1.2.1` | `nautobot_mcp/bridge.py` batch executor (concurrency + rate caps), workflow fan-out paths, `config.py` (`batch_max_items`, `batch_concurrency`, `batch_rps`) | Prevents agent-driven burst traffic from overloading Nautobot; enables predictable throughput for bulk reads/writes. |
-| Distributed tracing + request spans | `opentelemetry-sdk` | `==1.35.0` | `server.py` (tool-level spans), `bridge.py` (endpoint/method spans), workflow dispatcher spans | End-to-end traceability per MCP call and downstream Nautobot operation; critical for debugging latency and failure hotspots. |
-| OTLP export to collector/APM | `opentelemetry-exporter-otlp-proto-http` | `==1.35.0` | bootstrap/init path (telemetry setup), `config.py` (`OTEL_EXPORTER_OTLP_ENDPOINT`) | Makes traces usable in real systems (Tempo/Jaeger/Grafana Cloud/etc.) instead of local-only instrumentation. |
-| Service metrics endpoint for KPIs | `prometheus-client` | `==0.23.1` | `server.py` (counters/histograms), new `/metrics` exposure path, `bridge.py` (method/endpoint metrics), workflow result status metrics | Required for KPI benchmarking in production-like runs (p95 latency, error rate, partial-rate, throughput). |
-| Token verification for MCP-side auth hardening | `PyJWT` | `==2.10.1` | `server.py` auth guard before tool dispatch, `config.py` (`MCP_AUTH_ENABLED`, issuer/audience/public key), `exceptions.py` (`NautobotAuthorizationError`) | Adds explicit caller authentication/authorization control for MCP entrypoint; closes "any local caller can execute tools" gap. |
+All fix patterns already exist in the codebase.
 
-### Required `pyproject.toml` additions
+## Existing patterns to replicate
 
-```toml
-dependencies = [
-  # existing deps...
-  "jmespath==1.0.1",
-  "aiolimiter==1.2.1",
-  "opentelemetry-sdk==1.35.0",
-  "opentelemetry-exporter-otlp-proto-http==1.35.0",
-  "prometheus-client==0.23.1",
-  "PyJWT==2.10.1",
-]
+### Direct HTTP via http_session.get()
+
+Already used in `list_interfaces()`, `list_ip_addresses()`, `list_vlans()`, `NautobotClient.count()`:
+
+```python
+resp = client.api.http_session.get(
+    f"{client._profile.url}/api/<app>/<endpoint>/",
+    params={"id__in": ",".join(ids)},   # comma-separated, not repeated params
+)
+resp.raise_for_status()
+data = resp.json()
+records = data.get("results", [])
 ```
 
-## Optional additions
+### DRF comma-separated format
 
-| Library | Version | Use when | Integration impact |
-|---|---:|---|---|
-| `orjson` | `==3.11.3` | If batch/projection responses become CPU-bound during serialization | Swap response serialization paths for lower latency and smaller CPU cost. |
-| `structlog` | `==25.4.0` | If you need consistently structured JSON logs with context binding | Replace ad-hoc logging in `bridge.py`/`server.py`; improves correlation with traces/metrics. |
-| `pytest-benchmark` (dev) | `==5.1.0` | If KPI benchmarking should be repeatable in CI/UAT | Add benchmark suites for catalog, call bridge, and workflow latencies. |
+Django REST Framework supports both:
+- Repeated params: `?id__in=uuid1&id__in=uuid2` — pynautobot default, hits 414 at ~500 UUIDs
+- Comma-separated: `?id__in=uuid1,uuid2,uuid3` — DRF-native, ~3x shorter URI
 
-## Keep current stack
+The codebase already uses comma-separated in the direct HTTP pattern above.
 
-- **FastMCP `>=3.0.0`**: already aligns with MCP tooling and works with OTel instrumentation.
-- **pynautobot `>=2.3.0`**: keep as single Nautobot API transport layer; do not bypass with raw HTTP clients.
-- **Pydantic v2 + pydantic-settings v2**: continue as validation/config core for new response/batch/auth settings.
-- **Current exception hierarchy**: extend, don’t replace; add auth/rate-limit exceptions under `NautobotMCPError`.
+### pynautobot Record wrapping
 
-## Avoid adding
+Direct HTTP returns raw dicts. Existing code uses `return_obj()` to wrap them:
 
-- **Do not add Celery/RQ/Kafka** for v1.5 batching: adds operational overhead; in-process bounded batching is enough for this milestone.
-- **Do not add a second web framework** (FastAPI/Flask) just for metrics/auth: integrate directly in current server process.
-- **Do not add GraphQL/OpenAPI tool generation layers**: conflicts with validated 3-tool API Bridge design.
-- **Do not add heavyweight policy engines** (OPA/Keycloak adapters) in v1.5: JWT verification + scoped checks are sufficient now.
-- **Do not replace `pynautobot` with raw `httpx/requests` wrappers**: would regress existing error handling and endpoint compatibility.
+```python
+from pynautobot.core.response import Record
+record = endpoint.return_obj(raw_dict, api, endpoint)
+```
 
+## Fix locations
+
+| Component | File | Function | Pattern to fix |
+|-----------|------|----------|----------------|
+| CLI/MCP IP fetch | `ipam.py` | `get_device_ips()` | `.filter(id__in=chunk)` → direct HTTP |
+| CLI/MCP M2M fetch | `ipam.py` | `get_device_ips()` | `.filter(interface=chunk)` → direct HTTP |
+| REST bridge | `bridge.py` | `_execute_core()` | `.filter(**params)` → guard `__in` lists |
+| REST bridge CMS | `bridge.py` | `_execute_cms()` | `.filter(**effective_params)` → guard `__in` lists |
+| VLAN list | `ipam.py` | `list_vlans()` | Already uses direct HTTP, safe |
+| Interface list | `interfaces.py` | `list_interfaces()` | Already uses direct HTTP, safe |
+
+## Chunking utility
+
+Already exists in `utils.py:12`:
+```python
+def chunked(iterable: Iterable[T], size: int) -> Iterator[list[T]]:
+    it = iter(iterable)
+    while chunk := list(itertools.islice(it, size)):
+        yield chunk
+```
+
+Chunk size of 500 is used for existing patterns. Comma-separated DRF format is shorter than repeated params, so 500 comma-separated UUIDs should stay well under 8 KB.
+
+## No new dependencies
+
+- `pynautobot` (existing — provides `http_session` and `return_obj`)
+- `more_itertools.chunked` (already used)
+- Python ≥ 3.11 (existing)

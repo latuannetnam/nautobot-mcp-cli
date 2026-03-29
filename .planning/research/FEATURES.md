@@ -1,98 +1,49 @@
-# Feature Research — v1.5 MCP Server Quality & Agent Performance
+# Research: Features — v1.7 URI Limit Fix
 
-**Domain:** Agent-performance features for Nautobot MCP API Bridge
-**Researched:** 2026-03-26
-**Scope:** New behavior for v1.5 only (building on shipped v1.4)
+**Domain:** Bug fix — eliminate 414 Request-URI Too Large and 500 errors
+**Researched:** 2026-03-29
 
-## Table Stakes
+## Overview
 
-These are baseline patterns in top MCP servers for reducing round-trips, lowering token payloads, and keeping contracts predictable.
+Single category: **Reliability / Bug Fix**. No new user-facing features — pure defect elimination.
 
-| Capability | Why it is table stakes | v1.5 behavior to add | Complexity | Depends on existing architecture |
-|---|---|---|---|---|
-| **Stable 3–5 tool surface** | Tool overload hurts model selection accuracy and increases prompt cost | Keep 3-tool surface as default; enforce “no endpoint-specific MCP tool sprawl” as a design rule | LOW | Existing `server.py` 3-tool API Bridge |
-| **Contract-first discovery** | Agents need deterministic discovery before execution | Expand catalog with explicit `contract_version`, required/optional params, and response shape summary per workflow | MEDIUM | `nautobot_api_catalog`, catalog engine |
-| **Strict input validation + typed errors** | Predictable failures are required for autonomous recovery | Standardize error envelope fields across all tools (`error_code`, `hint`, `retryable`, `field_errors`) | MEDIUM | Existing validation in `bridge.py`, existing error hint system |
-| **Bounded responses by default** | Unbounded lists are a token bomb | Make limits explicit in every list-like response and include truncation metadata consistently | LOW | Existing `limit`, hard cap, truncation behavior in `bridge.py` |
-| **Response shape consistency** | Agents need reusable parsing logic | Ensure every tool returns fixed top-level keys in stable order/type (`status`, `data`, `warnings`, `meta`) | MEDIUM | Existing workflow envelopes + partial-failure pattern |
-| **Server-side composite workflows** | Round-trip reduction is the biggest practical win | Add/expand intent-level workflows for common multi-call tasks (read-heavy diagnostics first) | MEDIUM | Existing workflow registry + `nautobot_run_workflow` |
-| **Identifier normalization** | Agents frequently pass URLs/UUIDs/names inconsistently | Extend normalization rules (already for UUID paths) to consistently accept name/UUID/URL where safe | MEDIUM | Existing endpoint normalization and device resolution paths |
+## Findings: 414-risk patterns
 
-## Differentiators
+### HIGH severity — bridge unguarded (bridge.py)
 
-These separate “works” from “best-in-class” for agent efficiency and reliability.
+`nautobot_call_nautobot` accepts arbitrary `params` dict. Any caller can inject `id__in=[uuid1, ..., uuid10000]` and trigger 414 on **any endpoint** (core or CMS). This is the most dangerous finding.
 
-| Differentiator | Why it matters | v1.5 behavior | Complexity | Depends on existing architecture |
-|---|---|---|---|---|
-| **Workflow contract versioning** | Prevents silent breakage when workflow schemas evolve | Add per-workflow `version` + changelog metadata in catalog; optional `min_version` guard on execution | MEDIUM | Workflow registry, catalog metadata |
-| **Token-budget-aware response modes** | Lets agent choose concise vs diagnostic payloads intentionally | Add explicit `response_mode` (`minimal`, `standard`, `debug`) for workflows and bridge responses | MEDIUM | Existing `detail=False`, `limit=N`, response-size metadata |
-| **Machine-actionable partial success semantics** | Enables robust autonomous continuation despite partial failures | Unify status taxonomy across tools: `ok`, `partial`, `error`; include per-subtask warning codes | LOW-MEDIUM | Existing `WarningCollector` and 3-tier status pattern |
-| **Deterministic result ordering** | Reduces non-deterministic diffs and retry confusion | Guarantee stable sorting keys for list responses where backend ordering is ambiguous | LOW | Bridge response wrapping (`call_nautobot`) |
-| **Contract test snapshots for MCP outputs** | Keeps tool contracts predictable over time | Add snapshot tests for envelope/schema per workflow/tool (not only functional tests) | MEDIUM | Existing UAT + pytest foundation |
-| **Single-call “planner” workflows for common investigations** | Major round-trip savings in multi-step diagnostics | Add curated high-value bundles (e.g., “device health + config drift + CMS deltas”) with capped detail | MEDIUM-HIGH | Existing workflow orchestration and partial-failure handling |
+| Pattern | File | Risk | Fix |
+|---------|------|------|-----|
+| `.filter(**params)` | `bridge.py:188` | HIGH | Guard `__in` list params; raise if > 500 |
+| `.filter(**effective_params)` | `bridge.py:270` | HIGH | Same guard for CMS path |
 
-## Anti-features
+### LOW severity — ipam.py already chunked
 
-These are commonly requested but usually reduce agent quality, inflate tokens, or increase unpredictability.
+`get_device_ips()` already chunks at 500 with `chunked()`. But `.filter(id__in=chunk)` creates repeated query params, not comma-separated. At 700 IPs → 2 chunks × ~18 KB each → 414.
 
-| Anti-feature | Why it hurts agent performance | Better alternative | Complexity impact if avoided |
-|---|---|---|---|
-| **Re-expanding into many endpoint-specific MCP tools** | Tool-selection confusion, context bloat, maintenance overhead | Keep universal bridge + catalog + workflows | Saves HIGH complexity long-term |
-| **Unbounded “return everything” defaults** | Token spikes, latency, model truncation | Default capped responses + explicit opt-in detail modes | Saves MEDIUM runtime/debug cost |
-| **Schema-less/shape-shifting responses** | Fragile agent parsers and retry loops | Fixed envelopes + versioned contracts | Saves HIGH integration cost |
-| **Overly “magic” parameter inference** | Non-deterministic behavior and hidden side effects | Explicit normalization rules + transparent metadata | Saves MEDIUM debugging cost |
-| **Client-side orchestration requirement for common tasks** | Too many round-trips and higher failure surface | Move frequent N+1 patterns into server workflows | Saves HIGH token + latency cost |
-| **Opaque error strings only** | Hard for agents to self-heal | Structured error codes + hints + retryability flags | Saves MEDIUM recovery cost |
+| Pattern | File | Risk | Fix |
+|---------|------|------|-----|
+| `.filter(id__in=chunk)` | `ipam.py:371` | LOW | Direct HTTP with comma-separated |
+| `.filter(interface=chunk)` | `ipam.py:361` | LOW | Direct HTTP with comma-separated |
+| `.filter(id__in=chunk)` | `ipam.py:269` | LOW | Already chunked at 500; VLANs are few per device |
 
-## Prioritization
+### LOW severity — all other .filter() sites
 
-### P1 (Must-have for v1.5)
+All other `.filter()` calls in the codebase pass **scalar values** (single device name, single interface ID, etc.). These are safe — no list expansion.
 
-1. **Catalog contract metadata** (`contract_version`, params, response shape summary)
-   - **Why:** Foundation for predictable contracts.
-   - **Complexity:** MEDIUM.
-   - **Dependencies:** `nautobot_api_catalog`, catalog engine.
+## VLANs 500 error
 
-2. **Unified response/error envelopes across all 3 tools**
-   - **Why:** Predictable parsing + autonomous retries.
-   - **Complexity:** MEDIUM.
-   - **Dependencies:** `server.py` tool wrappers, `bridge.py` error translation, existing workflow envelopes.
+`devices summary DEVICE` calls `client.count("ipam", "vlans", location="HQV")` → hits `/api/ipam/vlans/count/?location=HQV` → **500 Internal Server Error** from Nautobot server.
 
-3. **Token-budget response modes** (`minimal`/`standard`/`debug`)
-   - **Why:** Direct control of payload size by agent intent.
-   - **Complexity:** MEDIUM.
-   - **Dependencies:** Existing `detail`, `limit`, response-size metadata.
+This is a **server-side issue** — cannot be fixed in CLI/MCP code. Mitigation: catch 500 errors on `/count/` and return `None` for affected counts, letting the operation continue without the VLAN count.
 
-4. **Deterministic ordering + consistent truncation metadata**
-   - **Why:** Repeatable outputs and simpler diffing.
-   - **Complexity:** LOW.
-   - **Dependencies:** `call_nautobot` result shaping.
+## Complexity
 
-### P2 (High-value differentiators after P1)
+- ipam.py fix: LOW complexity, isolated, well-understood pattern
+- bridge.py fix: MEDIUM complexity, affects all MCP callers, needs careful error messaging
+- VLANs 500 mitigation: LOW complexity, one extra try/except
 
-1. **Workflow versioning and compatibility guardrails**
-   - **Complexity:** MEDIUM.
-   - **Dependencies:** Workflow registry + catalog.
+## Dependencies
 
-2. **Contract snapshot tests (schema-level)**
-   - **Complexity:** MEDIUM.
-   - **Dependencies:** Existing pytest/UAT setup.
-
-3. **1–2 new planner workflows for common investigations**
-   - **Complexity:** MEDIUM-HIGH.
-   - **Dependencies:** Existing composite orchestration + partial-failure model.
-
-### P3 (Defer unless capacity remains)
-
-1. **Broader identifier normalization expansion across all endpoints**
-   - **Complexity:** MEDIUM-HIGH due to endpoint-specific ambiguity.
-   - **Dependencies:** Bridge routing + endpoint registries.
-
-2. **Advanced adaptive payload shaping by token budget integer target**
-   - **Complexity:** HIGH.
-   - **Dependencies:** Response-size metadata + per-workflow field-pruning rules.
-
----
-
-**Bottom line:**
-For top MCP servers, **table stakes** are bounded payloads, strict contracts, and server-side composites. The strongest **v1.5 differentiators** are contract versioning, explicit response modes, and deterministic envelopes that let agents recover and continue automatically. The main **anti-feature to avoid** is any return to tool sprawl or shape-shifting outputs.
+None — all patterns exist in codebase already.
