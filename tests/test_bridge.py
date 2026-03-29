@@ -15,6 +15,9 @@ from nautobot_mcp.bridge import (
     _validate_method,
     _build_valid_endpoints,
     _strip_uuid_from_endpoint,
+    _guard_filter_params,
+    _execute_core,
+    _execute_cms,
     MAX_LIMIT,
     DEFAULT_LIMIT,
 )
@@ -584,3 +587,161 @@ class TestCallNautobotWithUUID:
             "GET",
         )
         assert result["endpoint"] == "/api/dcim/devices/abc12345-def4-5678-9abc-def012345678/"
+
+
+class TestParamGuard:
+    """Test _guard_filter_params() guard logic."""
+
+    def test_none_params_returns_none(self):
+        """None input returns None (passthrough)."""
+        assert _guard_filter_params(None) is None
+
+    def test_empty_dict_returns_empty_dict(self):
+        """Empty dict returns empty dict."""
+        assert _guard_filter_params({}) == {}
+
+    # --- Small list (≤ 500): converted to comma-separated string ---
+
+    def test_id_in_small_list_converted_to_string(self):
+        """Small __in list is converted to comma-separated string."""
+        params = {"id__in": ["uuid1", "uuid2", "uuid3"]}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"id__in": "uuid1,uuid2,uuid3"}
+
+    def test_interface_in_small_list_converted(self):
+        """interface__in list converted."""
+        params = {"interface__in": ["iface1", "iface2"]}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"interface__in": "iface1,iface2"}
+
+    def test_exactly_500_items_converted(self):
+        """Exactly 500 items is allowed and converted."""
+        items = [f"uuid-{i}" for i in range(500)]
+        params = {"id__in": items}
+        guarded = _guard_filter_params(params)
+        assert len(guarded["id__in"].split(",")) == 500
+        assert isinstance(guarded["id__in"], str)
+
+    def test_mixed_in_and_regular_params(self):
+        """Mixed __in and non-__in params: __in converted, others passed through."""
+        params = {"id__in": ["a", "b"], "status": "active", "name": "router1"}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"id__in": "a,b", "status": "active", "name": "router1"}
+
+    # --- Large list (> 500): raises NautobotValidationError ---
+
+    def test_id_in_501_items_raises(self):
+        """501 items in id__in raises NautobotValidationError."""
+        params = {"id__in": [f"uuid-{i}" for i in range(501)]}
+        with pytest.raises(NautobotValidationError, match="id__in.*501.*500"):
+            _guard_filter_params(params)
+
+    def test_interface_in_600_items_raises(self):
+        """600 items in interface__in raises."""
+        params = {"interface__in": [f"iface-{i}" for i in range(600)]}
+        with pytest.raises(NautobotValidationError, match="interface__in.*600"):
+            _guard_filter_params(params)
+
+    def test_error_message_includes_param_key(self):
+        """Error message names the offending parameter key."""
+        params = {"custom__in": [f"val-{i}" for i in range(600)]}
+        with pytest.raises(NautobotValidationError, match="custom__in"):
+            _guard_filter_params(params)
+
+    def test_error_message_includes_count(self):
+        """Error message includes the actual item count."""
+        params = {"id__in": [f"uuid-{i}" for i in range(750)]}
+        with pytest.raises(NautobotValidationError, match="750"):
+            _guard_filter_params(params)
+
+    # --- Non-__in list params: pass through unchanged ---
+
+    def test_tag_list_passed_through_unchanged(self):
+        """Non-__in list params pass through as-is (list objects)."""
+        params = {"tag": ["foo", "bar", "baz"]}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"tag": ["foo", "bar", "baz"]}  # list unchanged
+
+    def test_status_list_passed_through_unchanged(self):
+        """status=[active, planned] passed through unchanged."""
+        params = {"status": ["active", "planned"]}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"status": ["active", "planned"]}
+
+    def test_location_list_passed_through_unchanged(self):
+        """location=[uuid1, uuid2] passed through unchanged (no __in suffix)."""
+        params = {"location": ["loc-uuid-1", "loc-uuid-2"]}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"location": ["loc-uuid-1", "loc-uuid-2"]}
+
+    def test_non_list_params_passed_through(self):
+        """Scalar params pass through unchanged."""
+        params = {"name": "router1", "status": "active", "limit": 50}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"name": "router1", "status": "active", "limit": 50}
+
+    def test_tuple_converted_to_string(self):
+        """Tuple __in value is converted to string (same as list)."""
+        params = {"id__in": ("uuid-1", "uuid-2")}
+        guarded = _guard_filter_params(params)
+        assert guarded == {"id__in": "uuid-1,uuid-2"}
+
+
+class TestParamGuardIntegration:
+    """Test _execute_core() and _execute_cms() raise for oversized __in lists."""
+
+    def _mock_client_core(self):
+        """Set up mock for _execute_core path."""
+        client = MagicMock()
+        endpoint = MagicMock()
+        endpoint.filter.return_value = []
+        app = MagicMock()
+        setattr(app, "devices", endpoint)
+        client.api.dcim = app
+        return client, endpoint
+
+    def test_execute_core_large_id_in_raises(self):
+        """_execute_core raises when params contains id__in > 500 items."""
+        client, _ = self._mock_client_core()
+        params = {"id__in": [f"uuid-{i}" for i in range(600)]}
+        with pytest.raises(NautobotValidationError, match="id__in.*600.*500"):
+            _execute_core(client, "dcim", "devices", "GET", params, None, None, 50)
+
+    def test_execute_core_small_id_in_works(self):
+        """_execute_core works when id__in ≤ 500 (converted to string)."""
+        client, endpoint = self._mock_client_core()
+        params = {"id__in": ["uuid-1", "uuid-2", "uuid-3"]}
+        _execute_core(client, "dcim", "devices", "GET", params, None, None, 50)
+        # pynautobot accepts string for __in — verify filter called with CSV string
+        call_kwargs = endpoint.filter.call_args
+        assert call_kwargs[1]["id__in"] == "uuid-1,uuid-2,uuid-3"
+
+    def test_execute_core_non_in_list_unchanged(self):
+        """_execute_core passes non-__in list params through unchanged."""
+        client, endpoint = self._mock_client_core()
+        params = {"tag": ["foo", "bar"]}
+        _execute_core(client, "dcim", "devices", "GET", params, None, None, 50)
+        # tag=[...] stays as a list; filter call does not crash
+        call_kwargs = endpoint.filter.call_args
+        assert call_kwargs[1]["tag"] == ["foo", "bar"]
+
+    def test_execute_cms_large_interface_in_raises(self):
+        """_execute_cms raises when params contains interface__in > 500 items."""
+        client = MagicMock()
+        mock_endpoint = MagicMock()
+        mock_endpoint.filter.return_value = []
+        with patch("nautobot_mcp.bridge.get_cms_endpoint", return_value=mock_endpoint):
+            params = {"interface__in": [f"iface-{i}" for i in range(501)]}
+            with pytest.raises(NautobotValidationError, match="interface__in.*501.*500"):
+                _execute_cms(client, "juniper_static_routes", "GET", params, None, None, 50)
+
+    def test_execute_cms_small_in_works(self):
+        """_execute_cms works when __in ≤ 500 (converted to string)."""
+        client = MagicMock()
+        mock_endpoint = MagicMock()
+        mock_endpoint.filter.return_value = []
+        with patch("nautobot_mcp.bridge.get_cms_endpoint", return_value=mock_endpoint):
+            params = {"id__in": ["uuid-1", "uuid-2"]}
+            _execute_cms(client, "juniper_static_routes", "GET", params, None, None, 50)
+            call_kwargs = mock_endpoint.filter.call_args
+            assert call_kwargs[1]["id__in"] == "uuid-1,uuid-2"
