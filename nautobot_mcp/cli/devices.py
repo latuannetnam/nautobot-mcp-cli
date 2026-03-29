@@ -137,7 +137,8 @@ def devices_summary(
             typer.echo(f"  Primary IP: {d['primary_ip']}")
         typer.echo(f"\n  Interfaces: {data['interface_count']}")
         typer.echo(f"  IP Addresses: {data['ip_count']}")
-        typer.echo(f"  VLANs: {data['vlan_count']}")
+        vlan_val = data["vlan_count"] if data["vlan_count"] is not None else "N/A"
+        typer.echo(f"  VLANs: {vlan_val}")
 
     except Exception as e:
         handle_cli_error(e)
