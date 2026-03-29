@@ -147,6 +147,43 @@ def _parse_core_endpoint(endpoint: str) -> tuple[str, str]:
     return app_name, ep_name
 
 
+def _guard_filter_params(params: dict | None) -> dict | None:
+    """Guard __in-suffixed filter params against 414 Request-URI Too Large.
+
+    - Raises NautobotValidationError if any __in param has > 500 items.
+    - Converts all __in param lists ≤ 500 to comma-separated strings
+      (DRF-native format ?key=val1,val2,val3) to reduce query string size.
+    - Non-__in list params (e.g., tag=[...], status=[...]) pass through unchanged.
+
+    Args:
+        params: Filter params dict, or None.
+
+    Returns:
+        Guarded params dict with __in lists converted to strings, or None.
+
+    Raises:
+        NautobotValidationError: If any __in param value has > 500 items.
+    """
+    if not params:
+        return None
+
+    result = {}
+    for key, value in params.items():
+        if key.endswith("__in") and isinstance(value, (list, tuple)):
+            if len(value) > 500:
+                raise NautobotValidationError(
+                    message=f"Parameter '{key}' has {len(value)} items — exceeds "
+                            f"maximum of 500. Chunk your query and retry.",
+                    hint="Split large 'in' queries into batches of ≤ 500 items. "
+                         "E.g., fetch IDs in chunks and merge results.",
+                )
+            # Convert list to comma-separated string (DRF-native format)
+            result[key] = ",".join(str(v) for v in value)
+        else:
+            result[key] = value
+    return result
+
+
 def _execute_core(client, app_name: str, ep_name: str, method: str,
                   params: dict | None, data: dict | None,
                   obj_id: str | None, limit: int, offset: int = 0) -> dict:
