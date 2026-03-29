@@ -57,6 +57,8 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - [ ] v1.7: VLANs count 500 fix — handle Nautobot server 500 errors gracefully in vlans count path
 - [ ] v1.5 requirements: ENV-01..ENV-05 (Contract & Envelope), BAT-01..BAT-05 (Batch), PRT-01..PRT-06 (Projection), SEC-01..SEC-06 (Security), KPI-01..KPI-04 (KPI Benchmarks) — all planned for v1.5 but not built; deferred to future milestone
 
+**v1.7 phases completed:** 30 (direct HTTP), **31** (bridge param guard)
+
 ### Validated (v1.6 — Query Performance)
 
 - ✓ Eliminate wasteful `count()` auto-pagination — `skip_count` plumbed through CLI, MCP tool, bridge, `get_device_inventory()` — v1.6
@@ -68,6 +70,15 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - ✓ `latency_ms` in `call_nautobot` response envelope — wall-clock timing for all operations — v1.6
 - ✓ `--no-count` CLI flag — skips all count operations regardless of detail — v1.6
 - ✓ `--limit 0` auto-enables `skip_count` — unlimited mode with zero count overhead — v1.6
+
+### Validated (v1.7 — Phase 31: Bridge Param Guard)
+
+- ✓ `_guard_filter_params()` guard function in bridge.py — intercepts `__in`-suffixed filter params before `.filter()` calls — v1.7 Phase 31
+- ✓ Raises `NautobotValidationError` for `__in` lists > 500 items — prevents 414 Request-URI Too Large from external callers — v1.7 Phase 31
+- ✓ Converts `__in` lists ≤ 500 to DRF-native comma-separated strings — reduces query string size for large-but-valid lists — v1.7 Phase 31
+- ✓ Non-`__in` list params (tag, status, location) pass through unchanged — no regression on existing callers — v1.7 Phase 31
+- ✓ Guard wired into `_execute_core()` and `_execute_cms()` — covers both Nautobot core and CMS plugin endpoints — v1.7 Phase 31
+- ✓ 18 unit tests: `TestParamGuard` (13) + `TestParamGuardIntegration` (5) — full coverage of guard logic and integration — v1.7 Phase 31
 
 ### Rejected
 
