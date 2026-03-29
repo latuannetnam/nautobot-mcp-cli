@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 import json
+import requests  # needed for HTTPError in test_count_vlans_500_raises_nautobot_api_error
 
 import pytest
 
@@ -292,3 +293,93 @@ class TestHandleApiErrorHintMap:
         d = err.to_dict()
         assert "validation_errors" in d
         assert d["validation_errors"][0]["field"] == "name"
+
+
+# ---------------------------------------------------------------------------
+# VLAN-01 + VLAN-02: count() with UUID location filter
+# ---------------------------------------------------------------------------
+
+
+class TestVLANCount500:
+    """Test count() behavior with UUID location filter and 500 error path.
+
+    Covers:
+    - D-01: location=<uuid> succeeds with 200
+    - D-03: 500 propagates as NautobotAPIError
+    - D-04: caller catches NautobotAPIError
+    """
+
+    def _make_client(self, mock_nautobot_profile) -> NautobotClient:
+        client = NautobotClient(profile=mock_nautobot_profile)
+        client._api = MagicMock()
+        client.api.http_session = MagicMock()
+        return client
+
+    def test_count_vlans_by_uuid_returns_int(self, mock_nautobot_profile):
+        """location=<uuid> produces a valid count integer (200 OK)."""
+        client = self._make_client(mock_nautobot_profile)
+
+        fake_resp = MagicMock()
+        fake_resp.ok = True
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {"count": 42}
+        client.api.http_session.get.return_value = fake_resp
+
+        result = client.count("ipam", "vlans", location="5555-6666-7777-8888")
+        assert result == 42
+        # Verify UUID was passed, not name
+        call_args = client.api.http_session.get.call_args
+        assert "5555-6666-7777-8888" in str(call_args)
+
+    def test_count_vlans_500_raises_nautobot_api_error(self, mock_nautobot_profile):
+        """500 from /count/ propagates as NautobotAPIError (D-03)."""
+        client = self._make_client(mock_nautobot_profile)
+
+        # Direct HTTP returns 500
+        fake_resp_500 = MagicMock()
+        fake_resp_500.ok = False
+        fake_resp_500.status_code = 500
+        fake_resp_500.text = "Internal Server Error"
+        fake_resp_500.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            response=fake_resp_500
+        )
+
+        # pynautobot fallback also raises 500 (e.g. RequestError)
+        fallback_error = make_request_error(500, "Internal Server Error", "/api/ipam/vlans/")
+        client.api.http_session.get.return_value = fake_resp_500
+
+        # Set up pynautobot endpoint to also raise
+        mock_vlans = MagicMock()
+        mock_vlans.count.side_effect = fallback_error
+        client.api.ipam.vlans = mock_vlans
+
+        with pytest.raises(NautobotAPIError) as exc_info:
+            client.count("ipam", "vlans", location="5555-6666-7777-8888")
+
+        assert exc_info.value.status_code == 500
+
+    def test_count_vlans_fallback_404_returns_pynautobot_count(
+        self, mock_nautobot_profile
+    ):
+        """404 from /count/ falls back to pynautobot .count() (D-03 path: 404 → pass)."""
+        client = self._make_client(mock_nautobot_profile)
+
+        # Direct HTTP returns 404 (endpoint not supported)
+        fake_resp_404 = MagicMock()
+        fake_resp_404.ok = False
+        fake_resp_404.status_code = 404
+        fake_resp_404.text = "Not Found"
+        fake_resp_404.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            response=fake_resp_404
+        )
+        client.api.http_session.get.return_value = fake_resp_404
+
+        # pynautobot fallback succeeds
+        mock_vlans = MagicMock()
+        mock_vlans.count.return_value = 17
+        client.api.ipam.vlans = mock_vlans
+
+        result = client.count("ipam", "vlans", location="5555-6666-7777-8888")
+        assert result == 17
+        mock_vlans.count.assert_called_once_with(location="5555-6666-7777-8888")
+

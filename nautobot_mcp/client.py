@@ -378,9 +378,13 @@ class NautobotClient:
             pass
 
         # Fallback: pynautobot .count() — O(n) auto-pagination, but works everywhere
-        app_obj = getattr(self.api, app)
-        ep_obj = getattr(app_obj, endpoint)
-        return ep_obj.count(**filters)
+        # Also convert pynautobot RequestError → NautobotAPIError so callers get consistent errors
+        try:
+            app_obj = getattr(self.api, app)
+            ep_obj = getattr(app_obj, endpoint)
+            return ep_obj.count(**filters)
+        except pynautobot.core.query.RequestError as e:
+            raise self._handle_api_error(e, "count", f"{app}/{endpoint}") from e
 
     @property
     def cms(self):
