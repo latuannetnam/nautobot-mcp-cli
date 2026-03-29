@@ -283,6 +283,9 @@ def _execute_cms(client, cms_key: str, method: str,
         device_val = effective_params["device"]
         effective_params["device"] = resolve_device_id(client, device_val)
 
+    # Guard __in params: raise for oversized lists, convert small lists to CSV
+    effective_params = _guard_filter_params(effective_params) or {}
+
     # Get CMS endpoint accessor
     endpoint_accessor = get_cms_endpoint(client, cms_key)
 
