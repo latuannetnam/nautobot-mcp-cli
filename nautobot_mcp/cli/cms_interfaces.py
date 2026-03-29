@@ -491,7 +491,7 @@ def interface_detail(
     """Get composite interface detail summary for a device (units, families, VRRP)."""
     try:
         client = get_client_from_ctx(ctx)
-        result = cms_interfaces.get_interface_detail(client, device=device, include_arp=include_arp)
+        result, _ = cms_interfaces.get_interface_detail(client, device=device, include_arp=include_arp)
         data = result.model_dump()
         if ctx.obj.get("json", False):
             import json as json_mod

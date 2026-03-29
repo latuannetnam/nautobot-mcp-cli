@@ -344,7 +344,7 @@ def firewall_summary(
     """
     try:
         client = get_client_from_ctx(ctx)
-        result = cms_firewalls.get_device_firewall_summary(client, device=device, detail=detail)
+        result, _ = cms_firewalls.get_device_firewall_summary(client, device=device, detail=detail)
         data = result.model_dump()
         if ctx.obj.get("json", False):
             typer.echo(json_mod.dumps(data, indent=2, default=str))

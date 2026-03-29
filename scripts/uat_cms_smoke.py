@@ -66,7 +66,7 @@ WORKFLOWS = [
         "cmd": [
             "uv", "run", "nautobot-mcp", "--json",
             "devices", "inventory",
-            "--device", DEVICE,
+            DEVICE,
         ],
     },
 ]
@@ -128,9 +128,9 @@ def run_workflow(workflow: dict) -> WorkflowResult:
             summary="ERROR",
         )
 
-    # Try to parse JSON from stdout
+    # Try to parse JSON from stdout (for error reporting only)
     try:
-        data = json.loads(result.stdout)
+        _ = json.loads(result.stdout)  # noqa: F841
     except json.JSONDecodeError:
         return WorkflowResult(
             id=workflow["id"],
@@ -138,8 +138,7 @@ def run_workflow(workflow: dict) -> WorkflowResult:
             passed=False,
             elapsed_ms=elapsed_ms,
             status=None,
-            preview = result.stdout.strip()[:200] if result.stdout else "(empty stdout)"
-            error=f"Non-JSON stdout: {preview}",
+            error=f"Non-JSON stdout: {result.stdout.strip()[:200] if result.stdout else '(empty stdout)'}",
             summary="PARSE ERROR",
         )
 
@@ -156,28 +155,23 @@ def run_workflow(workflow: dict) -> WorkflowResult:
         )
 
     # Evaluate pass/fail criteria
-    status = data.get("status")
-    error = data.get("error")
-    passed = status in ("ok", "partial") and error is None
+    # CLI commands return raw data (no workflow envelope), so pass = exit 0
+    passed = result.returncode == 0
 
     summary_parts = []
     if passed:
         summary_parts.append("PASS")
     else:
         summary_parts.append("FAIL")
-
-    if status:
-        summary_parts.append(f"status={status}")
-    if error:
-        summary_parts.append(f"error={error}")
+        summary_parts.append(f"exit={result.returncode}")
 
     return WorkflowResult(
         id=workflow["id"],
         name=workflow["name"],
         passed=passed,
         elapsed_ms=elapsed_ms,
-        status=status,
-        error=error,
+        status=None,
+        error=None,
         summary=" | ".join(summary_parts),
     )
 
