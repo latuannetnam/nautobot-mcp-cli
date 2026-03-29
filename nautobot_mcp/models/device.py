@@ -75,9 +75,16 @@ class DeviceStatsResponse(BaseModel):
     device: DeviceSummary = Field(description="Core device info")
     interface_count: int = Field(default=0, description="Total interface count")
     ip_count: int = Field(default=0, description="Total IP count")
-    vlan_count: int = Field(default=0, description="Total VLAN count")
+    vlan_count: Optional[int] = Field(
+        default=None,
+        description="Total VLAN count (null if unavailable due to server error)",
+    )
     enabled_count: int = Field(default=0, description="Enabled interfaces")
     disabled_count: int = Field(default=0, description="Disabled interfaces")
+    warnings: Optional[list[dict[str, str]]] = Field(
+        default=None,
+        description="Recoverable error warnings from data fetch",
+    )
 
 
 class DeviceInventoryResponse(BaseModel):
@@ -118,3 +125,7 @@ class DeviceInventoryResponse(BaseModel):
     limit: int = Field(default=0, description="Max results per page")
     offset: int = Field(default=0, description="Offset applied")
     has_more: bool = Field(default=False, description="More results available")
+    warnings: Optional[list[dict[str, str]]] = Field(
+        default=None,
+        description="Recoverable error warnings from data fetch",
+    )
