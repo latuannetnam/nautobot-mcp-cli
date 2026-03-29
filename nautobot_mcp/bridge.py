@@ -164,7 +164,7 @@ def _guard_filter_params(params: dict | None) -> dict | None:
     Raises:
         NautobotValidationError: If any __in param value has > 500 items.
     """
-    if not params:
+    if params is None:
         return None
 
     result = {}
