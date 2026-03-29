@@ -17,30 +17,102 @@ Candidates:
 - Config remediation suggestions based on drift reports
 - Extended drift coverage (interfaces, firewalls)
 
-### Performance & Device Inventory
 
-- `devices summary` is now stats-only (device metadata + interface/IP/VLAN counts) to avoid expensive detail fetches on high-interface devices.
-- Added `devices inventory` command for paginated full detail (`interfaces|ips|vlans|all`) with `--limit` and `--offset`.
-- Refactored `ipam.get_device_ips()` from per-interface/per-IP N+1 lookups to chunked bulk M2M + bulk `id__in` IP fetches.
-- Refactored `ipam.list_vlans(device=...)` from per-VLAN `get()` N+1 to chunked bulk `id__in` fetches.
-- Added `devices_inventory` workflow to MCP (`nautobot_run_workflow`) and workflow catalog.
-- Fixed CMS N+1 query patterns across Juniper modules (`firewalls.py`, `routing.py`, `interfaces.py`, `policies.py`) using bulk-fetch + dictionary grouping.
-- Added shared helpers in `nautobot_mcp/utils.py` (`chunked`, `group_by_attr`) for batch operations.
+---
 
-⚠️ **Breaking behavior change**: `devices summary --detail` has been removed. Use `devices inventory` for detailed interface/IP/VLAN data.
+## [v1.7] — 2026-03-29
+
+### URI Limit & Server Resilience
+
+Eliminated all **414 Request-URI Too Large** errors and **500** errors for large devices.
+
+#### Direct HTTP Bulk Fetch (`get_device_ips()`)
+
+Replaced O(3N/chunk_size) chunked `.filter()` loops in `get_device_ips()` with O(3) direct HTTP calls using DRF comma-separated UUID format. Eliminates 414 errors for high-interface-count devices.
+
+- `_bulk_get_by_ids()` helper: single direct HTTP call with `?interface=uuid1,uuid2,uuid3` format, auto-follows `next` pagination links
+- Empty `ip_ids` early return: skips Pass 3 when M2M returns zero IP IDs
+- Partial failure detection: stale/deleted IPs surfaced as `unlinked_ips` stubs
+- Added `unlinked_ips` field to IPAM response models
+
+#### Bridge Param Guard
+
+Added `_guard_filter_params()` to intercept oversized `__in` list values before they reach pynautobot, preventing 414 errors from external callers who pass large UUID lists through the MCP bridge.
+
+- Raises `NautobotValidationError` when any `__in` param has > 500 items (exact pynautobot limit)
+- Converts `__in` lists ≤ 500 to DRF-native comma-separated strings (`?id__in=a,b,c`) — ~3x shorter than repeated params
+- Wired into `_execute_core()` and `_execute_cms()` before `.filter()` calls
+
+#### VLANs 500 Fix
+
+Fixed `devices summary` and `devices inventory` failing with 500 on high-VLAN-count devices (e.g. HQV-PE1-NEW with 2,381 VLANs).
+
+- `DeviceStatsResponse.vlan_count` changed from `int` to `Optional[int]`
+- `DeviceStatsResponse.warnings` and `DeviceInventoryResponse.warnings`: new structured warning fields (`{section, message, recoverable}`)
+- CLI now shows `N/A` when `vlan_count` is unavailable
+- `NautobotClient.count()` pynautobot fallback: wrapped in error handling + `RetryError` catch for HTTP 500 fallback
+
+### Stats
+
+- MCP tools: 3 (unchanged)
+- Unit tests: 443
+- Phases: 30–32 (Direct HTTP Bulk Fetch, Bridge Param Guard, VLANs 500 Fix)
 
 
-### Performance & Device Inventory
+---
 
-- `devices summary` is now stats-only (device metadata + interface/IP/VLAN counts) to avoid expensive detail fetches on high-interface devices.
-- Added `devices inventory` command for paginated full detail (`interfaces|ips|vlans|all`) with `--limit` and `--offset`.
-- Refactored `ipam.get_device_ips()` from per-interface/per-IP N+1 lookups to chunked bulk M2M + bulk `id__in` IP fetches.
-- Refactored `ipam.list_vlans(device=...)` from per-VLAN `get()` N+1 to chunked bulk `id__in` fetches.
-- Added `devices_inventory` workflow to MCP (`nautobot_run_workflow`) and workflow catalog.
-- Fixed CMS N+1 query patterns across Juniper modules (`firewalls.py`, `routing.py`, `interfaces.py`, `policies.py`) using bulk-fetch + dictionary grouping.
-- Added shared helpers in `nautobot_mcp/utils.py` (`chunked`, `group_by_attr`) for batch operations.
+## [v1.6] — 2026-03-28
 
-⚠️ **Breaking behavior change**: `devices summary --detail` has been removed. Use `devices inventory` for detailed interface/IP/VLAN data.
+### Query Performance & Device Inventory
+
+Major performance overhaul of device inventory operations — up to **10x faster** on high-interface devices.
+
+#### Adaptive Count Skipping
+
+Eliminated O(n) count calls for paginated requests.
+
+- `get_device_inventory()` skips all `count()` calls when `skip_count=True` or `limit==0` — O(1) vs O(n)
+- `has_more` correctly inferred from `len(results) == limit` when counts are skipped
+- `--no-count` CLI flag plumbed through all layers (CLI → bridge → MCP tool → workflow)
+- `limit=0` auto-enables unlimited mode with no count fetches
+
+#### Direct `/count/` Endpoint
+
+Replaced pynautobot's O(n) auto-paginating `.count()` with O(1) direct HTTP calls to Nautobot's `/count/` endpoint.
+
+- `NautobotClient.count(app, endpoint, **filters)` — direct `GET /api/{app}/{endpoint}/count/` with HTTP 404 fallback to pynautobot's O(n) `.count()`
+- All 8 `client.api.{app}.{endpoint}.count(...)` call sites in `devices.py` replaced with `client.count()`
+- Parallel counts via `ThreadPoolExecutor` for `detail=all` when counts ARE needed (with sequential fallback on failure)
+
+#### Observability
+
+- `latency_ms` added to every `nautobot_call_nautobot` success and error response — full-call wall-clock timing visible to agents
+- Per-section timing fields (`interfaces_latency_ms`, `ips_latency_ms`, `vlans_latency_ms`, `total_latency_ms`) in `DeviceInventoryResponse`
+
+#### Device Inventory Refactor
+
+- `devices summary` is now stats-only (device metadata + interface/IP/VLAN counts) — no expensive detail fetches on high-interface devices
+- Added `devices inventory` command for paginated full detail (`interfaces|ips|vlans|all`) with `--limit` and `--offset`
+- Refactored `ipam.get_device_ips()` from per-interface/per-IP N+1 lookups to chunked bulk M2M + bulk `id__in` IP fetches
+- Refactored `ipam.list_vlans(device=...)` from per-VLAN `get()` N+1 to chunked bulk `id__in` fetches
+- Added `devices_inventory` workflow to MCP (`nautobot_run_workflow`) and workflow catalog
+- Fixed CMS N+1 query patterns across Juniper modules (`firewalls.py`, `routing.py`, `interfaces.py`, `policies.py`) using bulk-fetch + dictionary grouping
+- Added shared helpers in `nautobot_mcp/utils.py` (`chunked`, `group_by_attr`) for batch operations
+
+⚠️ **Breaking behavior change**: `devices summary --detail` has been removed. Use `devices inventory --detail all` for full interface/IP/VLAN data.
+
+### Stats
+
+- MCP tools: 3 (unchanged)
+- Unit tests: 478
+- Phases: 28–29 (Adaptive Count & Fast Pagination, Direct /count/ Endpoint)
+
+
+---
+
+## [v1.5] — 2026-03-28
+
+*(Placeholder — no functional changes)*
 
 
 ---

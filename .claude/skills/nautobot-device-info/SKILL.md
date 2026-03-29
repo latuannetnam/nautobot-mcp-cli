@@ -12,13 +12,15 @@ Query device inventory, interfaces, IPAM, and organizational data from Nautobot 
 ## The Encoding Problem
 
 Two distinct Unicode characters crash the CLI on Windows:
-2
+
 | Character | Source | Effect |
 |-----------|--------|--------|
 | `→` (`\u2192`) | Nautobot API location paths (e.g. `"Asia → VietNam → North"`) | `charmap codec can't encode` → exit 1 |
 | `↑` `↓` (`\u2191` `\u2193`) | Hard-coded in CLI summary output | `charmap codec can't encode` → exit 1 |
 
 **Rule: For agentic/structured use, always use `--json`.** For human-readable terminal output, prefix with `PYTHONIOENCODING=utf-8`.
+
+**New in v1.7:** `vlan_count` in device responses can be `null` (`"N/A"` in text output) when Nautobot's VLANs count endpoint is unavailable. A `warnings` array may also be present in responses — always handle these fields defensively.
 
 ## The 3-Tool API Bridge (MCP)
 
@@ -273,11 +275,13 @@ uv run nautobot-mcp --json onboard config config.json "Router" --commit \
   "device": { "name": "Router", ... },
   "interface_count": 202,
   "ip_count": 214,
-  "vlan_count": 0,
+  "vlan_count": 2381,          // or null when Nautobot's /count/ is unavailable
   "enabled_count": 200,
-  "disabled_count": 2
+  "disabled_count": 2,
+  "warnings": null              // or [{section, message, recoverable}] when count fails
 }
 ```
+> `vlan_count` is `null` (`"N/A"` in text) when Nautobot returns 500 for the VLANs count endpoint. `warnings` is present when any section encountered an error.
 
 **`--json devices inventory --detail all`**:
 ```json
@@ -288,17 +292,18 @@ uv run nautobot-mcp --json onboard config config.json "Router" --commit \
   "vlans": [],
   "total_interfaces": 202,
   "total_ips": 214,
-  "total_vlans": 0,
+  "total_vlans": 2381,             // or null when Nautobot's /count/ is unavailable
   "interfaces_latency_ms": 3421.1,
   "ips_latency_ms": null,
   "vlans_latency_ms": null,
   "total_latency_ms": 5543.8,
   "limit": 50,
   "offset": 0,
-  "has_more": true
+  "has_more": true,
+  "warnings": null                  // or [{section, message, recoverable}] when a section fails
 }
 ```
-> **Timing fields:** `*_latency_ms` are wall-clock times. `null` when that section is not fetched. `total_*` fields are `null` when count is skipped (`--no-count` or `limit > 0` without count).
+> **Timing fields:** `*_latency_ms` are wall-clock times. `null` when that section is not fetched. `total_*` fields are `null` when count is skipped (`--no-count` or `limit > 0` without count). `warnings` is present when any section encountered an error (e.g. VLANs 500).
 
 **`--json ipam addresses device-ips DEVICE`**:
 ```json
@@ -323,6 +328,10 @@ uv run nautobot-mcp --json onboard config config.json "Router" --commit \
 
 - **Ignoring exit code**: Exit 1 on Windows often means encoding error, not API failure
   **Fix:** Check exit code; retry with `--json` if code is 1
+
+- **Assuming `vlan_count` is always an integer**: On high-VLAN devices, Nautobot's `/count/` endpoint returns 500 and `vlan_count` will be `null` (shown as `N/A` in text output). Always handle `null` in code and check for a `warnings` array in the response.
+
+- **Passing very large UUID lists to `nautobot_call_nautobot`**: The MCP bridge raises `NautobotValidationError` if any `__in` filter list exceeds 500 items. Chunk large UUID sets into batches of ≤ 500 before passing to `params`.
 
 ## Configuration
 

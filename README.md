@@ -6,7 +6,7 @@
 
 ## Features
 
-### MCP Tools (v1.4 API Bridge — 3 tools)
+### MCP Tools (v1.7 API Bridge — 3 tools)
 
 | Tool | Purpose |
 |---|---|
@@ -245,7 +245,7 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-### Available MCP tools (v1.4)
+### Available MCP tools (v1.7)
 
 The server exposes **3 tools**. Use `nautobot_api_catalog` to discover all endpoints and workflow IDs before calling the other two.
 
@@ -279,6 +279,7 @@ nautobot_api_catalog(domain="cms")
 | `data` | dict (optional) | Request body for POST/PATCH |
 | `id` | string (optional) | Object UUID for single-object operations |
 | `limit` | int (optional) | Max results for GET list (default 50, hard cap 200) |
+| `skip_count` | bool (optional) | Skip count queries for faster paginated results (default false) |
 
 Routes to pynautobot core (`/api/*`) or CMS plugin (`cms:*`) automatically.
 
@@ -293,7 +294,7 @@ nautobot_call_nautobot(endpoint="/api/dcim/devices/", method="GET", params={"nam
 nautobot_call_nautobot(endpoint="cms:juniper_bgp_groups", method="GET", params={"device": "core-rtr-01"})
 ```
 
-Response: `{count, results, endpoint, method}` — with optional `truncated` + `total_available` when capped.
+Response: `{count, results, endpoint, method, latency_ms}` — with optional `truncated` + `total_available` when capped. `latency_ms` is the full-call wall-clock time in milliseconds.
 
 </details>
 
@@ -348,6 +349,7 @@ uv run nautobot-mcp [OPTIONS] COMMAND [ARGS]...
 | `--token TOKEN` | Override API token |
 | `--no-verify` | Skip SSL certificate verification |
 | `--json` | Output as JSON instead of table |
+| `--no-count` | Skip count queries for faster paginated results |
 
 ### Commands
 
@@ -381,9 +383,11 @@ uv run nautobot-mcp golden-config show-intended core-rtr-01
 uv run nautobot-mcp golden-config show-backup core-rtr-01
 uv run nautobot-mcp golden-config compliance-results core-rtr-01
 
-# Device summary
-uv run nautobot-mcp devices summary core-rtr-01
-uv run nautobot-mcp devices summary core-rtr-01 --detail  # includes interfaces + IPs
+# Device summary & inventory
+uv run nautobot-mcp devices summary core-rtr-01            # stats-only: interface/IP/VLAN counts
+uv run nautobot-mcp devices inventory core-rtr-01           # paginated full detail
+uv run nautobot-mcp devices inventory core-rtr-01 --detail all --limit 50  # all sections, 50 items
+uv run nautobot-mcp devices inventory core-rtr-01 --detail ips --limit 100 --no-count  # IPs only, no count fetches
 
 # Parse JunOS config
 uv run nautobot-mcp parse junos config.json
