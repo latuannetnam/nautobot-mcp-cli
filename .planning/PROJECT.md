@@ -8,11 +8,9 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.7 URI Limit & Server Resilience
+## Current Milestone: Planning Next (v1.8)
 
-**Goal:** Eliminate all 414 Request-URI Too Large errors across CLI and MCP server by replacing all problematic `.filter(id__in=chunk)` / `.filter(interface=chunk)` patterns with direct HTTP using comma-separated UUIDs; address VLANs count endpoint returning 500 errors.
-
-**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only, not built) → v1.6 Query Performance (2026-03-28) → **v1.7 (current)**
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only) → v1.6 Query Performance (2026-03-28) → v1.7 URI Limit & Server Resilience (2026-03-29) → **v1.8 (planning)**
 
 ## Requirements
 
@@ -53,11 +51,8 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 
 ### Active
 
-- [ ] v1.7: URI Limit Fix — audit and replace all .filter(id__in=chunk) / .filter(interface=chunk) patterns across CLI and MCP server with direct HTTP using comma-separated UUIDs
-- [ ] v1.7: VLANs count 500 fix — handle Nautobot server 500 errors gracefully in vlans count path
 - [ ] v1.5 requirements: ENV-01..ENV-05 (Contract & Envelope), BAT-01..BAT-05 (Batch), PRT-01..PRT-06 (Projection), SEC-01..SEC-06 (Security), KPI-01..KPI-04 (KPI Benchmarks) — all planned for v1.5 but not built; deferred to future milestone
-
-**v1.7 phases completed:** 30 (direct HTTP), **31** (bridge param guard)
+- [ ] v1.8 requirements: TBD
 
 ### Validated (v1.6 — Query Performance)
 
@@ -71,6 +66,17 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - ✓ `--no-count` CLI flag — skips all count operations regardless of detail — v1.6
 - ✓ `--limit 0` auto-enables `skip_count` — unlimited mode with zero count overhead — v1.6
 
+### Validated (v1.7 — Phase 32: VLANs 500 Fix)
+
+- ✓ VLAN count graceful degradation: `vlan_count` → `Optional[int]`, `warnings: Optional[list[dict]]` in `DeviceStatsResponse` and `DeviceInventoryResponse` — v1.7 Phase 32
+- ✓ `device.location.id` (UUID) used at all VLAN count call sites instead of `location.name` — v1.7 Phase 32
+- ✓ `NautobotAPIError` caught in all 4 VLAN count paths: summary, inventory sequential, inventory parallel, inventory fallback — v1.7 Phase 32
+- ✓ `RetryError` catch in `client.count()` — HTTP retries exhaust on 500 → pynautobot fallback works cleanly — v1.7 Phase 32
+- ✓ `N/A` display in CLI when `vlan_count` is null — v1.7 Phase 32
+- ✓ Live verified: `devices summary HQV-PE1-NEW` → `"vlan_count": 2381` (was 500) — v1.7 Phase 32
+- ✓ 11 new unit tests: `TestVLANCount500` (3) + `TestDeviceVLANCountErrorHandling` (8) — v1.7 Phase 32
+- ✓ 443 total unit tests pass — no regression — v1.7 Phase 32
+
 ### Validated (v1.7 — Phase 31: Bridge Param Guard)
 
 - ✓ `_guard_filter_params()` guard function in bridge.py — intercepts `__in`-suffixed filter params before `.filter()` calls — v1.7 Phase 31
@@ -79,6 +85,13 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - ✓ Non-`__in` list params (tag, status, location) pass through unchanged — no regression on existing callers — v1.7 Phase 31
 - ✓ Guard wired into `_execute_core()` and `_execute_cms()` — covers both Nautobot core and CMS plugin endpoints — v1.7 Phase 31
 - ✓ 18 unit tests: `TestParamGuard` (13) + `TestParamGuardIntegration` (5) — full coverage of guard logic and integration — v1.7 Phase 31
+
+### Validated (v1.7 — Phase 30: Direct HTTP Bulk Fetch)
+
+- ✓ `_bulk_get_by_ids()` helper — single direct HTTP call with DRF comma-separated UUIDs, auto-follows `next` links, wraps via `endpoint.return_obj()` — v1.7 Phase 30
+- ✓ `get_device_ips()` Pass 2 & 3 refactored: chunked `.filter()` loops → `_bulk_get_by_ids()` — no 414 for large devices — v1.7 Phase 30
+- ✓ Stale IP detection: `fetched_ids - requested_ids` surfaces deleted IPs as `unlinked_ips` stubs — v1.7 Phase 30
+- ✓ 11 new unit tests in `tests/test_ipam.py` — 29 total tests pass — v1.7 Phase 30
 
 ### Rejected
 
@@ -134,6 +147,14 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 | 404 fallback to pynautobot | Some plugin endpoints don't expose `/count/`; 404 is not an error, it's a signal to use O(n) fallback | ✓ Shipped v1.6 |
 | Wall-clock `latency_ms` in bridge | `_execute_core`/`_execute_cms` time, not ORM-to-dict time; covers full call path including `resolve_device_id` | ✓ Shipped v1.6 |
 | Parallel counts via `ThreadPoolExecutor(max_workers=3)` | Max of 3 latencies instead of sum when `detail=all`; sequential fallback on any failure | ✓ Shipped v1.6 |
+| DRF comma-separated for bulk fetch | `?interface=uuid1,uuid2,uuid3` ~3x shorter than repeated `?interface=uuid1&interface=uuid2` — eliminates 414 | ✓ Shipped v1.7 Phase 30 |
+| Raise for oversized `__in` lists | 414 from external callers is prevented by raising `NautobotValidationError` before `.filter()` — guides callers to chunk | ✓ Shipped v1.7 Phase 31 |
+| 500-item threshold on `__in` lists | Matches pynautobot's natural limit; raises before pynautobot crashes | ✓ Shipped v1.7 Phase 31 |
+| Location UUID instead of name for VLANs count | UUID bypasses Nautobot's `TreeNodeMultipleChoiceFilter` name→object resolution ORM crash | ✓ Shipped v1.7 Phase 32 |
+| Graceful VLAN count degradation | 500 → `vlan_count=None` + `warnings` field; operation continues, count shows `null`/`N/A` | ✓ Shipped v1.7 Phase 32 |
+| RetryError → pynautobot fallback | HTTP `/count/` retries 3x on 500 → raises `RetryError` before `HTTPError` catch; adding `RetryError` catch routes to working pynautobot fallback | ✓ Shipped v1.7 Phase 32 |
+| `dict[str, Any]` for warnings field | Pydantic 2.12 rejects `bool` coercion in `dict[str, str]`; `dict[str, Any]` allows `recoverable: bool` | ✓ Shipped v1.7 Phase 32 |
+| `e.message` attribute for error strings | `NautobotAPIError.__str__` includes hint text; use `e.message` attribute directly to avoid Pydantic repr artifacts | ✓ Shipped v1.7 Phase 32 |
 
 ## Constraints
 
@@ -162,4 +183,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after v1.7 milestone started*
+*Last updated: 2026-03-29 after v1.7 milestone shipped*

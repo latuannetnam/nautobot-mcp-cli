@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.7 URI Limit & Server Resilience (Shipped: 2026-03-29)
+
+**Phases completed:** 27 phases, 57 plans, 47 tasks
+
+**Key accomplishments:**
+
+- [Rule 3 - Blocking] Hatchling build backend
+- `tests/test_cms_arp.py`
+- Adaptive count skipping with has_more inference, per-section timing, and parallel counts for detail=all
+- O(1) /count/ via direct HTTP, latency instrumentation in bridge, all 8 call sites migrated
+- Direct HTTP bulk fetch replaces O(3N/chunk_size) chunked .filter() loops in get_device_ips() with O(3) comma-separated UUID calls, plus partial failure detection for stale IPs
+- Phase:
+- Phase:
+- Phase:
+
+---
+
 ## v1.6 Query Performance Optimization (Shipped: 2026-03-28)
 
 **Phases completed:** 24 phases, 56 plans, 44 tasks
