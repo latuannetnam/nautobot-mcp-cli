@@ -12,6 +12,60 @@ from nautobot_mcp.models.ipam import DeviceIPEntry, DeviceIPsResponse, IPAddress
 
 if TYPE_CHECKING:
     from nautobot_mcp.client import NautobotClient
+    from pynautobot.core.endpoint import Endpoint
+
+
+def _bulk_get_by_ids(
+    client: NautobotClient,
+    endpoint: Endpoint,
+    ids: list[str],
+    id_param: str,
+) -> list:
+    """Bulk fetch records by IDs using direct HTTP with comma-separated UUIDs.
+
+    Uses DRF comma-separated format (e.g. ?id__in=uuid1,uuid2,uuid3) instead of
+    repeated query params (e.g. ?id__in=uuid1&id__in=uuid2) to avoid 414
+    Request-URI Too Large errors on large ID sets.
+
+    Follows next links automatically for paginated responses.
+
+    Args:
+        client: NautobotClient instance.
+        endpoint: pynautobot Endpoint object (provides .url and .return_obj).
+        ids: List of UUID strings to fetch.
+        id_param: Query param name (e.g. "interface", "id__in").
+
+    Returns:
+        List of pynautobot Record objects wrapped via endpoint.return_obj().
+        Empty list if ids is empty (no HTTP call made).
+    """
+    if not ids:
+        return []
+
+    url = f"{client._profile.url}{endpoint.url}"
+    params = {id_param: ",".join(ids)}
+
+    results: list = []
+    next_url: str | None = None
+
+    while True:
+        if next_url is None:
+            resp = client.api.http_session.get(url, params=params)
+        else:
+            resp = client.api.http_session.get(next_url, params=None)
+
+        resp.raise_for_status()
+        data = resp.json()
+        results.extend(data.get("results", []))
+
+        next_link = data.get("next")
+        if next_link:
+            next_url = next_link
+        else:
+            break
+
+    # Wrap raw dicts via pynautobot's return_obj (no HTTP call)
+    return [endpoint.return_obj(r, client.api, endpoint) for r in results]
 
 
 def list_prefixes(
@@ -323,10 +377,12 @@ def get_device_ips(
 ) -> DeviceIPsResponse:
     """Get all IPs assigned to a device's interfaces via the M2M table.
 
-    Bulk strategy — O(3) API calls regardless of interface count:
+    Bulk strategy — O(3) direct HTTP calls regardless of interface count:
     1. Collect all interface IDs for the device
-    2. Bulk fetch all M2M records in one call (chunked if many interfaces)
-    3. Bulk fetch all IP details in one call (chunked)
+    2. Bulk fetch all M2M records in one direct HTTP call
+    3. Bulk fetch all IP details in one direct HTTP call
+
+    Uses DRF comma-separated format (?id__in=a,b,c) to avoid 414 errors.
 
     Args:
         client: NautobotClient instance.
@@ -337,8 +393,6 @@ def get_device_ips(
     Returns:
         DeviceIPsResponse with interface_ips and unlinked_ips.
     """
-    from nautobot_mcp.utils import chunked
-
     try:
         # Pass 1: collect all interface IDs
         iface_records = list(client.api.dcim.interfaces.filter(device=device_name))
@@ -353,23 +407,52 @@ def get_device_ips(
                 unlinked_ips=[],
             )
 
-        # Pass 2: bulk M2M — try all IDs at once, chunk if too many
-        CHUNK = 500
-        m2m_records: list = []
-        for chunk in chunked(iface_ids, CHUNK):
-            chunk_records = list(
-                client.api.ipam.ip_address_to_interface.filter(interface=chunk)
-            )
-            m2m_records.extend(chunk_records)
+        # Pass 2: bulk M2M — single direct HTTP call with comma-separated UUIDs
+        m2m_records: list = _bulk_get_by_ids(
+            client,
+            client.api.ipam.ip_address_to_interface,
+            iface_ids,
+            id_param="interface",
+        )
 
         # Collect all IP IDs from M2M results
         ip_ids = list({str(m.ip_address.id) for m in m2m_records})
 
-        # Pass 3: bulk IP lookup — chunk if many IDs
-        ip_map: dict = {}
-        for chunk in chunked(ip_ids, CHUNK):
-            for ip in client.api.ipam.ip_addresses.filter(id__in=chunk):
-                ip_map[str(ip.id)] = ip
+        # Pass 3: bulk IP lookup — single direct HTTP call with comma-separated UUIDs
+        # Empty ip_ids: return early (no IPs linked to any interface)
+        if not ip_ids:
+            return DeviceIPsResponse(
+                device_name=device_name,
+                total_ips=0,
+                interface_ips=[],
+                unlinked_ips=[],
+            )
+
+        ip_records: list = _bulk_get_by_ids(
+            client,
+            client.api.ipam.ip_addresses,
+            ip_ids,
+            id_param="id__in",
+        )
+        ip_map = {str(ip.id): ip for ip in ip_records}
+
+        # Detect missing IPs (stale UUIDs — deleted between Pass 2 and 3)
+        fetched_ids = {str(ip.id) for ip in ip_records}
+        requested_ids = set(ip_ids)
+        missing_ip_ids = requested_ids - fetched_ids
+
+        unlinked_ips: list[IPAddressSummary] = []
+        if missing_ip_ids:
+            for missing_id in missing_ip_ids:
+                unlinked_ips.append(IPAddressSummary(
+                    id=missing_id,
+                    address="<deleted>",
+                    status="Unknown",
+                    namespace=None,
+                    tenant=None,
+                    dns_name=None,
+                    type="Host",
+                ))
 
         # Build entries using O(1) lookups
         all_entries: list[DeviceIPEntry] = []
@@ -399,7 +482,7 @@ def get_device_ips(
             device_name=device_name,
             total_ips=total_ips,
             interface_ips=paginated,
-            unlinked_ips=[],
+            unlinked_ips=unlinked_ips,
         )
 
     except Exception as e:
