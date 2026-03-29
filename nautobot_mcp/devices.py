@@ -261,7 +261,7 @@ def get_device_summary(
         try:
             vlan_count = client.count("ipam", "vlans", location=device_location_id)
         except NautobotAPIError as e:
-            stats_warnings = [{"section": "vlans", "message": f"VLAN count unavailable: {e}", "recoverable": True}]
+            stats_warnings = [{"section": "vlans", "message": f"VLAN count unavailable: {getattr(e, 'message', str(e))}", "recoverable": True}]
 
     return DeviceStatsResponse(
         device=device,
@@ -353,7 +353,7 @@ def get_device_inventory(
                         total_vlans = client.count("ipam", "vlans", location=loc_id)
                     except NautobotAPIError as e:
                         total_vlans = None
-                        inventory_warnings.append({"section": "vlans", "message": f"VLAN count unavailable: {e}", "recoverable": True})
+                        inventory_warnings.append({"section": "vlans", "message": f"VLAN count unavailable: {e.message}", "recoverable": True})
                 else:
                     total_vlans = 0
                 vlans_latency_ms = (time.time() - t_vlans) * 1000
@@ -410,7 +410,7 @@ def get_device_inventory(
                         total_vlans = client.count("ipam", "vlans", location=loc_id)
                     except NautobotAPIError as e:
                         total_vlans = None
-                        inventory_warnings.append({"section": "vlans", "message": f"VLAN count unavailable: {e}", "recoverable": True})
+                        inventory_warnings.append({"section": "vlans", "message": f"VLAN count unavailable: {e.message}", "recoverable": True})
                 else:
                     total_vlans = 0
                 vlans_latency_ms = (time.time() - t_vlans) * 1000

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -81,7 +81,7 @@ class DeviceStatsResponse(BaseModel):
     )
     enabled_count: int = Field(default=0, description="Enabled interfaces")
     disabled_count: int = Field(default=0, description="Disabled interfaces")
-    warnings: Optional[list[dict[str, str]]] = Field(
+    warnings: Optional[list[dict[str, Any]]] = Field(
         default=None,
         description="Recoverable error warnings from data fetch",
     )
@@ -125,7 +125,7 @@ class DeviceInventoryResponse(BaseModel):
     limit: int = Field(default=0, description="Max results per page")
     offset: int = Field(default=0, description="Offset applied")
     has_more: bool = Field(default=False, description="More results available")
-    warnings: Optional[list[dict[str, str]]] = Field(
+    warnings: Optional[list[dict[str, Any]]] = Field(
         default=None,
         description="Recoverable error warnings from data fetch",
     )
