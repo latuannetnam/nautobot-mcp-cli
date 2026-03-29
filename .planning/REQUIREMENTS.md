@@ -1,7 +1,44 @@
-# Requirements: nautobot-mcp-cli v1.5
+# Requirements: nautobot-mcp-cli
 
 **Defined:** 2026-03-26
+**Updated for v1.7:** 2026-03-29
 **Core Value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools — with predictable contracts, minimal round-trips, compact responses, and production-grade reliability.
+
+## v1.7 Requirements
+
+Requirements to eliminate 414 Request-URI Too Large errors and address VLANs 500 errors. All fixes use existing codebase patterns (direct HTTP, comma-separated DRF format, pynautobot Record wrapping).
+
+### Direct HTTP Bulk Fetch (URI)
+
+- [ ] **URI-01**: `get_device_ips()` replaces `.filter(interface=chunk)` M2M loop with a single direct HTTP call using comma-separated interface UUIDs (`?interface=uuid1,uuid2,uuid3`)
+- [ ] **URI-02**: `get_device_ips()` replaces `.filter(id__in=chunk)` IP detail loop with a single direct HTTP call using comma-separated IP UUIDs (`?id__in=uuid1,uuid2,uuid3`)
+- [ ] **URI-03**: Direct HTTP bulk fetch follows pagination `next` links to collect all results when response exceeds page size
+- [ ] **URI-04**: Direct HTTP responses are wrapped back into pynautobot `Record` objects via `return_obj()` so existing attribute access (`ip.id`, `ip.address`, `ip.status.display`) continues to work
+- [ ] **URI-05**: Empty IP/M2M result sets are handled gracefully — early return before HTTP call when no IDs to fetch
+- [ ] **URI-06**: M2M bulk fetch uses a fallback chunking strategy (chunk size 100) if comma-separated format is not supported by the `ip_address_to_interface` endpoint
+
+### Bridge Param Guard (BRIDGE)
+
+- [ ] **BRIDGE-01**: `_execute_core()` intercepts `__in` list values in `params` before passing to `.filter()`; lists > 500 items raise `NautobotValidationError` with descriptive message
+- [ ] **BRIDGE-02**: `_execute_cms()` implements the same `__in` list guard for CMS endpoint params
+- [ ] **BRIDGE-03**: Lists ≤ 500 items in `__in` params are converted to comma-separated strings before passing to `.filter()` (DRF-native format)
+- [ ] **BRIDGE-04**: Non-`__in` list params (e.g., `tag=[foo, bar]`) are passed through unchanged — only `__in` list sizes are restricted
+- [ ] **BRIDGE-05**: Bridge param guard is covered by unit tests: small list (≤ 500) works, large list (> 500) raises validation error, non-`__in` lists pass through
+
+### VLANs 500 Mitigation (VLAN)
+
+**Root cause found:** CLI passes `location=HQV` (name) to `/api/ipam/vlans/count/`. Nautobot's `VLANViewSet` uses an annotated queryset (`annotate(prefix_count=count_related(...))`) shared between list and count. The ManyToMany `locations` JOIN combined with name-based filtering triggers an ORM crash → 500. Passing `location=<uuid>` (resolved first) avoids the name→object resolution fallback path.
+
+- [ ] **VLAN-01**: All `client.count("ipam", "vlans", location=...)` call sites resolve the location name to a UUID before calling count — `location=<uuid>` instead of `location=HQV`
+- [ ] **VLAN-02**: `client.count()` catches HTTP 500 as a safety fallback — returns `None` when all retry attempts are exhausted; operation continues without the count
+- [ ] **VLAN-03**: Count values of `None` are handled gracefully in `devices summary` and `devices inventory` output — count fields show `null` rather than crashing
+- [ ] **VLAN-04**: A warning is added to the output when any VLAN count fails, indicating it was unavailable
+
+### Regression (TEST)
+
+- [ ] **TEST-01**: All existing unit tests pass after changes — no behavioral regression in working paths
+- [ ] **TEST-02**: `device-ips DEVICE` command works correctly on a device with known many IPs (verified against prod with HQV-PE1-NEW or similar)
+- [ ] **TEST-03**: `devices inventory DEVICE --detail ips` completes successfully for large-IP-count devices without 414
 
 ## v1.6 Requirements
 
@@ -201,12 +238,31 @@ Deferred to future release.
 | KPI-02 | TBD | Pending |
 | KPI-03 | TBD | Pending |
 | KPI-04 | TBD | Pending |
+| URI-01 | TBD | Pending |
+| URI-02 | TBD | Pending |
+| URI-03 | TBD | Pending |
+| URI-04 | TBD | Pending |
+| URI-05 | TBD | Pending |
+| URI-06 | TBD | Pending |
+| BRIDGE-01 | TBD | Pending |
+| BRIDGE-02 | TBD | Pending |
+| BRIDGE-03 | TBD | Pending |
+| BRIDGE-04 | TBD | Pending |
+| BRIDGE-05 | TBD | Pending |
+| VLAN-01 | TBD | Pending |
+| VLAN-02 | TBD | Pending |
+| VLAN-03 | TBD | Pending |
+| VLAN-04 | TBD | Pending |
+| TEST-01 | TBD | Pending |
+| TEST-02 | TBD | Pending |
+| TEST-03 | TBD | Pending |
 
 **Coverage:**
 - v1.4 requirements: 20 total — all complete ✓
 - v1.5 requirements: 24 total — pending roadmap
-- v1.6 requirements: 8 total — Phases 28-29 defined
+- v1.6 requirements: 8 total — all complete ✓
+- v1.7 requirements: 15 total — roadmap pending
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after v1.6 milestone kickoff*
+*Last updated: 2026-03-29 after v1.7 milestone kickoff*

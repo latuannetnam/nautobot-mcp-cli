@@ -16,38 +16,33 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-28)
+See: .planning/PROJECT.md (updated 2026-03-29)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** Phase 29 — direct-count-endpoint (complete)
+**Current focus:** Phase 30 — direct HTTP bulk fetch (not started)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Not started (roadmap defined)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-29 — Milestone v1.7 started
+Status: Roadmap defined — 3 phases
+Last activity: 2026-03-29 — Milestone v1.7 roadmap defined
 
 ## Context
 
-**Phase 28 status:** ✅ COMPLETE — all 6 tasks committed; skip_count plumbed through all layers
-**Phase 29 status:** ✅ COMPLETE — all 3 tasks committed (PERF-03, PERF-04, OBS-02); 478 unit tests pass
+**v1.6 status:** ✅ COMPLETE — shipped 2026-03-28 with skip_count and direct /count/ endpoint
 
-## Context
+**v1.7 Goal:** Eliminate all 414 Request-URI Too Large errors and address VLANs 500 errors.
 
-**Goal:** Fix slow CLI and MCP queries for devices with large interface/IP counts.
+**Root causes identified:**
 
-**Root cause identified:**
+1. **414 in ipam.py `get_device_ips()`:** `.filter(id__in=chunk)` and `.filter(interface=chunk)` use repeated query params → ~18 KB per 500-UUID chunk → 414 for large devices. Fix: direct HTTP with comma-separated DRF format.
 
-- `pynautobot.count(device=name)` does NOT use `/count/` endpoint
-- Instead calls `.filter()` → auto-paginates through ALL pages → returns `len(results)`
-- For HQV-PE1-NEW (700+ interfaces): wastes ~700+ record fetches + Record→dict conversions
-- The count is only needed for the "total: N" header and `has_more` flag
-- When user requests `--limit 5`, they don't need the total count upfront
+2. **414 in bridge.py (`_execute_core()` + `_execute_cms()`):** No guard on caller-supplied `params`. External callers can inject `id__in=[uuid1..uuid10000]` → 414 on any endpoint. Fix: `_guard_filter_params()` with 500-item limit on `__in` lists.
 
-**Impact:** `devices inventory HQV-PE1-NEW --limit 5` is slow because of count fetch, not data fetch
+3. **500 in VLANs count:** CLI passes `location=HQV` (name) to `/api/ipam/vlans/count/`. Nautobot's VLAN queryset annotation + ManyToMany location JOIN + name-based filter → ORM crash → 500. Fix: resolve location name→UUID before calling `/count/`.
 
-**Fix strategy:** Skip count when `limit > 0` and `detail != "all"`; infer `has_more` from `returned_count == limit`
+**Impact:** `device-ips HQV-PE1-NEW` fails with 414; `devices summary HQV-PE1-NEW` fails with 500 on VLAN count.
 
 ## Key Decisions
 
@@ -58,17 +53,11 @@ Last activity: 2026-03-29 — Milestone v1.7 started
 | Direct `/count/` endpoint fallback | v1.6 | When count IS needed, bypass pynautobot for true O(1) |
 | Adaptive count strategy | v1.6 | Only count when `detail=all` or `limit=0` |
 | Instrument timing in output | v1.6 | Observable performance for users and agents |
-
-## Phase 28 Decisions (completed 2026-03-28)
-
-| Decision | Rationale |
-|----------|-----------|
-| D-01: `has_more = len(results) == limit` when count skipped | Exact `limit` results → `has_more=True`; fewer → `has_more=False` |
-| D-02: Null totals when count skipped | Honest signal — `total_*` fields are `None` in JSON when counts not fetched |
-| D-03: `skip_count` param plumbed through CLI + workflow + bridge + MCP tool | Unified across all interfaces, not just CLI |
-| D-04: Per-section timing granularity | `interfaces_latency_ms`, `ips_latency_ms`, `vlans_latency_ms`, `total_latency_ms` |
-| D-05: Parallel counts for `detail=all` via `ThreadPoolExecutor(max_workers=3)` | Max of 3 latencies instead of sum; sequential fallback on any failure |
-| D-06: `limit=0` auto-enables `skip_count` | Unlimited mode should never pay count overhead |
+| Direct HTTP with comma-separated for IP/M2M bulk | v1.7 | `?id__in=a,b,c` ~3x shorter than `?id__in=a&id__in=b&id__in=c` |
+| Bridge guard rejects `__in` lists > 500 | v1.7 | Caller must chunk — prevents 414 from external agents |
+| Raise vs auto-chunk on bridge guard | v1.7 | Raise error — auto-chunking would hide bad caller patterns |
+| Location name → UUID before VLANs count | v1.7 | UUID avoids Nautobot's `TreeNodeMultipleChoiceFilter` name→object resolution path that triggers ORM crash |
+| 500 fallback returns `None` | v1.7 | Count unavailable → `null` in output; operation continues |
 
 ## Accumulated Context
 
