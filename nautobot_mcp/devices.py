@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Optional
 
-from nautobot_mcp.exceptions import NautobotNotFoundError
+from nautobot_mcp.exceptions import NautobotAPIError, NautobotNotFoundError
 from nautobot_mcp.models.base import ListResponse
 from nautobot_mcp.models.device import DeviceSummary, DeviceStatsResponse, DeviceInventoryResponse
 
@@ -252,14 +252,23 @@ def get_device_summary(
     ip_count = client.count("ipam", "ip_addresses", device_id=device_uuid)
 
     # Step 4: VLAN count — scoped to device's location (VLANs have no device FK)
-    device_location = device.location.name if device.location else None
-    vlan_count = client.count("ipam", "vlans", location=device_location) if device_location else 0
+    # D-01: Use UUID (device.location.id) instead of name to avoid 500 on /count/
+    # D-04: Catch NautobotAPIError → set vlan_count=None, append warning
+    stats_warnings: list[dict[str, str]] | None = None
+    device_location_id = device.location.id if device.location else None
+    vlan_count: int | None = None
+    if device_location_id:
+        try:
+            vlan_count = client.count("ipam", "vlans", location=device_location_id)
+        except NautobotAPIError as e:
+            stats_warnings = [{"section": "vlans", "message": f"VLAN count unavailable: {e}", "recoverable": True}]
 
     return DeviceStatsResponse(
         device=device,
         interface_count=interface_count,
         ip_count=ip_count,
         vlan_count=vlan_count,
+        warnings=stats_warnings,
     )
 
 
@@ -318,6 +327,7 @@ def get_device_inventory(
     interfaces_latency_ms: float | None = None
     ips_latency_ms: float | None = None
     vlans_latency_ms: float | None = None
+    inventory_warnings: list[dict[str, str]] = []
 
     # -------------------------------------------------------------------------
     # Count phase — skip if effective_skip_count=True
@@ -337,19 +347,30 @@ def get_device_inventory(
                 ips_latency_ms = (time.time() - t_ips) * 1000
             elif detail == "vlans":
                 t_vlans = time.time()
-                loc_name = device_obj.location.name if device_obj.location else None
-                total_vlans = client.count("ipam", "vlans", location=loc_name) if loc_name else 0
+                loc_id = device_obj.location.id if device_obj.location else None
+                if loc_id:
+                    try:
+                        total_vlans = client.count("ipam", "vlans", location=loc_id)
+                    except NautobotAPIError as e:
+                        total_vlans = None
+                        inventory_warnings.append({"section": "vlans", "message": f"VLAN count unavailable: {e}", "recoverable": True})
+                else:
+                    total_vlans = 0
                 vlans_latency_ms = (time.time() - t_vlans) * 1000
 
         elif detail == "all":
             # D-05: Parallel counts for detail=all — all 3 counts fire simultaneously
-            def _count_vlans_by_loc(client_: NautobotClient, loc: str | None) -> int:
-                if loc:
-                    return client_.count("ipam", "vlans", location=loc)
+            def _count_vlans_by_loc(client_: NautobotClient, loc_id: str | None) -> int | None:
+                """Count VLANs by location UUID. Returns None if count fails."""
+                if loc_id:
+                    try:
+                        return client_.count("ipam", "vlans", location=loc_id)
+                    except NautobotAPIError:
+                        return None
                 return 0
 
             try:
-                loc_name = device_obj.location.name if device_obj.location else None
+                loc_id = device_obj.location.id if device_obj.location else None
                 with ThreadPoolExecutor(max_workers=3) as ex:
                     t_parallel_start = time.time()
                     f_iface = ex.submit(client.count, "dcim", "interfaces", device=device_name)
@@ -357,10 +378,11 @@ def get_device_inventory(
                         ipam_mod.get_device_ips,
                         client, device_name=device_name, limit=0, offset=0
                     )
-                    f_vlans = ex.submit(_count_vlans_by_loc, client, loc_name)
+                    f_vlans = ex.submit(_count_vlans_by_loc, client, loc_id)
                     total_interfaces = f_iface.result()
                     ips_resp = f_ips.result()
-                    total_vlans = f_vlans.result()
+                    vlans_result = f_vlans.result()
+                    total_vlans = vlans_result
                     total_ips = ips_resp.total_ips
                     parallel_latency = (time.time() - t_parallel_start) * 1000
                     # ISSUE-2 fix: capture IPs latency from the parallel response
@@ -368,6 +390,10 @@ def get_device_inventory(
                     ips_latency_ms = parallel_latency
                     interfaces_latency_ms = parallel_latency
                     vlans_latency_ms = parallel_latency
+                    # D-04: Handle VLAN count failure in parallel path
+                    if total_vlans is None:
+                        inventory_warnings.append({"section": "vlans", "message": "VLAN count unavailable in parallel fetch", "recoverable": True})
+                        total_vlans = None
             except Exception:
                 # D-05: Sequential fallback on any parallel failure
                 t_iface_count = time.time()
@@ -378,8 +404,15 @@ def get_device_inventory(
                 total_ips = ips_resp.total_ips
                 ips_latency_ms = (time.time() - t_ips) * 1000
                 t_vlans = time.time()
-                loc_name = device_obj.location.name if device_obj.location else None
-                total_vlans = client.count("ipam", "vlans", location=loc_name) if loc_name else 0
+                loc_id = device_obj.location.id if device_obj.location else None
+                if loc_id:
+                    try:
+                        total_vlans = client.count("ipam", "vlans", location=loc_id)
+                    except NautobotAPIError as e:
+                        total_vlans = None
+                        inventory_warnings.append({"section": "vlans", "message": f"VLAN count unavailable: {e}", "recoverable": True})
+                else:
+                    total_vlans = 0
                 vlans_latency_ms = (time.time() - t_vlans) * 1000
 
     # -------------------------------------------------------------------------
@@ -459,5 +492,6 @@ def get_device_inventory(
         ips_latency_ms=ips_latency_ms,
         vlans_latency_ms=vlans_latency_ms,
         total_latency_ms=total_latency_ms,
+        warnings=inventory_warnings or None,
     )
 
