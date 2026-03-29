@@ -52,11 +52,11 @@ nautobot_run_workflow("devices_inventory", {"device": "HQV-PE1-NEW"})
 
 ### CLI (scripts/uat_cms_smoke.py)
 ```bash
-nautobot-mcp --json cms routing bgp-summary --device HQV-PE1-NEW
-nautobot-mcp --json cms routing routing-table --device HQV-PE1-NEW
-nautobot-mcp --json cms firewalls firewall-summary --device HQV-PE1-NEW
-nautobot-mcp --json cms interfaces detail --device HQV-PE1-NEW
-nautobot-mcp --json devices inventory --device HQV-PE1-NEW
+uv run nautobot-mcp --json cms routing bgp-summary --device HQV-PE1-NEW
+uv run nautobot-mcp --json cms routing routing-table --device HQV-PE1-NEW
+uv run nautobot-mcp --json cms firewalls firewall-summary --device HQV-PE1-NEW
+uv run nautobot-mcp --json cms interfaces detail --device HQV-PE1-NEW
+uv run nautobot-mcp --json devices inventory --device HQV-PE1-NEW
 ```
 
 ---
@@ -65,7 +65,7 @@ nautobot-mcp --json devices inventory --device HQV-PE1-NEW
 
 `scripts/uat_cms_smoke.py` — standalone UAT script that:
 - Reads `NAUTOBOT_URL` + `NAUTOBOT_TOKEN` from environment (prod profile)
-- Runs all 5 workflows via Python API (bypasses CLI JSON encoding issues on Windows)
+- Runs all 5 workflows via `uv run nautobot-mcp --json ...` subprocess calls
 - Prints a summary table: `PASS | FAIL | SKIP` per workflow
 - Prints total elapsed time
 - Exits `0` if all pass, `1` otherwise
