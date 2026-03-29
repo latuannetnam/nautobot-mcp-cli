@@ -220,6 +220,8 @@ def _execute_core(client, app_name: str, ep_name: str, method: str,
                     hint="Check the UUID is correct",
                 )
             return {"count": 1, "results": [dict(record)]}
+        # Guard __in params: raise for oversized lists, convert small lists to CSV
+        params = _guard_filter_params(params)
         # List operation — pass limit/offset server-side to avoid fetching all records
         if params:
             records = list(endpoint_accessor.filter(**params, **pagination_kwargs))
