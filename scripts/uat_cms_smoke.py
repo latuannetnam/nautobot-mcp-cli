@@ -110,6 +110,18 @@ WORKFLOWS = [
     },
 ]
 
+# Performance thresholds: workflow_id → max_allowed_ms
+# bgp_summary: was ~80s before fix; target <5s per v1.8 requirement (REG-01)
+# Other thresholds: conservative 2x estimates; update to 2× empirically observed
+# post-fix times per D-06.
+THRESHOLD_MS: dict[str, float] = {
+    "bgp_summary": 5000.0,
+    "routing_table": 15000.0,
+    "firewall_summary": 15000.0,
+    "interface_detail": 15000.0,
+    "devices_inventory": 15000.0,
+}
+
 
 @dataclass
 class WorkflowResult:
@@ -143,6 +155,11 @@ def run_workflow(workflow: dict) -> WorkflowResult:
             timeout=120,
         )
         elapsed_ms = round((time.monotonic() - t0) * 1000, 1)
+
+        # Threshold check — evaluate before parsing to catch slow-but-successful runs
+        threshold = THRESHOLD_MS.get(workflow["id"])
+        exceeded = threshold is not None and elapsed_ms > threshold
+
     except subprocess.TimeoutExpired:
         return WorkflowResult(
             id=workflow["id"],
@@ -206,7 +223,8 @@ def run_workflow(workflow: dict) -> WorkflowResult:
 
     # Evaluate pass/fail criteria
     # CLI commands return raw data (no workflow envelope), so pass = exit 0
-    passed = result.returncode == 0
+    # Threshold-exceeded runs still append FAIL below but get threshold_error set
+    passed = result.returncode == 0 and not exceeded
 
     summary_parts = []
     if passed:
@@ -215,13 +233,18 @@ def run_workflow(workflow: dict) -> WorkflowResult:
         summary_parts.append("FAIL")
         summary_parts.append(f"exit={result.returncode}")
 
+    if exceeded:
+        threshold_error = f"Threshold exceeded: {elapsed_ms:.0f}ms > {threshold:.0f}ms"
+    else:
+        threshold_error = None
+
     return WorkflowResult(
         id=workflow["id"],
         name=workflow["name"],
         passed=passed,
         elapsed_ms=elapsed_ms,
         status=None,
-        error=None,
+        error=threshold_error,
         summary=" | ".join(summary_parts),
     )
 
