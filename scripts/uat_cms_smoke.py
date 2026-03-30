@@ -20,6 +20,45 @@ import sys
 import time
 from dataclasses import dataclass
 
+# HTTP call counter — instruments pynautobot Request._make_call
+_http_call_counts: dict[str, int] = {}
+_original_make_call = None
+
+
+def _counting_make_call(self, *args, **kwargs):
+    """Monkey-patch wrapper that counts HTTP GET calls per URL path."""
+    global _http_call_counts
+    url = args[0] if args else kwargs.get("url", "")
+    # Extract path from URL for readability (e.g., /api/plugins/netnam-cms-core/...)
+    if hasattr(self, "session") and self.session:
+        base = self.session.get("base_url", "")
+        if url.startswith(base):
+            path = url[len(base):]
+        else:
+            path = url
+    else:
+        path = url
+    key = path.rstrip("?").split("?")[0]  # strip trailing ? and query for grouping
+    _http_call_counts[key] = _http_call_counts.get(key, 0) + 1
+    return _original_make_call(self, *args, **kwargs)
+
+
+def _install_counter():
+    """Install HTTP call counter monkey-patch on pynautobot Request class."""
+    global _original_make_call
+    if _original_make_call is None:
+        import pynautobot.core.request as req
+        _original_make_call = req.Request._make_call
+        req.Request._make_call = _counting_make_call
+
+
+def _get_counts() -> dict[str, int]:
+    """Return snapshot of HTTP call counts and reset."""
+    global _http_call_counts
+    snap = dict(_http_call_counts)
+    _http_call_counts = {}
+    return snap
+
 PROFILE = "prod"
 DEVICE = "HQV-PE1-NEW"
 
@@ -83,12 +122,19 @@ class WorkflowResult:
     summary: str
 
 
+_workflow_counts: dict[str, dict[str, int]] = {}
+
+
 def run_workflow(workflow: dict) -> WorkflowResult:
     """Run one workflow via subprocess and evaluate pass/fail.
 
     Parses JSON from stdout. Returns WorkflowResult.
     """
+    global _workflow_counts
+    _install_counter()  # install or no-op if already installed
     t0 = time.monotonic()
+    result = None
+    elapsed_ms = -1.0
     try:
         result = subprocess.run(
             workflow["cmd"],
@@ -127,6 +173,10 @@ def run_workflow(workflow: dict) -> WorkflowResult:
             error=str(exc),
             summary="ERROR",
         )
+
+    # Capture HTTP call counts after subprocess completes
+    counts = _get_counts()
+    _workflow_counts[workflow["id"]] = counts
 
     # Try to parse JSON from stdout (for error reporting only)
     try:
@@ -178,6 +228,7 @@ def run_workflow(workflow: dict) -> WorkflowResult:
 
 def print_results(results: list[WorkflowResult], total_ms: float) -> None:
     """Print a formatted summary table."""
+    global _workflow_counts
     print(f"\n{'=' * 72}")
     print(f"  CMS Smoke UAT — {DEVICE} | Profile: {PROFILE}")
     print(f"{'=' * 72}")
@@ -193,6 +244,16 @@ def print_results(results: list[WorkflowResult], total_ms: float) -> None:
     passed_count = sum(1 for r in results if r.passed)
     print(f"  {passed_count}/{len(results)} passed  |  Total time: {total_ms:.0f}ms")
     print(f"{'=' * 72}\n")
+
+    # --- HTTP Call Counts per Workflow ---
+    print(f"\n  --- HTTP Call Counts per Workflow ---")
+    for wid, counts in _workflow_counts.items():
+        total_calls = sum(counts.values())
+        print(f"  {wid}: {total_calls} total calls")
+        for path, n in sorted(counts.items(), key=lambda x: -x[1])[:5]:
+            if n > 1:
+                print(f"    {n:3d}x {path}")
+    _workflow_counts.clear()
 
 
 def main() -> int:
