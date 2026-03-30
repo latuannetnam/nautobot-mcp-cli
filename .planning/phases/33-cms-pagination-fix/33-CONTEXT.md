@@ -17,7 +17,7 @@ Out of scope: modifying `cms_get()`, bulk HTTP changes (already done in Phase 30
 ## Implementation Decisions
 
 ### Page Size Override Mechanism
-- **D-01:** `endpoint.limit = 200` before `.all()` / `.filter()` when `limit=0`. pynautobot 3.0.0's concurrent fetch uses `Request.limit` as the page size parameter. Setting it on the endpoint object before calling `.all()` / `.filter()` overrides the default. This is the mechanism used to collapse N sequential single-record calls into ceil(N/200) larger-page calls.
+- **D-01:** `limit=_CMS_BULK_LIMIT` passed as kwarg to `.all()` / `.filter()` when `limit=0`. pynautobot 3.0.0's `Endpoint.filter()` extracts `limit` from kwargs and passes it to `Request.__init__`. `Request.get()` uses `self.limit` to set `?limit=N` in the HTTP URL. The `Endpoint` class has NO `limit` attribute — `endpoint.limit = 200` is a no-op. The correct fix: `pagination_kwargs["limit"] = _CMS_BULK_LIMIT` (200) when `limit==0`, then `endpoint.all(**pagination_kwargs)` / `endpoint.filter(**filters, **pagination_kwargs)`. This collapses N sequential single-record calls into ceil(N/200) larger-page calls.
 - **D-02:** `_CMS_BULK_LIMIT = 200` defined as a module-level constant in `cms/client.py`. Named with `_CMS_BULK_LIMIT` prefix to indicate its CMS-specific purpose. Documented with rationale: Nautobot cap, CMS plugin PAGE_SIZE=1 compatibility, conservative safety margin.
 - **D-03:** Override is unconditional — always applied when `limit=0`, regardless of endpoint. No endpoint-specific registry or conditional application needed. `juniper_bgp_address_families` is confirmed slow (151 records, PAGE_SIZE=1 on HQV-PE1-NEW); applying 200 broadly handles it and any similar endpoints.
 
