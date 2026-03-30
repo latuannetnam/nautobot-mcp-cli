@@ -2,7 +2,32 @@
 
 **Defined:** 2026-03-26
 **Updated for v1.7:** 2026-03-29
+**Updated for v1.8:** 2026-03-30
 **Core Value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools — with predictable contracts, minimal round-trips, compact responses, and production-grade reliability.
+
+## v1.8 Requirements
+
+Fix N+1 pynautobot pagination in CMS composite functions. Root cause: `limit=0` (falsy) not sent as HTTP param → Nautobot CMS plugin uses PAGE_SIZE=1 → 151 sequential HTTP calls (~80s). Fix: pass `_CMS_BULK_LIMIT = 200` when `limit == 0` in `cms_list()`.
+
+### CMS Pagination Fix (PAG)
+
+- [ ] **PAG-01**: `cms_list()` passes `_CMS_BULK_LIMIT = 200` to `endpoint.all()` / `endpoint.filter()` when `limit == 0` — collapses N sequential calls to ceil(N/200) calls
+- [ ] **PAG-02**: `limit > 0` values pass through unchanged — caller intent is preserved
+- [ ] **PAG-03**: `_CMS_BULK_LIMIT` constant documented with rationale (Nautobot cap, CMS plugin compatibility, safety margin)
+- [ ] **PAG-04**: Unit tests verify `cms_list(limit=0)` calls `endpoint.all(limit=200)` — not `limit=0`
+- [ ] **PAG-05**: Unit tests verify `cms_list(limit=50)` calls `endpoint.all(limit=50)` — explicit limit preserved
+- [ ] **PAG-06**: Unit tests verify `cms_list(limit=0, filters)` calls `endpoint.filter(..., limit=200)` — bulk limit with filters
+
+### Endpoint Discovery (DISC)
+
+- [ ] **DISC-01**: Instrument all CMS list functions with HTTP call counting to discover which endpoints have PAGE_SIZE=1 (empirical test against prod server)
+- [ ] **DISC-02**: Document slow endpoints found and add them to a registry in `cms/client.py` for future reference
+
+### Regression Prevention (REG)
+
+- [ ] **REG-01**: `scripts/uat_cms_smoke.py` — bgp_summary completes in < 5s (was 80s before fix)
+- [ ] **REG-02**: All existing unit tests pass after changes — no behavioral regression
+- [ ] **REG-03**: `scripts/uat_cms_smoke.py` committed and pushed to repository
 
 ## v1.7 Requirements
 
@@ -253,6 +278,17 @@ Deferred to future release.
 | VLAN-02 | TBD | Pending |
 | VLAN-03 | TBD | Pending |
 | VLAN-04 | TBD | Pending |
+| PAG-01 | Phase 33 | Pending |
+| PAG-02 | Phase 33 | Pending |
+| PAG-03 | Phase 33 | Pending |
+| PAG-04 | Phase 33 | Pending |
+| PAG-05 | Phase 33 | Pending |
+| PAG-06 | Phase 33 | Pending |
+| DISC-01 | Phase 33 | Pending |
+| DISC-02 | Phase 33 | Pending |
+| REG-01 | Phase 33 | Pending |
+| REG-02 | Phase 33 | Pending |
+| REG-03 | Phase 33 | Pending |
 | TEST-01 | TBD | Pending |
 | TEST-02 | TBD | Pending |
 | TEST-03 | TBD | Pending |
@@ -261,8 +297,9 @@ Deferred to future release.
 - v1.4 requirements: 20 total — all complete ✓
 - v1.5 requirements: 24 total — pending roadmap
 - v1.6 requirements: 8 total — all complete ✓
-- v1.7 requirements: 15 total — roadmap pending
+- v1.7 requirements: 15 total — all complete ✓
+- v1.8 requirements: 11 total — Phase 33
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-29 after v1.7 milestone kickoff*
+*Last updated: 2026-03-30 after v1.8 milestone kickoff*
