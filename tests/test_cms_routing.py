@@ -327,10 +327,11 @@ class TestListStaticRoutes:
         mock_client_with_cms.cms.juniper_static_route_qualified_nexthops.filter.return_value = []
 
         result = list_static_routes(mock_client_with_cms, device="core-rtr-01", routing_instance="mgmt")
-        # Should have passed routing_instance__name filter
+        # Should have passed routing_instance__name filter + bulk limit
         mock_client_with_cms.cms.juniper_static_routes.filter.assert_called_once_with(
             device="dev-1111-2222-3333-4444",
             routing_instance__name="mgmt",
+            limit=200,
         )
 
 
@@ -371,7 +372,8 @@ class TestListBGPNeighbors:
         result = list_bgp_neighbors(mock_client_with_cms, group_id="bgpg-aaaa-bbbb-cccc-dddd")
         assert result.count == 1
         mock_client_with_cms.cms.juniper_bgp_neighbors.filter.assert_called_once_with(
-            group="bgpg-aaaa-bbbb-cccc-dddd"
+            group="bgpg-aaaa-bbbb-cccc-dddd",
+            limit=200,
         )
 
     def test_list_returns_empty_without_groups(self, mock_client_with_cms):
