@@ -47,7 +47,7 @@ def _install_counter():
     """Install HTTP call counter monkey-patch on pynautobot Request class."""
     global _original_make_call
     if _original_make_call is None:
-        import pynautobot.core.request as req
+        import pynautobot.core.query as req
         _original_make_call = req.Request._make_call
         req.Request._make_call = _counting_make_call
 
