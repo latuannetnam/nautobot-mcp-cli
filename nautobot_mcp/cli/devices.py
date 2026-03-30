@@ -150,7 +150,7 @@ def devices_inventory(
     name: str = typer.Argument(help="Device name"),
     detail: str = typer.Option("interfaces", "--detail",
         help="interfaces|ips|vlans|all  [default: interfaces]"),
-    limit: int = typer.Option(50, "--limit", help="Max results per page"),
+    limit: int = typer.Option(10, "--limit", help="Max results per page"),
     offset: int = typer.Option(0, "--offset", help="Skip N results"),
     no_count: bool = typer.Option(False, "--no-count", help="Skip count() calls for faster pagination"),
 ) -> None:

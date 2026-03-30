@@ -674,33 +674,37 @@ def get_device_bgp_summary(
         # Build group dicts with nested neighbors
         group_dicts = []
 
-        # Bulk fetch all address-families and policy-associations for device → dict by neighbor_id
+        # Bulk fetch AFs/policies only when detail=True AND there are neighbors.
+        # Without this guard, both endpoints cause 60s+ timeouts even at limit=1
+        # (unindexed global scans on the Nautobot CMS plugin). HQV-PE1-NEW has
+        # 0 BGP groups so these fetches serve no purpose in the default path.
         af_by_nbr: dict = {}
         pol_by_nbr: dict = {}
         all_afs_results: list = []
         all_pols_results: list = []
         af_bulk_failed = False
         pol_bulk_failed = False
-        try:
-            all_afs = list_bgp_address_families(client, limit=0)
-            all_afs_results = all_afs.results
-            for af in all_afs.results:
-                nbr_id = getattr(af, "neighbor_id", None)
-                if nbr_id:
-                    af_by_nbr.setdefault(nbr_id, []).append(af)
-        except Exception as e:
-            af_bulk_failed = True
-            collector.add("list_bgp_address_families", str(e))
-        try:
-            all_pols = list_bgp_policy_associations(client, limit=0)
-            all_pols_results = all_pols.results
-            for p in all_pols.results:
-                nbr_id = getattr(p, "neighbor_id", None)
-                if nbr_id:
-                    pol_by_nbr.setdefault(nbr_id, []).append(p)
-        except Exception as e:
-            pol_bulk_failed = True
-            collector.add("list_bgp_policy_associations", str(e))
+        if detail and all_neighbors:
+            try:
+                all_afs = list_bgp_address_families(client, limit=0)
+                all_afs_results = all_afs.results
+                for af in all_afs.results:
+                    nbr_id = getattr(af, "neighbor_id", None)
+                    if nbr_id:
+                        af_by_nbr.setdefault(nbr_id, []).append(af)
+            except Exception as e:
+                af_bulk_failed = True
+                collector.add("list_bgp_address_families", str(e))
+            try:
+                all_pols = list_bgp_policy_associations(client, limit=0)
+                all_pols_results = all_pols.results
+                for p in all_pols.results:
+                    nbr_id = getattr(p, "neighbor_id", None)
+                    if nbr_id:
+                        pol_by_nbr.setdefault(nbr_id, []).append(p)
+            except Exception as e:
+                pol_bulk_failed = True
+                collector.add("list_bgp_policy_associations", str(e))
 
         neighbor_ids = {n.id for n in all_neighbors}
         af_keyed_usable = any(getattr(af, "neighbor_id", None) in neighbor_ids for af in all_afs_results)
