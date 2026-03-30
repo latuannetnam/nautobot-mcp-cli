@@ -169,7 +169,7 @@ class TestCMSList:
         )
         assert result.count == 1
         mock_client_with_cms.cms.juniper_static_routes.filter.assert_called_once_with(
-            device="core-rtr-01"
+            device="core-rtr-01", limit=200
         )
 
     def test_list_with_limit(self, mock_client_with_cms, mock_cms_record):
@@ -183,6 +183,61 @@ class TestCMSList:
         mock_client_with_cms.cms.juniper_static_routes.all.assert_called_once_with(limit=1)
         assert result.count == 1
         assert len(result.results) == 1
+
+
+class TestCMSListPagination:
+    """Pagination regression tests for cms_list — PAG-01..PAG-06.
+
+    Core regression: without the fix, limit=0 causes N+1 sequential HTTP calls
+    because the CMS plugin has PAGE_SIZE=1. With the fix, limit=200 collapses
+    N records into ceil(N/200) calls.
+    """
+
+    def test_limit_zero_uses_bulk_limit(self, mock_client_with_cms, mock_cms_record):
+        """PAG-04: limit=0 triggers _CMS_BULK_LIMIT (200), not limit=0 or no kwarg.
+
+        This is the primary regression test. Without the fix, limit=0 (falsy)
+        sends no limit kwarg → CMS plugin PAGE_SIZE=1 → N sequential HTTP calls.
+        """
+        mock_client_with_cms.cms.juniper_static_routes.all.return_value = [mock_cms_record]
+
+        from nautobot_mcp.cms.client import _CMS_BULK_LIMIT, cms_list
+        result = cms_list(mock_client_with_cms, "juniper_static_routes", CMSBaseSummary, limit=0)
+
+        mock_client_with_cms.cms.juniper_static_routes.all.assert_called_once_with(limit=_CMS_BULK_LIMIT)
+        assert result.count == 1
+
+    def test_explicit_positive_limit_preserved(self, mock_client_with_cms, mock_cms_record):
+        """PAG-05: limit=50 passes through as-is. Bulk limit does NOT override caller intent."""
+        mock_client_with_cms.cms.juniper_static_routes.all.return_value = [mock_cms_record]
+
+        from nautobot_mcp.cms.client import _CMS_BULK_LIMIT, cms_list
+        result = cms_list(mock_client_with_cms, "juniper_static_routes", CMSBaseSummary, limit=50)
+
+        # Must be limit=50, NOT 200 or 0
+        mock_client_with_cms.cms.juniper_static_routes.all.assert_called_once_with(limit=50)
+        _calls = mock_client_with_cms.cms.juniper_static_routes.all.call_args
+        assert _calls.kwargs["limit"] == 50
+        assert result.count == 1
+
+    def test_limit_zero_with_filters_uses_bulk_limit(self, mock_client_with_cms, mock_cms_record):
+        """PAG-06: limit=0 with filters also triggers bulk limit on .filter() call."""
+        mock_client_with_cms.cms.juniper_static_routes.filter.return_value = [mock_cms_record]
+
+        from nautobot_mcp.cms.client import _CMS_BULK_LIMIT, cms_list
+        result = cms_list(
+            mock_client_with_cms,
+            "juniper_static_routes",
+            CMSBaseSummary,
+            limit=0,
+            device="core-rtr-01",
+        )
+
+        mock_client_with_cms.cms.juniper_static_routes.filter.assert_called_once_with(
+            device="core-rtr-01",
+            limit=_CMS_BULK_LIMIT,
+        )
+        assert result.count == 1
 
 
 class TestCMSGet:
