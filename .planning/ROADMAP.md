@@ -100,9 +100,9 @@
 
 ### v1.8 CMS Pagination Fix (Planning)
 
-- [ ] Phase 33: CMS Pagination Fix — Fix N+1 pynautobot pagination in CMS composite functions via smart page-size override
+- [ ] Phase 33: CMS Pagination Fix — Fix N+1 pynautobot pagination in CMS composite functions via `_CMS_BULK_LIMIT = 200` override in `cms_list()`; endpoint discovery; regression tests
 
 ### Next Milestone: v1.9 (TBD)
 
 ---
-*Last updated: 2026-03-29 — v1.7 shipped*
+*Last updated: 2026-03-30 — v1.8 roadmap created*
