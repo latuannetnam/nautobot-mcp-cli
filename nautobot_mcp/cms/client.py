@@ -150,7 +150,9 @@ def cms_list(client, endpoint_name, model_cls, limit=0, offset=0, **filters):
     try:
         endpoint = get_cms_endpoint(client, endpoint_name)
         pagination_kwargs = {}
-        if limit > 0:
+        if limit == 0:
+            pagination_kwargs["limit"] = _CMS_BULK_LIMIT
+        elif limit > 0:
             pagination_kwargs["limit"] = limit
         if offset > 0:
             pagination_kwargs["offset"] = offset
