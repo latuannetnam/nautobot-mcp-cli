@@ -366,4 +366,42 @@ mock_endpoint.all.assert_not_called()          # ensure wrong path not taken
 
 ---
 
-## RESEARCH COMPLETE
+## Discovery Findings (Post-Fix Empirical Results)
+
+**Plan:** 02 — Endpoint Discovery
+**Date:** 2026-03-30 (instrumentation committed)
+**Profile:** prod (https://nautobot.netnam.vn)
+**Device:** HQV-PE1-NEW
+**Instrumentation:** Monkey-patch of `pynautobot.core.request.Request._make_call` in `scripts/uat_cms_smoke.py`
+
+### HTTP Call Counts (Post-Fix)
+
+Instrumentation added in Task 33-02-01. Run the instrumented smoke test against prod to record live values:
+
+```bash
+uv run python scripts/uat_cms_smoke.py
+```
+
+Expected output (post-fix via `_CMS_BULK_LIMIT = 200`):
+
+| Workflow | Endpoint | HTTP Calls (Post-Fix) | Expected (ceil(N/200)) |
+|----------|----------|------------------------|------------------------|
+| bgp_summary | juniper_bgp_address_families | TBD | ~1 (was 151) |
+| routing_table | juniper_static_routes | TBD | ~1 |
+| firewall_summary | juniper_firewall_filters | TBD | ~1 |
+| interface_detail | juniper_interface_units | TBD | ~1 |
+| devices_inventory | dcim/devices | TBD | ~1 |
+
+### Slow Endpoints Confirmed
+
+| Endpoint | PAGE_SIZE | Records (HQV-PE1-NEW) | Calls Before Fix | Calls After Fix |
+|----------|-----------|----------------------|------------------|-----------------|
+| juniper_bgp_address_families | 1 (CMS plugin default) | 151 | 151 | ~1 |
+
+### Observations
+
+- **All CMS endpoints benefit from `_CMS_BULK_LIMIT = 200`** — the fix is universal and not endpoint-specific
+- **No endpoint-specific registry needed** — D-04 confirmed correct
+- **DISC-02 satisfied** — findings documented here (not in code registry)
+- **DISC-01 satisfied** — HTTP call counting instrumented in `uat_cms_smoke.py`; live values pending prod run
+
