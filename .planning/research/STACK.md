@@ -1,6 +1,24 @@
-# Research: Stack — v1.7 URI Limit Fix
+# Stack Research: CMS Pagination Fix (v1.8)
 
-**Domain:** Bug fix — eliminate 414 Request-URI Too Large errors
+**Pynautobot version:** 3.0.0
+
+## Key Finding: No `page_size` Attribute on `Endpoint`
+
+pynautobot's `Endpoint` class holds **zero pagination state**. Only `Request.limit` matters. `limit=0` is falsy → not sent in HTTP request → server uses PAGE_SIZE=1 → 151 sequential calls.
+
+## Fix: Override `limit=0` with `_CMS_BULK_LIMIT = 200` in `cms_list()`
+
+Single choke point in `nautobot_mcp/cms/client.py`. All 38+ CMS list operations benefit automatically.
+
+## Slow Endpoints (confirmed)
+
+| Function | Endpoint | Records | Calls (before) | Calls (after) |
+|---|---|---|---|---|
+| `list_bgp_address_families()` | `juniper_bgp_address_families` | 151 | 151 | 1 |
+| `list_bgp_policy_associations()` | `juniper_bgp_policy_associations` | — | 1+ (plugin bug) | 1 |
+| `list_interface_families()` | `juniper_interface_families` | varies | N | ceil(N/200) |
+
+All other `cms_list()` callers also benefit: `list_static_routes`, `list_firewall_filters`, `list_interface_units`, etc.
 **Researched:** 2026-03-29
 
 ## No new libraries needed

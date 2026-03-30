@@ -1,6 +1,57 @@
-# Research: Pitfalls — v1.7 URI Limit Fix
+# Pitfalls Research: CMS Pagination Fix (v1.8)
 
-**Domain:** Bug fix
+## Pitfall 1: Setting `endpoint.page_size` — Does Nothing
+
+**Warning sign:** Code sets `endpoint.page_size = 200` or `endpoint._page_size = 200` before calling `.all()`.
+
+**Why it's wrong:** pynautobot's `Endpoint` has no `page_size` attribute. It is never read during pagination. Only `Request(limit=N)` controls page size.
+
+**Prevention:** Unit test verifies `.all()` is called with `limit=200` (not `limit=0`).
+
+## Pitfall 2: Global `api.max_workers` or `api.threading` Mutation — Thread Hazard
+
+**Warning sign:** Code sets `endpoint.api.max_workers = 8` or `client.api.threading = True` to speed up pagination.
+
+**Why it's wrong:** `Endpoint` objects share the same `api` reference. Mutating it globally affects ALL endpoints and ALL concurrent operations. In the MCP server (multi-request), this causes race conditions.
+
+**Prevention:** Pass `limit` per-call; never mutate `api` attributes.
+
+## Pitfall 3: Overriding `limit > 0` — Caller Intent Violated
+
+**Warning sign:** Code changes `limit` when `limit > 0` (e.g., `cms_list(limit=50)` → sends `limit=200`).
+
+**Why it's wrong:** Caller explicitly requested 50 records. Overriding it violates the contract and may cause unexpected data volumes.
+
+**Prevention:** Only override when `limit == 0`. `limit > 0` passes through unchanged.
+
+## Pitfall 4: Setting `limit` Too High — Server Rejects 400/422
+
+**Warning sign:** Code uses `_CMS_BULK_LIMIT = 1000` or higher.
+
+**Why it's wrong:** CMS plugin may cap page size at a lower value (e.g., 200). Server returns 400/422 → operation fails.
+
+**Prevention:** Use `_CMS_BULK_LIMIT = 200`. If server rejects, pynautobot raises `NautobotValidationError` — acceptable failure mode, logged. Future improvement: retry with half.
+
+## Pitfall 5: Bypassing pynautobot with Direct HTTP — Loses Retries + Error Translation
+
+**Warning sign:** `cms_list()` uses `client.api.http_session.get()` directly instead of `endpoint.all()`.
+
+**Why it's wrong:** Loses pynautobot's retry logic (3 retries on 500/502/503/504) and error translation. More fragile.
+
+**Prevention:** Always use `endpoint.all(limit=N)` or `endpoint.filter(limit=N, **filters)`.
+
+## Pitfall 6: New List Function Bypasses `cms_list()` — Silent Regression
+
+**Warning sign:** Someone adds `endpoint.all()` or `endpoint.filter()` directly in a new CMS function instead of calling `cms_list()`.
+
+**Prevention:** Add a lint rule or code comment: "Always use `cms_list()` for CMS list operations." Review in code review.
+
+## Pitfall 7: Changing `_CMS_BULK_LIMIT` Without Evidence
+
+**Warning sign:** Someone raises `_CMS_BULK_LIMIT` to 1000 without testing against prod CMS plugin.
+
+**Prevention:** Document: "Align with Nautobot's de facto cap of 1000 and CMS plugin limits. Test live before changing."
+
 **Researched:** 2026-03-29
 
 ## Pitfall 1: pynautobot Record vs raw dict
