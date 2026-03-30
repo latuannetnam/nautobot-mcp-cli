@@ -98,14 +98,14 @@
 
 </details>
 
-### v1.8 CMS Pagination Fix (In Progress)
+### v1.8 CMS Pagination Fix (SHIPPED 2026-03-30)
 
-- [~] Phase 33: CMS Pagination Fix
+- [x] Phase 33: CMS Pagination Fix
   - [x] Plan 01: Implement Pagination Fix (33-01-SUMMARY.md) — completed 2026-03-30
-  - [ ] Plan 02: Regression Tests
-  - [ ] Plan 03: Smoke Test
+  - [x] Plan 02: Regression Tests (33-02-SUMMARY.md) — completed 2026-03-30
+  - [x] Plan 03: Smoke Test (33-03-SUMMARY.md) — completed 2026-03-30
 
 ### Next Milestone: v1.9 (TBD)
 
 ---
-*Last updated: 2026-03-30 — v1.8 roadmap created*
+*Last updated: 2026-03-30 — v1.8 Phase 33 shipped*
