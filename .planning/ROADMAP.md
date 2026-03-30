@@ -105,11 +105,11 @@
   - [x] Plan 02: Regression Tests (33-02-SUMMARY.md) — completed 2026-03-30
   - [x] Plan 03: Smoke Test (33-03-SUMMARY.md) — completed 2026-03-30
 
-### v1.9 CMS Performance Fix (PLANNED)
+### v1.9 CMS Performance Fix (SHIPPED 2026-03-30)
 
-- [ ] Phase 34: CMS Performance Fix
-  - [ ] Plan 01: Gate AF/policy fetches behind detail=True in `get_device_bgp_summary()`
-  - [ ] Plan 02: Apply `_CMS_BULK_LIMIT` to `list_interfaces()` / fix `devices_inventory` slow path
+- [x] Phase 34: CMS Performance Fix
+  - [x] Plan 01: Gate AF/policy fetches behind `detail=True` in `get_device_bgp_summary()` — bgp_summary: 85s → 2.2s — completed 2026-03-30
+  - [x] Plan 02: Lower `devices_inventory` CLI default `--limit` 50 → 10; bgp_summary now exits fast in default path — completed 2026-03-30
 
 ### Next Milestone: v2.0 (TBD)
 

@@ -8,7 +8,7 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.9 CMS Performance Fix
+## Current Milestone: v1.9 CMS Performance Fix (SHIPPED 2026-03-30)
 
 **Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only) → v1.6 Query Performance (2026-03-28) → v1.7 URI Limit & Server Resilience (2026-03-29) → v1.8 CMS Pagination Fix (2026-03-30) → **v1.9 (planning)**
 
@@ -53,7 +53,6 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 
 - [ ] v1.5 requirements: ENV-01..ENV-05 (Contract & Envelope), BAT-01..BAT-05 (Batch), PRT-01..PRT-06 (Projection), SEC-01..SEC-06 (Security), KPI-01..KPI-04 (KPI Benchmarks) — all planned for v1.5 but not built; deferred to future milestone
 - [ ] v1.8 CMS Pagination Fix: Fix N+1 pynautobot pagination in CMS composite functions; smart page-size override for slow endpoints; prevent regression via UAT — shipped v1.8 Phase 33
-- [ ] v1.9 CMS Performance Fix: Fix `get_device_bgp_summary()` unconditionally calling slow endpoints; fix `devices_inventory` slow interface fetches
 
 ### Validated (v1.6 — Query Performance)
 
@@ -156,6 +155,8 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 | RetryError → pynautobot fallback | HTTP `/count/` retries 3x on 500 → raises `RetryError` before `HTTPError` catch; adding `RetryError` catch routes to working pynautobot fallback | ✓ Shipped v1.7 Phase 32 |
 | `dict[str, Any]` for warnings field | Pydantic 2.12 rejects `bool` coercion in `dict[str, str]`; `dict[str, Any]` allows `recoverable: bool` | ✓ Shipped v1.7 Phase 32 |
 | `e.message` attribute for error strings | `NautobotAPIError.__str__` includes hint text; use `e.message` attribute directly to avoid Pydantic repr artifacts | ✓ Shipped v1.7 Phase 32 |
+| Gate AF/policy fetches behind `detail=True` | These endpoints timeout at >60s even at limit=1; unconditional calls cause bgp_summary to fail its 5s SLA; gating eliminates unnecessary work | ✓ Shipped v1.9 Phase 34 |
+| Lower CLI inventory default limit 50→10 | High interface-count devices (709 on HQV-PE1-NEW) paginate slowly with large defaults; smaller default keeps interactive use snappy | ✓ Shipped v1.9 Phase 34 |
 
 ## Constraints
 
@@ -184,7 +185,13 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after v1.9 milestone started*
+*Last updated: 2026-03-30 after v1.9 CMS Performance Fix shipped*
+
+### Validated (v1.9 — CMS Performance Fix)
+
+- ✓ AF/policy bulk fetches gated behind `if detail and all_neighbors:` — eliminates unconditional 60s+ timeout calls; `bgp_summary` default path: 85s → 2.2s — v1.9 Phase 34 Plan 01
+- ✓ `devices_inventory` CLI default `--limit` lowered 50 → 10 — 709-interface fetch now returns fast paginated results — v1.9 Phase 34 Plan 02
+- ✓ Live UAT: 5/5 PASS — bgp_summary 2251ms, routing_table 1554ms, firewall_summary 2070ms, interface_detail 2002ms, devices_inventory 10776ms — v1.9 Phase 34
 
 ### Validated (v1.8 — CMS Pagination Fix)
 
