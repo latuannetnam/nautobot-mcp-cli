@@ -2,16 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: CMS Pagination Fix
-status: discussing
-last_updated: "2026-03-30T00:00:00.000Z"
+status: executing
+last_updated: "2026-03-30T04:31:43.703Z"
 last_activity: 2026-03-30
-current_phase: 33
-current_phase_context: .planning/phases/33-cms-pagination-fix/33-CONTEXT.md
 progress:
-  total_phases: 1
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 28
+  completed_phases: 24
+  total_plans: 60
+  completed_plans: 60
 ---
 
 # Project State: nautobot-mcp-cli
@@ -21,14 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** Defining v1.8 requirements and roadmap
+**Current focus:** Phase 33 — cms-pagination-fix
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-30 — v1.8 milestone started
+Phase: 33 (cms-pagination-fix) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-03-30
 
 ## Context
 
@@ -39,6 +37,7 @@ Last activity: 2026-03-30 — v1.8 milestone started
 Affected endpoints confirmed slow: `juniper_bgp_address_families` (PAGE_SIZE=1, 151 records on HQV-PE1-NEW).
 
 **Other CMS composite CLI bugs found (already fixed in v1.7 hotfix commit f505813):**
+
 - `cms_routing.py` bgp-summary: called `.model_dump()` on raw tuple
 - `cms_routing.py` routing-table: same issue
 - `cms_firewalls.py` firewall-summary: same issue
@@ -70,7 +69,21 @@ Affected endpoints confirmed slow: `juniper_bgp_address_families` (PAGE_SIZE=1, 
 
 None.
 
+## Validated (v1.8 — Phase 33 Plan 01: CMS Pagination Fix)
+
+- ✓ `_CMS_BULK_LIMIT = 200` constant defined in `cms/client.py` with rationale docstring — Nautobot REST cap is 1000; 200 is conservative margin sufficient to collapse 151-record fetches into 1 call — v1.8 Plan 01
+- ✓ `cms_list()` updated: `limit=0` → `limit=200`; explicit `limit > 0` preserved via `elif` branch — v1.8 Plan 01
+- ✓ `TestCMSListPagination` regression suite (3 tests, 29/29 total passing) — v1.8 Plan 01
+- ✓ Rule 1 auto-fix: `test_list_with_filters` corrected to expect `limit=200` on `.filter()` — pre-existing test encoded the exact bug being fixed — v1.8 Plan 01
+
+## Key Decisions (v1.8 additions)
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| `_CMS_BULK_LIMIT = 200` | Nautobot REST cap=1000; 200 is conservative margin; collapses 151 sequential calls into 1 | ✓ Shipped v1.8 Plan 01 |
+| `limit=0 → _CMS_BULK_LIMIT` via `if limit == 0` | Fixes N+1 from CMS PAGE_SIZE=1; `elif limit > 0` preserves explicit caller intent | ✓ Shipped v1.8 Plan 01 |
+| `uat_cms_smoke.py` as regression gate | bgp_summary must complete < 5s; smoke in CI prevents recurrence | — Pending Plan 02 |
+
 ---
 *State initialized: 2026-03-28*
-*Last updated: 2026-03-30 — v1.8 milestone defined*
-
+*Last updated: 2026-03-30 — v1.8 Phase 33 Plan 01 complete*
