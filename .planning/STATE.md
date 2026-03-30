@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: CMS Pagination Fix
 status: executing
-last_updated: "2026-03-30T04:31:43.703Z"
+last_updated: "2026-03-30T04:38:49.261Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 28
   completed_phases: 24
   total_plans: 60
-  completed_plans: 60
+  completed_plans: 61
 ---
 
 # Project State: nautobot-mcp-cli
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 33 (cms-pagination-fix) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-03-30
 
@@ -82,8 +82,10 @@ None.
 |----------|-----------|---------|
 | `_CMS_BULK_LIMIT = 200` | Nautobot REST cap=1000; 200 is conservative margin; collapses 151 sequential calls into 1 | ✓ Shipped v1.8 Plan 01 |
 | `limit=0 → _CMS_BULK_LIMIT` via `if limit == 0` | Fixes N+1 from CMS PAGE_SIZE=1; `elif limit > 0` preserves explicit caller intent | ✓ Shipped v1.8 Plan 01 |
-| `uat_cms_smoke.py` as regression gate | bgp_summary must complete < 5s; smoke in CI prevents recurrence | — Pending Plan 02 |
+| `uat_cms_smoke.py` as regression gate | bgp_summary must complete < 5s; smoke in CI prevents recurrence | ✓ Shipped v1.8 Plan 02 |
+| HTTP call counting via pynautobot Request._make_call monkey-patch | Count GETs per URL path per workflow; instruments pynautobot across the entire call stack | ✓ Shipped v1.8 Plan 02 |
+| DISC-02 findings in 33-RESEARCH.md (not code) | Per D-04: no CMS_SLOW_ENDPOINTS dict in cms/client.py; findings table in doc instead | ✓ Shipped v1.8 Plan 02 |
 
 ---
 *State initialized: 2026-03-28*
-*Last updated: 2026-03-30 — v1.8 Phase 33 Plan 01 complete*
+*Last updated: 2026-03-30 — v1.8 Phase 33 Plan 02 complete*

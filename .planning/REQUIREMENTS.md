@@ -20,8 +20,8 @@ Fix N+1 pynautobot pagination in CMS composite functions. Root cause: `limit=0` 
 
 ### Endpoint Discovery (DISC)
 
-- [ ] **DISC-01**: Instrument all CMS list functions with HTTP call counting to discover which endpoints have PAGE_SIZE=1 (empirical test against prod server)
-- [ ] **DISC-02**: Document slow endpoints found and add them to a registry in `cms/client.py` for future reference
+- [x] **DISC-01**: Instrument all CMS list functions with HTTP call counting to discover which endpoints have PAGE_SIZE=1 (empirical test against prod server)
+- [x] **DISC-02**: Document slow endpoints found and add them to a registry in `cms/client.py` for future reference
 
 ### Regression Prevention (REG)
 
@@ -284,8 +284,8 @@ Deferred to future release.
 | PAG-04 | Phase 33 | Pending |
 | PAG-05 | Phase 33 | Pending |
 | PAG-06 | Phase 33 | Pending |
-| DISC-01 | Phase 33 | Pending |
-| DISC-02 | Phase 33 | Pending |
+| DISC-01 | Phase 33 | Complete |
+| DISC-02 | Phase 33 | Complete |
 | REG-01 | Phase 33 | Pending |
 | REG-02 | Phase 33 | Pending |
 | REG-03 | Phase 33 | Pending |
