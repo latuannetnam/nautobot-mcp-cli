@@ -103,3 +103,19 @@
 **Last phase number:** 4
 
 ---
+
+## v1.8 CMS Pagination Fix (In Progress)
+
+**Goal:** Fix N+1 pynautobot pagination in CMS composite functions for both CLI and MCP server. Smart page-size override for known-slow CMS endpoints.
+
+**Root cause:** `list_bgp_address_families(limit=0)` makes 151 sequential HTTP calls due to PAGE_SIZE=1 on the Nautobot CMS plugin. Fix via pynautobot Endpoint.page_size override.
+
+**Requirements:** See `.planning/REQUIREMENTS.md`
+
+**Phase 33:** CMS Pagination Fix — Smart page-size override in `cms_list()` for known-slow endpoints
+
+**Started:** 2026-03-30
+
+---
+
+*Last updated: 2026-03-30 — v1.8 milestone started*
