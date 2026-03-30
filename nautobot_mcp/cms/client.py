@@ -15,6 +15,13 @@ if TYPE_CHECKING:
     from nautobot_mcp.client import NautobotClient
 
 
+#: Nautobot bulk fetch limit for CMS plugin (PAGE_SIZE=1 workaround).
+#: Nautobot REST API cap is 1000; 200 is a conservative safety margin.
+#: When limit=0 (get all), pynautobot's sequential pagination makes one
+#: HTTP call per record (N+1) if the CMS plugin has PAGE_SIZE=1.
+#: Setting limit=200 collapses N records into ceil(N/200) HTTP calls.
+_CMS_BULK_LIMIT = 200
+
 # Registry of all CMS endpoint names (pynautobot underscore style)
 # mapped to human-readable model names for error messages
 CMS_ENDPOINTS = {
