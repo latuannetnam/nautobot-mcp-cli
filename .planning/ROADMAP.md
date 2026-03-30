@@ -105,7 +105,13 @@
   - [x] Plan 02: Regression Tests (33-02-SUMMARY.md) — completed 2026-03-30
   - [x] Plan 03: Smoke Test (33-03-SUMMARY.md) — completed 2026-03-30
 
-### Next Milestone: v1.9 (TBD)
+### v1.9 CMS Performance Fix (PLANNED)
+
+- [ ] Phase 34: CMS Performance Fix
+  - [ ] Plan 01: Gate AF/policy fetches behind detail=True in `get_device_bgp_summary()`
+  - [ ] Plan 02: Apply `_CMS_BULK_LIMIT` to `list_interfaces()` / fix `devices_inventory` slow path
+
+### Next Milestone: v2.0 (TBD)
 
 ---
 *Last updated: 2026-03-30 — v1.8 Phase 33 shipped*
