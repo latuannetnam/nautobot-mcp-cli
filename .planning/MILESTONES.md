@@ -1,32 +1,73 @@
 # Milestones
 
-## v1.7 URI Limit & Server Resilience (Shipped: 2026-03-29)
+## v1.10 CMS N+1 Query Elimination (PLANNING)
 
-**Phases completed:** 27 phases, 57 plans, 47 tasks
+**Goal:** Eliminate N+1 HTTP call patterns in CMS composite workflows so all 5 smoke test workflows complete within 60s on HQV-PE1.
+
+**Root causes:**
+1. `interface_detail`: Bulk-fetches families once, discards result, refetches one-by-one per unit (~2,000 units → ~2,000 extra requests)
+2. `firewall_summary` detail: Per-filter term refetch + per-term action refetch → N×M sequential requests
+3. `routing_table`: Per-route nexthop fallback loop after bulk nexthop fetch
+4. `bgp_summary`: Per-neighbor AF/policy fallback loops without `len(...) > 0` guards
+
+**Requirements:** CQP-01..CQP-05, RGP-01..RGP-02 (see `.planning/REQUIREMENTS.md`)
+
+**Phase 35:** `interface_detail` N+1 Fix — CQP-01, CQP-05
+**Phase 36:** `firewall_summary` Detail N+1 Fix — CQP-02, CQP-05
+**Phase 37:** `routing_table` + `bgp_summary` N+1 Fixes — CQP-03, CQP-04
+**Phase 38:** Regression Gate — RGP-01, RGP-02
+
+**Started:** 2026-03-31
+
+---
+
+## v1.9 CMS Performance Fix (Shipped: 2026-03-30)
+
+**Phases completed:** 1 phase (Phase 34), 2 plans
 
 **Key accomplishments:**
 
-- [Rule 3 - Blocking] Hatchling build backend
-- `tests/test_cms_arp.py`
-- Adaptive count skipping with has_more inference, per-section timing, and parallel counts for detail=all
-- O(1) /count/ via direct HTTP, latency instrumentation in bridge, all 8 call sites migrated
-- Direct HTTP bulk fetch replaces O(3N/chunk_size) chunked .filter() loops in get_device_ips() with O(3) comma-separated UUID calls, plus partial failure detection for stale IPs
-- Phase:
-- Phase:
-- Phase:
+- AF/policy fetches gated behind `if detail and all_neighbors:` — eliminates unconditional 60s+ timeout calls; `bgp_summary` default path: 85s → 2.2s
+- `devices_inventory` CLI default `--limit` lowered 50 → 10 — 709-interface fetch now returns fast paginated results
+- Live UAT: 5/5 PASS — bgp_summary 2251ms, routing_table 1554ms, firewall_summary 2070ms, interface_detail 2002ms, devices_inventory 10776ms
+
+---
+
+## v1.8 CMS Pagination Fix (Shipped: 2026-03-30)
+
+**Phases completed:** 1 phase (Phase 33), 2 plans
+
+**Key accomplishments:**
+
+- `_CMS_BULK_LIMIT = 200` constant in `cms/client.py` — collapses 151 sequential HTTP calls into 1 for CMS endpoints with PAGE_SIZE=1
+- `cms_list()` updated: `limit=0 → limit=200` via kwarg; explicit `limit > 0` preserved via `elif` branch
+- `uat_cms_smoke.py` regression gate with per-workflow HTTP call counting via pynautobot monkey-patch
+- 57 new/modified unit tests pass — no regression
+
+---
+
+## v1.7 URI Limit & Server Resilience (Shipped: 2026-03-29)
+
+**Phases completed:** 3 phases (30-32), 3 plans
+
+**Key accomplishments:**
+
+- Direct HTTP bulk fetch for `get_device_ips()` — replaces O(3N/chunk_size) chunked `.filter()` loops with O(3) comma-separated UUID calls
+- `_guard_filter_params()` for `__in` lists > 500 — prevents 414 Request-URI Too Large
+- VLAN count graceful degradation — `vlan_count=None` + `warnings` on 500; live verified on HQV-PE1-NEW (2381 VLANs, was 500)
 
 ---
 
 ## v1.6 Query Performance Optimization (Shipped: 2026-03-28)
 
-**Phases completed:** 24 phases, 56 plans, 44 tasks
+**Phases completed:** 2 phases (28-29), 2 plans
 
 **Key accomplishments:**
 
-- [Rule 3 - Blocking] Hatchling build backend
-- `tests/test_cms_arp.py`
-- Adaptive count skipping with has_more inference, per-section timing, and parallel counts for detail=all
-- O(1) /count/ via direct HTTP, latency instrumentation in bridge, all 8 call sites migrated
+- `skip_count` with `has_more` inference from `len(results) == limit` — eliminates wasteful O(n) count pagination
+- Direct `/count/` endpoint via HTTP — O(1) count instead of O(n) pynautobot auto-pagination
+- Per-section timing instrumentation — `interfaces_latency_ms`, `ips_latency_ms`, `vlans_latency_ms`
+- Parallel counts via `ThreadPoolExecutor(max_workers=3)` for `detail=all`
 
 ---
 
@@ -52,7 +93,11 @@
 
 **Key accomplishments:**
 
-- (none recorded)
+- 3-tool API Bridge consolidates 165 MCP tools into `nautobot_api_catalog`, `nautobot_call_nautobot`, `nautobot_run_workflow`
+- Static core + dynamic CMS plugin endpoint discovery
+- Universal REST bridge with auto-pagination, fuzzy suggestions, UUID normalization
+- Workflow registry with 10 composite workflows and parameter normalization
+- Agent skills rewritten for 3-tool API (`cms-device-audit`, `onboard-router-config`, `verify-compliance`)
 
 ---
 
@@ -84,8 +129,6 @@
 - `verify quick-drift` CLI command
 - 46 MCP tools | 105 unit tests | ~11k LOC
 
-**Last phase number:** 7
-
 ---
 
 ## v1.0 MVP (Shipped: 2026-03-18)
@@ -100,22 +143,5 @@
 - Config onboarding and verification workflows
 - Agent skills (onboard-router-config, verify-compliance)
 
-**Last phase number:** 4
-
 ---
-
-## v1.8 CMS Pagination Fix (In Progress)
-
-**Goal:** Fix N+1 pynautobot pagination in CMS composite functions for both CLI and MCP server. Smart page-size override for known-slow CMS endpoints.
-
-**Root cause:** `list_bgp_address_families(limit=0)` makes 151 sequential HTTP calls due to PAGE_SIZE=1 on the Nautobot CMS plugin. Fix via pynautobot Endpoint.page_size override.
-
-**Requirements:** See `.planning/REQUIREMENTS.md`
-
-**Phase 33:** CMS Pagination Fix — Smart page-size override in `cms_list()` for known-slow endpoints
-
-**Started:** 2026-03-30
-
----
-
-*Last updated: 2026-03-30 — v1.8 milestone started*
+*Last updated: 2026-03-31 — v1.10 milestone started*
