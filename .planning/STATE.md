@@ -4,7 +4,7 @@ milestone: v1.10
 milestone_name: CMS N+1 Query Elimination
 status: executing
 last_updated: "2026-03-31T05:11:00.000Z"
-last_activity: 2026-03-31 -- Phase 35 Plan 01 committed; Plan 02 (VRRP bulk prefetch) next
+last_activity: 2026-03-31 -- Phase 35 Plan 02 committed (VRRP bulk prefetch + _get_vrrp_for_family rewrite); Plan 03 (unit tests) next
 progress:
   total_phases: 29
   completed_phases: 25
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 ## Current Position
 
 Phase: 35 (interface-detail-n1-fix) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 35
-Last activity: 2026-03-31 -- Phase 35 execution started
+Plan: 2 of 3
+Status: Plan 02 complete; Plan 03 (unit tests) next
+Last activity: 2026-03-31 -- Phase 35 Plan 02 committed (VRRP bulk prefetch)
 
 ## Phase Plan
 
@@ -41,7 +41,7 @@ Last activity: 2026-03-31 -- Phase 35 execution started
 
 Three N+1 patterns identified across the 4 failing CMS workflows:
 
-1. **`interface_detail`** (interfaces.py ~line 690): Bulk-fetches interface families once, then **discards the result** and refetches families one-by-one per unit. With ~2,000 units: ~2,000 HTTP requests. Then also makes one VRRP call per family: another ~2,000 requests.
+1. **`interface_detail`** (interfaces.py ~line 690): ~~Bulk-fetches interface families once, then discards the result and refetches families one-by-one per unit~~ — Plan 01+02 fixed both family and VRRP N+1: now ≤3 HTTP calls total (units + bulk families + bulk VRRP).
 
 2. **`firewall_summary`** with `detail=True` (firewall.py): Per-filter loop fetches terms individually; per-term loop fetches actions individually. With many filters/terms: N×M sequential HTTP requests → >120s timeout.
 

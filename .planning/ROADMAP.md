@@ -117,7 +117,7 @@
 
 - [ ] Phase 35: `interface_detail` N+1 Fix
   - [x] Plan 01: Eliminate per-unit family refetch (bulk families → lookup map) — `598284a`
-  - [ ] Plan 02: Eliminate per-family VRRP loop (bulk VRRP → lookup map)
+  - [x] Plan 02: Eliminate per-family VRRP loop (bulk VRRP → lookup map) — `749c508`
   - [ ] Plan 03: Unit tests for `interface_detail` bulk lookup invariants
 - [ ] Phase 36: `firewall_summary` Detail N+1 Fix
   - [ ] Plan 01: Eliminate per-filter term refetch (bulk terms → lookup map)
