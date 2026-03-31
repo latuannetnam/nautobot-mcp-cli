@@ -702,36 +702,66 @@ def get_device_firewall_summary(
         raise RuntimeError("Both primary queries failed: filters and policers")
 
     if detail:
-        # For each filter, fetch full term data
+        # ------------------------------------------------------------------
+        # BULK TERM PREFETCH (replaces per-filter list_firewall_terms loop)
+        # ------------------------------------------------------------------
+        device_id = resolve_device_id(client, device)
+
+        terms_by_filter: dict[str, list] = {}
+        try:
+            all_terms_resp = cms_list(
+                client,
+                "juniper_firewall_terms",
+                FirewallTermSummary,
+                device=device_id,
+                limit=0,
+            )
+            for t in all_terms_resp.results:
+                terms_by_filter.setdefault(t.filter_id, []).append(t)
+        except Exception as e:
+            collector.add("bulk_terms_fetch", str(e))
+            terms_by_filter = {}
+
+        # ------------------------------------------------------------------
+        # BULK ACTION PREFETCH (replaces per-policer list_firewall_policer_actions loop)
+        # ------------------------------------------------------------------
+        actions_by_policer: dict[str, list] = {}
+        try:
+            all_actions_resp = cms_list(
+                client,
+                "juniper_firewall_policer_actions",
+                FirewallPolicerActionSummary,
+                device=device_id,
+                limit=0,
+            )
+            for a in all_actions_resp.results:
+                actions_by_policer.setdefault(a.policer_id, []).append(a)
+        except Exception as e:
+            collector.add("bulk_actions_fetch", str(e))
+            actions_by_policer = {}
+
+        # Now populate filter_dicts using the prefetched lookup maps
         filter_dicts = []
         for fw_filter in filters_data:
             fd = fw_filter.model_dump()
-            try:
-                terms_resp = list_firewall_terms(client, filter_id=fw_filter.id, limit=0)
-                terms_capped = terms_resp.results[:limit] if limit > 0 else terms_resp.results
-                fd["terms"] = [t.model_dump() for t in terms_capped]
-                fd["term_count"] = terms_resp.count
-            except Exception as e:
-                collector.add(f"list_firewall_terms(filter={fw_filter.id})", str(e))
-                fd["terms"] = []
+            terms_list = terms_by_filter.get(fw_filter.id, [])
+            terms_capped = terms_list[:limit] if limit > 0 else terms_list
+            fd["terms"] = [t.model_dump() for t in terms_capped]
+            fd["term_count"] = len(terms_list)
             filter_dicts.append(fd)
-        # Cap filters[] at limit (per-array independent cap)
+        # Cap filters[] at limit
         filter_dicts = filter_dicts[:limit] if limit > 0 else filter_dicts
 
-        # For each policer, fetch full action data
+        # Populate policer_dicts using the prefetched lookup maps
         policer_dicts = []
         for policer in policers_data:
             pd = policer.model_dump()
-            try:
-                actions_resp = list_firewall_policer_actions(client, policer_id=policer.id, limit=0)
-                actions_capped = actions_resp.results[:limit] if limit > 0 else actions_resp.results
-                pd["actions"] = [a.model_dump() for a in actions_capped]
-                pd["action_count"] = actions_resp.count
-            except Exception as e:
-                collector.add(f"list_firewall_policer_actions(policer={policer.id})", str(e))
-                pd["actions"] = []
+            actions_list = actions_by_policer.get(policer.id, [])
+            actions_capped = actions_list[:limit] if limit > 0 else actions_list
+            pd["actions"] = [a.model_dump() for a in actions_capped]
+            pd["action_count"] = len(actions_list)
             policer_dicts.append(pd)
-        # Cap policers[] at limit (per-array independent cap)
+        # Cap policers[] at limit
         policer_dicts = policer_dicts[:limit] if limit > 0 else policer_dicts
     else:
         # Shallow — term_count and action_count already populated by list_ calls
