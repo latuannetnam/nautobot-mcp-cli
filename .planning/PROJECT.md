@@ -8,7 +8,7 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.10 CMS N+1 Query Elimination (PLANNING)
+## Current Milestone: v1.10 CMS N+1 Query Elimination (Phase 37 complete, Phase 38 next)
 
 **Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only) → v1.6 Query Performance (2026-03-28) → v1.7 URI Limit & Server Resilience (2026-03-29) → v1.8 CMS Pagination Fix (2026-03-30) → v1.9 CMS Performance Fix (2026-03-30) → **v1.10 (planning)**
 
@@ -52,7 +52,7 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 ### Active
 
 - [ ] v1.5 requirements: ENV-01..ENV-05 (Contract & Envelope), BAT-01..BAT-05 (Batch), PRT-01..PRT-06 (Projection), SEC-01..SEC-06 (Security), KPI-01..KPI-04 (KPI Benchmarks) — all planned for v1.5 but not built; deferred to future milestone
-- [ ] v1.10 CMS N+1 Query Elimination (Phase 35 complete, 36-38 remaining): Fix N+1 patterns in CMS composite workflows; all 5 smoke test workflows pass within thresholds on HQV-PE1
+- [ ] v1.10 CMS N+1 Query Elimination (Phase 37 complete, Phase 38 remaining): Fix N+1 patterns in CMS composite workflows; all 5 smoke test workflows pass within thresholds on HQV-PE1
 
 ### Validated (v1.6 — Query Performance)
 
@@ -102,6 +102,23 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - ✓ Exactly 3 bulk `cms_list` calls regardless of unit/family count (CQP-01): `list_interface_units` + `cms_list(families)` + `cms_list(vrrp)` — v1.10 Phase 35
 - ✓ 8 new N+1 invariant tests in `tests/test_cms_interfaces_n1.py` — failsafe patches prevent regression — v1.10 Phase 35
 - ✓ 6 updated tests in `tests/test_cms_composites.py` — all 26 composite tests pass, 531 unit tests pass — v1.10 Phase 35
+
+### Validated (v1.10 — Phase 36: `firewall_summary` Detail N+1 Fix)
+
+- ✓ `get_device_firewall_summary(detail=True)` bulk term prefetch — `cms_list(juniper_firewall_terms, device=device_id)` replaces per-filter `list_firewall_terms` loop — v1.10 Phase 36
+- ✓ Bulk action prefetch — `cms_list(juniper_firewall_term_actions, device=device_id)` replaces per-term `list_firewall_term_actions` loop — v1.10 Phase 36
+- ✓ Term lookup map: `terms_by_filter.get(filter_id, [])` — O(1) lookup, zero HTTP calls inside loop — v1.10 Phase 36
+- ✓ Action lookup map: `actions_by_term.get(term_id, [])` — O(1) lookup — v1.10 Phase 36
+- ✓ 8 new N+1 invariant tests in `tests/test_cms_firewalls_n1.py` — `683ff5c`
+- ✓ Phase 36 COMPLETE: ≤6 HTTP calls regardless of filter/term/policer count — v1.10 Phase 36
+
+### Validated (v1.10 — Phase 37: `routing_table` + `bgp_summary` N+1 Fixes)
+
+- ✓ `get_device_routing_table()` N+1 loop removed from `list_static_routes()` — per-route `cms_list(route=<id>)` fallback deleted; bulk `cms_list(nexthops, device=device_id)` + `cms_list(qualified_nexthops, device=device_id)` inline instead — O(N) → O(1) — v1.10 Phase 37 Plan 01
+- ✓ `get_device_bgp_summary()` triple-guard documented inline — `(a) not fam_list`, `(b) not af_bulk_failed`, `(c) af_keyed_usable` — suppresses per-neighbor fallback on unkeyed test data — v1.10 Phase 37 Plan 02
+- ✓ 9 new N+1 invariant tests in `tests/test_cms_routing_n1.py` — routing (5 tests) + BGP (4 tests) — `145f2c5`
+- ✓ All 548 unit tests pass — no regression — v1.10 Phase 37
+- ✓ Phase 37 COMPLETE: all 3 plans shipped — v1.10 Phase 37
 
 ### Rejected
 
@@ -195,7 +212,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after v1.10 milestone started*
+*Last updated: 2026-03-31 — Phase 37 COMPLETE; Phase 38 (regression gate) next*
 
 ### Validated (v1.9 — CMS Performance Fix)
 
