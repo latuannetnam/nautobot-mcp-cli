@@ -7,9 +7,9 @@ last_updated: "2026-03-31T06:59:59.314Z"
 last_activity: 2026-03-31 -- Phase 36 execution started
 progress:
   total_phases: 30
-  completed_phases: 26
+  completed_phases: 27
   total_plans: 63
-  completed_plans: 66
+  completed_plans: 69
 ---
 
 # Project State: nautobot-mcp-cli
@@ -19,21 +19,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** Phase 36 — firewall-summary-n1-fix
+**Current focus:** Phase 37 — routing_table + bgp_summary N+1 Fixes
 
 ## Current Position
 
-Phase: 36 (firewall-summary-n1-fix) — EXECUTING
-Plan: 2 of 3 — Plan 02 SHIPPED (31bc937)
-Status: Plan 02 shipped; test patches updated to match bulk prefetch call path; executing Plan 03
-Last activity: 2026-03-31 -- Plan 02 shipped; 53/53 tests pass (26 composites + 27 firewalls)
+Phase: 36 (firewall-summary-n1-fix) — COMPLETE
+Plan: 3 of 3 — Plan 03 SHIPPED (683ff5c)
+Status: Phase 36 fully shipped; 8 N+1 invariant tests in test_cms_firewalls_n1.py pass; Phase 37 next
+Last activity: 2026-03-31 -- Plan 03 shipped; 8/8 firewall N+1 tests pass; Phase 36 COMPLETE
 
 ## Phase Plan
 
 | Phase | Focus | Key Requirements |
 |-------|-------|-------------------|
 | Phase 35 | `interface_detail` N+1 Fix | ✅ COMPLETE |
-| Phase 36 | `firewall_summary` Detail N+1 Fix | CQP-02, CQP-05 |
+| Phase 36 | `firewall_summary` Detail N+1 Fix | ✅ COMPLETE |
 | Phase 37 | `routing_table` + `bgp_summary` Fixes | CQP-03, CQP-04 |
 | Phase 38 | Regression Gate | RGP-01, RGP-02 |
 
@@ -95,6 +95,9 @@ None.
 - No per-term `list_firewall_term_actions()` loop in the call path
 - `WarningCollector` still accumulates and returns warnings on partial failure
 - `firewall_summary` CLI command returns within 60s on HQV-PE1
+- ✅ Phase 36 COMPLETE: Plans 01+02 refactored bulk prefetch; Plan 03 added 8 unit tests in `test_cms_firewalls_n1.py`
+
+**Phase 37 success criteria (routing_table + bgp_summary fixes):**
 
 **Phase 37 success criteria (routing_table + bgp_summary fixes):**
 

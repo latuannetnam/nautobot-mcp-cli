@@ -120,9 +120,9 @@
   - [x] Plan 02: Eliminate per-family VRRP loop (bulk VRRP → lookup map) — `749c508`
   - [x] Plan 03: Unit tests — 8 new tests in `test_cms_interfaces_n1.py` — `a4d1611`
 - [ ] Phase 36: `firewall_summary` Detail N+1 Fix
-  - [ ] Plan 01: Eliminate per-filter term refetch (bulk terms → lookup map)
-  - [ ] Plan 02: Eliminate per-term action refetch (bulk actions → lookup map)
-  - [ ] Plan 03: Unit tests for `firewall_summary` bulk lookup invariants
+  - [x] Plan 01: Eliminate per-filter term refetch (bulk terms → lookup map)
+  - [x] Plan 02: Eliminate per-term action refetch (bulk actions → lookup map)
+  - [x] Plan 03: Unit tests — 8 new tests in `test_cms_firewalls_n1.py` — `683ff5c`
 - [ ] Phase 37: `routing_table` + `bgp_summary` N+1 Fixes
   - [ ] Plan 01: Remove per-route nexthop fallback loop in `routing_table`
   - [ ] Plan 02: Harden `bgp_summary` neighbor AF/policy guards
@@ -134,4 +134,4 @@
 ### Next Milestone: v2.0 (TBD)
 
 ---
-*Last updated: 2026-03-31 — Phase 35 COMPLETE; Phase 36 next; 66/66 plans total*
+*Last updated: 2026-03-31 — Phase 36 Plans 01-03 SHIPPED (683ff5c); Phase 37 next; 69/69 plans total*
