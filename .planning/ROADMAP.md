@@ -13,6 +13,9 @@
 - ✅ **v1.5 Agent Performance & Quality** — Phases 23-27 (scope only — not built; requirements deferred) — [Archive](milestones/v1.5-ROADMAP.md)
 - ✅ **v1.6 Query Performance Optimization** — Phases 28-29 (shipped 2026-03-28) — [Archive](milestones/v1.6-ROADMAP.md)
 - ✅ **v1.7 URI Limit & Server Resilience** — Phases 30-32 (shipped 2026-03-29) — [Archive](milestones/v1.7-ROADMAP.md)
+- ✅ **v1.8 CMS Pagination Fix** — Phase 33 (shipped 2026-03-30) — [Archive](milestones/v1.8-ROADMAP.md)
+- ✅ **v1.9 CMS Performance Fix** — Phase 34 (shipped 2026-03-30) — [Archive](milestones/v1.9-ROADMAP.md)
+- 🚧 **v1.10 CMS N+1 Query Elimination** — Phases 35-38 (planning) — [Roadmap](milestones/v1.10-ROADMAP.md)
 
 ## Phases
 
@@ -101,17 +104,34 @@
 ### v1.8 CMS Pagination Fix (SHIPPED 2026-03-30)
 
 - [x] Phase 33: CMS Pagination Fix
-  - [x] Plan 01: Implement Pagination Fix (33-01-SUMMARY.md) — completed 2026-03-30
-  - [x] Plan 02: Regression Tests (33-02-SUMMARY.md) — completed 2026-03-30
-  - [x] Plan 03: Smoke Test (33-03-SUMMARY.md) — completed 2026-03-30
+  - [x] Plan 01: Smart page-size override in `cms_list()` with `_CMS_BULK_LIMIT = 200` — completed 2026-03-30
+  - [x] Plan 02: Regression tests via `uat_cms_smoke.py` HTTP call counting — completed 2026-03-30
 
 ### v1.9 CMS Performance Fix (SHIPPED 2026-03-30)
 
 - [x] Phase 34: CMS Performance Fix
   - [x] Plan 01: Gate AF/policy fetches behind `detail=True` in `get_device_bgp_summary()` — bgp_summary: 85s → 2.2s — completed 2026-03-30
-  - [x] Plan 02: Lower `devices_inventory` CLI default `--limit` 50 → 10; bgp_summary now exits fast in default path — completed 2026-03-30
+  - [x] Plan 02: Lower `devices_inventory` CLI default `--limit` 50 → 10 — completed 2026-03-30
+
+### v1.10 CMS N+1 Query Elimination (PLANNING)
+
+- [ ] Phase 35: `interface_detail` N+1 Fix
+  - [ ] Plan 01: Eliminate per-unit family refetch (bulk families → lookup map)
+  - [ ] Plan 02: Eliminate per-family VRRP loop (bulk VRRP → lookup map)
+  - [ ] Plan 03: Unit tests for `interface_detail` bulk lookup invariants
+- [ ] Phase 36: `firewall_summary` Detail N+1 Fix
+  - [ ] Plan 01: Eliminate per-filter term refetch (bulk terms → lookup map)
+  - [ ] Plan 02: Eliminate per-term action refetch (bulk actions → lookup map)
+  - [ ] Plan 03: Unit tests for `firewall_summary` bulk lookup invariants
+- [ ] Phase 37: `routing_table` + `bgp_summary` N+1 Fixes
+  - [ ] Plan 01: Remove per-route nexthop fallback loop in `routing_table`
+  - [ ] Plan 02: Harden `bgp_summary` neighbor AF/policy guards
+  - [ ] Plan 03: Unit tests for routing/bgp bulk lookup invariants
+- [ ] Phase 38: Regression Gate
+  - [ ] Plan 01: `uat_cms_smoke.py` — all 5 workflows pass within thresholds on HQV-PE1
+  - [ ] Plan 02: Full unit test suite passes — no regression
 
 ### Next Milestone: v2.0 (TBD)
 
 ---
-*Last updated: 2026-03-30 — v1.8 Phase 33 shipped*
+*Last updated: 2026-03-31 — v1.10 milestone roadmap defined*

@@ -3,11 +3,53 @@
 **Defined:** 2026-03-26
 **Updated for v1.7:** 2026-03-29
 **Updated for v1.8:** 2026-03-30
+**Updated for v1.10:** 2026-03-31
 **Core Value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools — with predictable contracts, minimal round-trips, compact responses, and production-grade reliability.
 
-## v1.8 Requirements
+## v1.10 Requirements
 
-Fix N+1 pynautobot pagination in CMS composite functions. Root cause: `limit=0` (falsy) not sent as HTTP param → Nautobot CMS plugin uses PAGE_SIZE=1 → 151 sequential HTTP calls (~80s). Fix: pass `_CMS_BULK_LIMIT = 200` when `limit == 0` in `cms_list()`.
+### CMS-Query-Performance (CQP)
+
+- [ ] **CQP-01**: `get_interface_detail` makes ≤3 HTTP calls regardless of device unit count (1 bulk families, 1 bulk VRRP, 1 bulk units) — eliminates per-unit family refetch N+1
+- [ ] **CQP-02**: `get_device_firewall_summary` with `detail=True` makes ≤6 HTTP calls regardless of filter/policer count — eliminates per-filter/policer loop N+1
+- [ ] **CQP-03**: `get_device_routing_table` removes per-route nexthop fallback loop; bulk nexthop map is considered complete
+- [ ] **CQP-04**: `get_device_bgp_summary` guards per-neighbor AF/policy fallback behind `len(af_by_nbr) > 0` and `len(policy_by_nbr) > 0` checks
+- [ ] **CQP-05**: All N+1 fixes preserve existing `WarningCollector` partial-failure behavior
+
+### Regression-Gate (RGP)
+
+- [ ] **RGP-01**: `uat_cms_smoke.py` validates all 5 workflows pass within thresholds on HQV-PE1 (all: <60s)
+- [ ] **RGP-02**: All existing unit tests continue to pass — no regression from refactored code paths
+
+## Out of Scope (v1.10)
+
+| Feature | Reason |
+|---------|--------|
+| Global (non-device-scoped) bulk fetches | AF/policy endpoints timeout at >60s globally |
+| Remove all fallback patterns entirely | Tests and real environments differ |
+| asyncio/httpx/aiohttp rewrite | Full async rewrite; codebase committed to sync |
+
+## Traceability (v1.10)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| CQP-01 | Phase 35 | Pending |
+| CQP-02 | Phase 36 | Pending |
+| CQP-03 | Phase 37 | Pending |
+| CQP-04 | Phase 37 | Pending |
+| CQP-05 | Phase 35 | Pending |
+| RGP-01 | Phase 38 | Pending |
+| RGP-02 | Phase 38 | Pending |
+
+**Coverage:**
+- v1.10 requirements: 7 total — Phases 35-38 (roadmap defined)
+- All 7 requirements mapped to phases ✓
+
+## v1.9 Requirements (shipped 2026-03-30)
+
+AF/policy gating + CLI default limit. Completed as Phase 34.
+
+## v1.8 Requirements (shipped 2026-03-30)
 
 ### CMS Pagination Fix (PAG)
 
@@ -29,9 +71,7 @@ Fix N+1 pynautobot pagination in CMS composite functions. Root cause: `limit=0` 
 - [ ] **REG-02**: All existing unit tests pass after changes — no behavioral regression
 - [ ] **REG-03**: `scripts/uat_cms_smoke.py` committed and pushed to repository
 
-## v1.7 Requirements
-
-Requirements to eliminate 414 Request-URI Too Large errors and address VLANs 500 errors. All fixes use existing codebase patterns (direct HTTP, comma-separated DRF format, pynautobot Record wrapping).
+## v1.7 Requirements (shipped 2026-03-29)
 
 ### Direct HTTP Bulk Fetch (URI)
 
@@ -65,9 +105,7 @@ Requirements to eliminate 414 Request-URI Too Large errors and address VLANs 500
 - [ ] **TEST-02**: `device-ips DEVICE` command works correctly on a device with known many IPs (verified against prod with HQV-PE1-NEW or similar)
 - [ ] **TEST-03**: `devices inventory DEVICE --detail ips` completes successfully for large-IP-count devices without 414
 
-## v1.6 Requirements
-
-Requirements for query performance optimization. All rooted in root-cause analysis of the `--limit 5` slow response for large devices.
+## v1.6 Requirements (shipped 2026-03-28)
 
 ### Count Optimization (PERF)
 
@@ -86,9 +124,7 @@ Requirements for query performance optimization. All rooted in root-cause analys
 - [ ] **UX-01**: `--no-count` flag on `devices inventory` skips all count operations regardless of `detail` value
 - [ ] **UX-02**: `devices inventory --limit 0` (unlimited) fetches all records with zero count overhead
 
-## v1.5 Requirements
-
-Requirements for MCP server quality and AI-agent performance optimization. All built on existing 3-tool API Bridge architecture.
+## v1.5 Requirements (deferred)
 
 ### Contract & Envelope Stability (ENV)
 
@@ -132,8 +168,6 @@ Requirements for MCP server quality and AI-agent performance optimization. All b
 - [ ] **KPI-04**: Prometheus-compatible `/metrics` endpoint exposing: `mcp_requests_total`, `mcp_request_duration_seconds`, `mcp_response_size_bytes`
 
 ## v1.4 Requirements (completed)
-
-Requirements derived from verified user-reported pain points (see analysis report). Each maps to roadmap phases.
 
 ### Partial Failure Resilience (PFR)
 
@@ -209,6 +243,42 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| CQP-01 | Phase 35 | Pending |
+| CQP-02 | Phase 36 | Pending |
+| CQP-03 | Phase 37 | Pending |
+| CQP-04 | Phase 37 | Pending |
+| CQP-05 | Phase 35 | Pending |
+| RGP-01 | Phase 38 | Pending |
+| RGP-02 | Phase 38 | Pending |
+| PAG-01 | Phase 33 | Pending |
+| PAG-02 | Phase 33 | Pending |
+| PAG-03 | Phase 33 | Pending |
+| PAG-04 | Phase 33 | Pending |
+| PAG-05 | Phase 33 | Pending |
+| PAG-06 | Phase 33 | Pending |
+| DISC-01 | Phase 33 | Complete |
+| DISC-02 | Phase 33 | Complete |
+| REG-01 | Phase 33 | Pending |
+| REG-02 | Phase 33 | Pending |
+| REG-03 | Phase 33 | Pending |
+| URI-01 | TBD | Pending |
+| URI-02 | TBD | Pending |
+| URI-03 | TBD | Pending |
+| URI-04 | TBD | Pending |
+| URI-05 | TBD | Pending |
+| URI-06 | TBD | Pending |
+| BRIDGE-01 | TBD | Pending |
+| BRIDGE-02 | TBD | Pending |
+| BRIDGE-03 | TBD | Pending |
+| BRIDGE-04 | TBD | Pending |
+| BRIDGE-05 | TBD | Pending |
+| VLAN-01 | TBD | Pending |
+| VLAN-02 | TBD | Pending |
+| VLAN-03 | TBD | Pending |
+| VLAN-04 | TBD | Pending |
+| TEST-01 | TBD | Pending |
+| TEST-02 | TBD | Pending |
+| TEST-03 | TBD | Pending |
 | PERF-01 | Phase 28 | Pending |
 | PERF-02 | Phase 28 | Pending |
 | PERF-03 | Phase 29 | Pending |
@@ -263,87 +333,16 @@ Deferred to future release.
 | KPI-02 | TBD | Pending |
 | KPI-03 | TBD | Pending |
 | KPI-04 | TBD | Pending |
-| URI-01 | TBD | Pending |
-| URI-02 | TBD | Pending |
-| URI-03 | TBD | Pending |
-| URI-04 | TBD | Pending |
-| URI-05 | TBD | Pending |
-| URI-06 | TBD | Pending |
-| BRIDGE-01 | TBD | Pending |
-| BRIDGE-02 | TBD | Pending |
-| BRIDGE-03 | TBD | Pending |
-| BRIDGE-04 | TBD | Pending |
-| BRIDGE-05 | TBD | Pending |
-| VLAN-01 | TBD | Pending |
-| VLAN-02 | TBD | Pending |
-| VLAN-03 | TBD | Pending |
-| VLAN-04 | TBD | Pending |
-| PAG-01 | Phase 33 | Pending |
-| PAG-02 | Phase 33 | Pending |
-| PAG-03 | Phase 33 | Pending |
-| PAG-04 | Phase 33 | Pending |
-| PAG-05 | Phase 33 | Pending |
-| PAG-06 | Phase 33 | Pending |
-| DISC-01 | Phase 33 | Complete |
-| DISC-02 | Phase 33 | Complete |
-| REG-01 | Phase 33 | Pending |
-| REG-02 | Phase 33 | Pending |
-| REG-03 | Phase 33 | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
 
 **Coverage:**
 - v1.4 requirements: 20 total — all complete ✓
 - v1.5 requirements: 24 total — pending roadmap
-- v1.6 requirements: 8 total — all complete ✓
-- v1.7 requirements: 15 total — all complete ✓
+- v1.6 requirements: 8 total — pending implementation
+- v1.7 requirements: 15 total — pending implementation
 - v1.8 requirements: 11 total — Phase 33
+- v1.9 requirements: Phase 34 (shipped 2026-03-30)
+- v1.10 requirements: 7 total — Phases 35-38 (roadmap defined)
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-30 after v1.8 milestone kickoff*
-
-## v1.10 Requirements
-
-### CMS-Query-Performance (CQP)
-
-- [ ] **CQP-01**: `get_interface_detail` makes ≤3 HTTP calls regardless of device unit count (1 bulk families, 1 bulk VRRP, 1 bulk units) — eliminates per-unit family refetch N+1
-- [ ] **CQP-02**: `get_device_firewall_summary` with `detail=True` makes ≤6 HTTP calls regardless of filter/policer count — eliminates per-filter/policer loop N+1
-- [ ] **CQP-03**: `get_device_routing_table` removes per-route nexthop fallback loop; bulk nexthop map is considered complete
-- [ ] **CQP-04**: `get_device_bgp_summary` guards per-neighbor AF/policy fallback behind `len(af_by_nbr) > 0` and `len(policy_by_nbr) > 0` checks
-- [ ] **CQP-05**: All N+1 fixes preserve existing `WarningCollector` partial-failure behavior
-
-### Regression-Gate (RGP)
-
-- [ ] **RGP-01**: `uat_cms_smoke.py` validates all 5 workflows pass within thresholds on HQV-PE1 (all: <60s)
-- [ ] **RGP-02**: All existing unit tests continue to pass — no regression from refactored code paths
-
-## Out of Scope (v1.10)
-
-| Feature | Reason |
-|---------|--------|
-| Global (non-device-scoped) bulk fetches | AF/policy endpoints timeout at >60s globally |
-| Remove all fallback patterns entirely | Tests and real environments differ |
-| asyncio/httpx/aiohttp rewrite | Full async rewrite; codebase committed to sync |
-
-## Traceability (v1.10)
-
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| CQP-01 | Phase 35 | Pending |
-| CQP-02 | Phase 36 | Pending |
-| CQP-03 | Phase 37 | Pending |
-| CQP-04 | Phase 37 | Pending |
-| CQP-05 | Phase 35 | Pending |
-| RGP-01 | Phase 38 | Pending |
-| RGP-02 | Phase 38 | Pending |
-
-**Coverage:**
-- v1.10 requirements: 7 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 0 ✓
-
----
-*Last updated: 2026-03-31 after v1.10 milestone kickoff*
-
+*Last updated: 2026-03-31 after v1.10 milestone roadmap defined*
