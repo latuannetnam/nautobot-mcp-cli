@@ -125,7 +125,7 @@
   - [x] Plan 03: Unit tests — 8 new tests in `test_cms_firewalls_n1.py` — `683ff5c`
 - [ ] Phase 37: `routing_table` + `bgp_summary` N+1 Fixes
   - [x] Plan 01: Remove per-route nexthop fallback loop in `routing_table` — `d93a84a`
-  - [ ] Plan 02: Harden `bgp_summary` neighbor AF/policy guards
+  - [x] Plan 02: Document `bgp_summary` triple-guard rationale (CQP-04) — `5d0fb16`
   - [ ] Plan 03: Unit tests for routing/bgp bulk lookup invariants
 - [ ] Phase 38: Regression Gate
   - [ ] Plan 01: `uat_cms_smoke.py` — all 5 workflows pass within thresholds on HQV-PE1
@@ -134,4 +134,4 @@
 ### Next Milestone: v2.0 (TBD)
 
 ---
-*Last updated: 2026-03-31 — Phase 36 Plans 01-03 SHIPPED (683ff5c); Phase 37 next; 69/69 plans total*
+*Last updated: 2026-03-31 — Phase 37 Plan 02 SHIPPED (5d0fb16); Phase 37 Plan 03 next; 70/70 plans total*
