@@ -52,7 +52,7 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 ### Active
 
 - [ ] v1.5 requirements: ENV-01..ENV-05 (Contract & Envelope), BAT-01..BAT-05 (Batch), PRT-01..PRT-06 (Projection), SEC-01..SEC-06 (Security), KPI-01..KPI-04 (KPI Benchmarks) — all planned for v1.5 but not built; deferred to future milestone
-- [ ] v1.10 CMS N+1 Query Elimination: Fix N+1 patterns in CMS composite workflows; all 5 smoke test workflows pass within thresholds on HQV-PE1
+- [ ] v1.10 CMS N+1 Query Elimination (Phase 35 complete, 36-38 remaining): Fix N+1 patterns in CMS composite workflows; all 5 smoke test workflows pass within thresholds on HQV-PE1
 
 ### Validated (v1.6 — Query Performance)
 
@@ -92,6 +92,16 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 - ✓ `get_device_ips()` Pass 2 & 3 refactored: chunked `.filter()` loops → `_bulk_get_by_ids()` — no 414 for large devices — v1.7 Phase 30
 - ✓ Stale IP detection: `fetched_ids - requested_ids` surfaces deleted IPs as `unlinked_ips` stubs — v1.7 Phase 30
 - ✓ 11 new unit tests in `tests/test_ipam.py` — 29 total tests pass — v1.7 Phase 30
+
+### Validated (v1.10 — Phase 35: `interface_detail` N+1 Fix)
+
+- ✓ `get_interface_detail()` bulk family prefetch — `cms_list(juniper_interface_families, device=device_id)` replaces per-unit `list_interface_families` loop — O(N) → O(1) — v1.10 Phase 35
+- ✓ `get_interface_detail()` bulk VRRP prefetch — `cms_list(juniper_vrrp_groups, device=device_id)` replaces per-family `list_vrrp_groups` loop — O(F) → O(1) — v1.10 Phase 35
+- ✓ `_get_vrrp_for_family` rewritten as 1-line dict lookup (`vrrp_by_family.get(family_id, [])`) — zero HTTP calls inside closure — v1.10 Phase 35
+- ✓ VRRP prefetch failure → graceful degradation via `WarningCollector.add("bulk_vrrp_fetch", ...)` — family prefetch failure → hard-fail (no try/except) — v1.10 Phase 35
+- ✓ Exactly 3 bulk `cms_list` calls regardless of unit/family count (CQP-01): `list_interface_units` + `cms_list(families)` + `cms_list(vrrp)` — v1.10 Phase 35
+- ✓ 8 new N+1 invariant tests in `tests/test_cms_interfaces_n1.py` — failsafe patches prevent regression — v1.10 Phase 35
+- ✓ 6 updated tests in `tests/test_cms_composites.py` — all 26 composite tests pass, 531 unit tests pass — v1.10 Phase 35
 
 ### Rejected
 
