@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: CMS N+1 Query Elimination
-status: Phase 36 fully shipped; 8 N+1 invariant tests in test_cms_firewalls_n1.py pass; Phase 37 next
-last_updated: "2026-03-31T07:22:27.300Z"
+status: Phase 37 context gathered; ready to plan
+last_updated: "2026-03-31T08:45:00.000Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 30
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 
 ## Current Position
 
-Phase: 36
+Phase: 37
 Plan: Not started
-Status: Phase 36 fully shipped; 8 N+1 invariant tests in test_cms_firewalls_n1.py pass; Phase 37 next
+Status: Phase 37 context gathered; ready to plan
 Last activity: 2026-03-31
 
 ## Phase Plan
@@ -98,13 +98,12 @@ None.
 - ✅ Phase 36 COMPLETE: Plans 01+02 refactored bulk prefetch; Plan 03 added 8 unit tests in `test_cms_firewalls_n1.py`
 
 **Phase 37 success criteria (routing_table + bgp_summary fixes):**
-
-**Phase 37 success criteria (routing_table + bgp_summary fixes):**
-
-- `get_device_routing_table()` makes no per-route `cms_list(route=<id>)` fallback calls
-- Nexthop lookup uses bulk map from initial fetch only; routes with no nexthop return empty list
-- `get_device_bgp_summary()` neighbor AF/policy fallback loops guarded by `len(...) > 0` checks
-- `routing_table` + `bgp_summary` CLI commands return within 60s on HQV-PE1
+- `get_device_routing_table()` makes ≤3 HTTP calls: routes list + 2 bulk nexthop fetches (no per-route fallback)
+- Nexthop bulk fetch failure → silent graceful degradation (empty dict); WarningCollector for critical paths
+- Per-route fallback loop removed (L96-120 in `list_static_routes`); test mocks updated to include bulk data
+- `get_device_bgp_summary()` existing guards sufficient (no code changes needed for CQP-04)
+- `tests/test_cms_routing_n1.py` added covering both routing and BGP N+1 invariants
+- All Phase 37 tests pass
 
 **Phase 38 success criteria (regression gate):**
 
