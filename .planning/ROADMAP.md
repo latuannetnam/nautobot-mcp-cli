@@ -15,7 +15,7 @@
 - ✅ **v1.7 URI Limit & Server Resilience** — Phases 30-32 (shipped 2026-03-29) — [Archive](milestones/v1.7-ROADMAP.md)
 - ✅ **v1.8 CMS Pagination Fix** — Phase 33 (shipped 2026-03-30) — [Archive](milestones/v1.8-ROADMAP.md)
 - ✅ **v1.9 CMS Performance Fix** — Phase 34 (shipped 2026-03-30) — [Archive](milestones/v1.9-ROADMAP.md)
-- 🚧 **v1.10 CMS N+1 Query Elimination** — Phases 35-38 (Phase 35 shipped, 36-38 planning) — [Roadmap](milestones/v1.10-ROADMAP.md)
+- ✅ **v1.10 CMS N+1 Query Elimination** — Phases 35-38 (shipped 2026-03-31) — [Roadmap](milestones/v1.10-ROADMAP.md)
 
 ## Phases
 
@@ -127,11 +127,11 @@
   - [x] Plan 01: Remove per-route nexthop fallback loop in `routing_table` — `d93a84a`
   - [x] Plan 02: Document `bgp_summary` triple-guard rationale (CQP-04) — `5d0fb16`
   - [x] Plan 03: Unit tests for routing/bgp bulk lookup invariants — `145f2c5`
-- [ ] Phase 38: Regression Gate
-  - [ ] Plan 01: `uat_cms_smoke.py` — all 5 workflows pass within thresholds on HQV-PE1
-  - [ ] Plan 02: Full unit test suite passes — no regression
+- [x] Phase 38: Regression Gate (SHIPPED 2026-03-31)
+  - [x] Plan 01: `uat_cms_smoke.py` — all 5 workflows pass within thresholds on HQV-PE1-NEW — 5/5 PASS, exit 0
+  - [x] Plan 02: Full unit test suite — 546/546 unit tests pass; 10 pre-existing UAT fixture errors (scripts/uat_smoke_test.py, requires live server)
 
 ### Next Milestone: v2.0 (TBD)
 
 ---
-*Last updated: 2026-03-31 — Phase 37 COMPLETE (3/3 plans shipped); Phase 38 next; 73/72 plans total*
+*Last updated: 2026-03-31 — v1.10 COMPLETE (Phases 35-38 shipped); 75/75 plans total*

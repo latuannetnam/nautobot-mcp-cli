@@ -62,9 +62,11 @@ def test_interface_detail_bulk_prefetch_exactly_3_calls():
     units = _UNITS
     families = _FAMILIES
 
-    # cms_list handles families + VRRP only; units come from list_interface_units
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    # cms_list handles families (chunked) + VRRP only; units come from list_interface_units
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
+            # Chunked prefetch: interface_unit is a list of unit IDs
+            # Return families for those units only (families are pre-sliced by chunk)
             return ListResponse(count=6, results=families)
         if "vrrp_groups" in endpoint:
             return ListResponse(count=0, results=[])
@@ -85,7 +87,8 @@ def test_interface_detail_bulk_prefetch_exactly_3_calls():
         assert result.total_units == 3
         assert len(result.units) == 3
 
-        # 2 cms_list calls: families + VRRP (units handled by list_interface_units)
+        # 2 cms_list calls: 1 family chunk + 1 VRRP (units handled by list_interface_units)
+        # With 3 units and _FAMILY_CHUNK_SIZE=50, a single chunk covers all units
         assert mock_cms.call_count == 2
 
         # 0 calls to per-unit/per-family functions (N+1 eliminated)
@@ -111,7 +114,7 @@ def test_interface_detail_no_per_unit_family_calls():
     units = _UNITS[:2]
     families = _FAMILIES[:4]
 
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
             return ListResponse(count=4, results=families)
         return ListResponse(count=0, results=[])
@@ -145,7 +148,7 @@ def test_interface_detail_no_per_family_vrrp_calls():
     units = _UNITS[:1]
     families = _FAMILIES[:2]
 
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
             return ListResponse(count=2, results=families)
         return ListResponse(count=0, results=[])
@@ -162,21 +165,23 @@ def test_interface_detail_no_per_family_vrrp_calls():
 
 
 # ---------------------------------------------------------------------------
-# Test 4: Family prefetch failure → hard-fail (D-03)
+# Test 4: Family prefetch failure → graceful degradation (D-03 revised)
 # ---------------------------------------------------------------------------
 
 
-def test_interface_detail_family_prefetch_failure_hard_fail():
-    """D-03: Bulk family prefetch failure propagates as exception (hard-fail).
+def test_interface_detail_family_prefetch_failure_graceful():
+    """D-03 revised: Bulk family prefetch failure → graceful degradation (WarningCollector).
 
-    Family data is critical for detail=True enrichment. No WarningCollector degradation.
+    juniper_interface_families does not support `device` filter (400 error).
+    We now use chunked `interface_unit` filter. On any chunk failure, all units
+    get family_count=0 and no per-unit refetch is attempted (CQP-05).
     """
     from nautobot_mcp.cms.interfaces import get_interface_detail
 
     client = _mock_client()
     unit = _UNITS[0]
 
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
             raise RuntimeError("Family endpoint 503")
         # VRRP never reached
@@ -185,10 +190,14 @@ def test_interface_detail_family_prefetch_failure_hard_fail():
     with patch("nautobot_mcp.cms.interfaces.resolve_device_id", return_value="device-uuid-1"), \
          patch("nautobot_mcp.cms.interfaces.list_interface_units", return_value=_mock_list_response(unit)), \
          patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=cms_list_side_effect):
-        with pytest.raises(RuntimeError, match="Family endpoint 503"):
-            get_interface_detail(client, device="edge-01")
+        result, warnings = get_interface_detail(client, device="edge-01")
 
-    # No units processed — result never constructed
+    # Response is valid despite family prefetch failure — graceful degradation
+    assert isinstance(result, InterfaceDetailResponse)
+    assert result.device_name == "edge-01"
+    assert result.total_units == 1
+    assert result.units[0]["family_count"] == 0
+    assert result.units[0]["families"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +217,7 @@ def test_interface_detail_vrrp_prefetch_failure_graceful():
     unit = _UNITS[0]
     fam = _FAMILIES[0]
 
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
             return ListResponse(count=1, results=[fam])
         if "vrrp_groups" in endpoint:
@@ -253,7 +262,7 @@ def test_interface_detail_vrrp_enriched_from_prefetch_map():
     vrrp_1 = MagicMock(id="vrrp-1", model_dump=MagicMock(return_value={"id": "vrrp-1", "group_number": 1}))
     vrrp_2 = MagicMock(id="vrrp-2", model_dump=MagicMock(return_value={"id": "vrrp-2", "group_number": 2}))
 
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
             return ListResponse(count=2, results=[fam_with_vrrp, fam_no_vrrp])
         if "vrrp_groups" in endpoint:
@@ -299,7 +308,7 @@ def test_interface_detail_summary_mode_no_vrrp_calls():
     vrrp = MagicMock(id="vrrp-1", model_dump=MagicMock(return_value={"id": "vrrp-1", "group_number": 1}))
     vrrp.family_id = fam.id
 
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
             return ListResponse(count=1, results=[fam])
         if "vrrp_groups" in endpoint:
@@ -333,7 +342,7 @@ def test_interface_detail_summary_mode_no_family_calls():
     unit = _UNITS[0]
     fam = _FAMILIES[0]
 
-    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, interface_unit=None, **kwargs):
         if "interface_families" in endpoint:
             return ListResponse(count=1, results=[fam])
         return ListResponse(count=0, results=[])

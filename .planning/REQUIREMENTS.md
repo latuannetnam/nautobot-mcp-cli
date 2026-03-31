@@ -18,7 +18,7 @@
 
 ### Regression-Gate (RGP)
 
-- [ ] **RGP-01**: `uat_cms_smoke.py` validates all 5 workflows pass within thresholds on HQV-PE1 (all: <60s)
+- [x] **RGP-01**: `uat_cms_smoke.py` validates all 5 workflows pass within thresholds on HQV-PE1 (all: <60s)
 - [ ] **RGP-02**: All existing unit tests continue to pass — no regression from refactored code paths
 
 ## Out of Scope (v1.10)
@@ -33,12 +33,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CQP-01 | Phase 35 | Pending |
-| CQP-02 | Phase 36 | Pending |
-| CQP-03 | Phase 37 | Pending |
-| CQP-04 | Phase 37 | Pending |
-| CQP-05 | Phase 35 | Pending |
-| RGP-01 | Phase 38 | Pending |
+| CQP-01 | Phase 35 | Done |
+| CQP-02 | Phase 36 | Done |
+| CQP-03 | Phase 37 | Done |
+| CQP-04 | Phase 37 | Done |
+| CQP-05 | Phase 35 | Done |
+| RGP-01 | Phase 38 | Done |
 | RGP-02 | Phase 38 | Pending |
 
 **Coverage:**
@@ -243,12 +243,12 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CQP-01 | Phase 35 | Pending |
-| CQP-02 | Phase 36 | Pending |
-| CQP-03 | Phase 37 | Pending |
-| CQP-04 | Phase 37 | Pending |
-| CQP-05 | Phase 35 | Pending |
-| RGP-01 | Phase 38 | Pending |
+| CQP-01 | Phase 35 | Done |
+| CQP-02 | Phase 36 | Done |
+| CQP-03 | Phase 37 | Done |
+| CQP-04 | Phase 37 | Done |
+| CQP-05 | Phase 35 | Done |
+| RGP-01 | Phase 38 | Done |
 | RGP-02 | Phase 38 | Pending |
 | PAG-01 | Phase 33 | Pending |
 | PAG-02 | Phase 33 | Pending |

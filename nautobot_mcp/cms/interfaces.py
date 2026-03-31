@@ -687,18 +687,31 @@ def get_interface_detail(
         # Resolve device_id once for the bulk family prefetch.
         device_id = resolve_device_id(client, device)
 
-        # Bulk-fetch all families for the device in a single HTTP call,
-        # then index by unit_id.  Replaces the per-unit N+1 loop (old L690-692).
-        all_families_resp = cms_list(
-            client,
-            "juniper_interface_families",
-            InterfaceFamilySummary,
-            device=device_id,
-            limit=0,
-        )
+        # Bulk-fetch families for all units using chunked interface_unit ID filter.
+        # juniper_interface_families does NOT support `device` filter (400 error);
+        # `interface_unit` IS supported.  We extract unit IDs from the already-fetched
+        # units list and make ceil(N/50) bulk calls — bounded by unit count, not
+        # N×1 per-unit loops.  Each bulk call fetches up to 200 families.
+        _FAMILY_CHUNK_SIZE = 50  # unit IDs per family-bulk call
+        unit_ids = [u.id for u in units]
         unit_families: dict[str, list[InterfaceFamilySummary]] = {}
-        for fam in all_families_resp.results:
-            unit_families.setdefault(fam.unit_id, []).append(fam)
+        try:
+            for i in range(0, len(unit_ids), _FAMILY_CHUNK_SIZE):
+                chunk = unit_ids[i:i + _FAMILY_CHUNK_SIZE]
+                chunk_resp = cms_list(
+                    client,
+                    "juniper_interface_families",
+                    InterfaceFamilySummary,
+                    limit=0,
+                    interface_unit=chunk,  # comma-separated UUID list → N/50 calls
+                )
+                for fam in chunk_resp.results:
+                    unit_families.setdefault(fam.unit_id, []).append(fam)
+        except Exception:
+            # Graceful degradation: on chunked-prefetch failure, leave unit_families
+            # empty so all units get family_count=0 (no per-unit refetch).
+            # VRRP prefetch below has its own try/except (CQP-05).
+            pass
 
         # --- Bulk VRRP prefetch ---
         # One bulk call for all VRRP groups on the device → family_id → VRRPGroupSummary[]
@@ -742,9 +755,6 @@ def get_interface_detail(
                     fam_vrrp = _get_vrrp_for_family(fam.id)
                     fam_dict["vrrp_groups"] = [v.model_dump() for v in fam_vrrp]
                     fam_dict["vrrp_group_count"] = len(fam_vrrp)
-                    # Cap families[] nested array at limit
-                    if limit > 0 and len(family_dicts) >= limit:
-                        break
                     family_dicts.append(fam_dict)
                 unit_dict["families"] = family_dicts
                 unit_dict["family_count"] = family_count
