@@ -19,13 +19,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** Phase 35 — interface-detail-n1-fix
+**Current focus:** Phase 36 — firewall-summary-n1-fix
 
 ## Current Position
 
-Phase: 35
+Phase: 36
 Plan: Not started
-Status: All 3 plans complete; Phase 36 next
+Status: 3 plans defined; executing
 Last activity: 2026-03-31
 
 ## Phase Plan
@@ -111,4 +111,4 @@ None.
 
 ---
 *State initialized: 2026-03-28*
-*Last updated: 2026-03-31 — v1.10 roadmap defined, phases 35-38 planned*
+*Last updated: 2026-03-31 — Phase 36 plans defined*
