@@ -91,34 +91,8 @@ def list_static_routes(
             except Exception:
                 pass
 
-            # Backward-compatible fallback: if bulk map has no entry for a route,
-            # query that route directly (preserves old test behavior/mocks)
+            # Inline nexthops into each route from the bulk maps (no per-route HTTP calls)
             for route in routes.results:
-                if route.id not in nh_by_route:
-                    try:
-                        per_route_nhs = cms_list(
-                            client,
-                            "juniper_static_route_nexthops",
-                            StaticRouteNexthopSummary,
-                            limit=0,
-                            route=route.id,
-                        )
-                        nh_by_route[route.id] = per_route_nhs.results
-                    except Exception:
-                        nh_by_route[route.id] = []
-                if route.id not in qnh_by_route:
-                    try:
-                        per_route_qnhs = cms_list(
-                            client,
-                            "juniper_static_route_qualified_nexthops",
-                            StaticRouteQualifiedNexthopSummary,
-                            limit=0,
-                            route=route.id,
-                        )
-                        qnh_by_route[route.id] = per_route_qnhs.results
-                    except Exception:
-                        qnh_by_route[route.id] = []
-
                 route.nexthops = nh_by_route.get(route.id, [])
                 route.qualified_nexthops = qnh_by_route.get(route.id, [])
 

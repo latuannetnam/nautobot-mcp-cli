@@ -280,18 +280,20 @@ class TestListStaticRoutes:
         assert result.results[0].destination == "192.168.1.0/24"
 
     def test_list_inlines_nexthops(self, mock_client_with_cms, mock_static_route_record):
-        """Verifies nexthops are attached to route results via per-route queries."""
+        """Verifies nexthops are attached to route results via bulk device-level queries."""
         mock_device = MagicMock()
         mock_device.id = "dev-1111-2222-3333-4444"
         mock_client_with_cms.api.dcim.devices.get.return_value = mock_device
 
-        # Create a nexthop record that references the route
+        # Create a nexthop record that references the route.
+        # The model builder reads nh.route.id to populate route_id in StaticRouteNexthopSummary,
+        # which is what the bulk map lookup uses (nh.route_id == route.id).
         nh_record = MagicMock()
         nh_record.id = "nh-5555-6666-7777-8888"
         nh_record.display = "via 10.0.0.2"
         nh_record.url = None
         nh_record.device = None
-        nh_record.route.id = "route-aaaa-bbbb-cccc-dddd"
+        nh_record.route.id = "route-aaaa-bbbb-cccc-dddd"  # builder reads .route.id → route_id
         nh_record.route.display = "route"
         nh_record.ip_address.address = "10.0.0.2"
         nh_record.ip_address.display = "10.0.0.2"
@@ -302,15 +304,9 @@ class TestListStaticRoutes:
         nh_record.nexthop_type = "unicast"
         nh_record.via_interface = None
 
-        # Routes query returns route; per-route nexthop queries return nh/empty
+        # Routes query returns route; bulk nexthop query returns nh (no per-route fallback)
         mock_client_with_cms.cms.juniper_static_routes.filter.return_value = [mock_static_route_record]
-
-        def nh_filter_side_effect(**kwargs):
-            if kwargs.get("route") == "route-aaaa-bbbb-cccc-dddd":
-                return [nh_record]
-            return []
-
-        mock_client_with_cms.cms.juniper_static_route_nexthops.filter.side_effect = nh_filter_side_effect
+        mock_client_with_cms.cms.juniper_static_route_nexthops.filter.return_value = [nh_record]
         mock_client_with_cms.cms.juniper_static_route_qualified_nexthops.filter.return_value = []
 
         result = list_static_routes(mock_client_with_cms, device="core-rtr-01")
