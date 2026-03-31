@@ -9,7 +9,7 @@ Covers:
 - get_device_firewall_summary() default and detail modes
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -244,6 +244,7 @@ def test_routing_table_detail():
 def test_interface_detail_default():
     """get_interface_detail() default: units with families + VRRP counts, no ARP."""
     from nautobot_mcp.cms.interfaces import get_interface_detail
+    from nautobot_mcp.models.cms.interfaces import InterfaceFamilySummary, VRRPGroupSummary
 
     client = _mock_client()
 
@@ -251,16 +252,29 @@ def test_interface_detail_default():
     unit.id = "unit-001"
     unit.model_dump.return_value = {"id": "unit-001", "interface_name": "ge-0/0/0", "unit_number": 0}
 
-    fam = MagicMock()
-    fam.id = "fam-001"
-    fam.model_dump.return_value = {"id": "fam-001", "family_type": "inet"}
+    # cms_list() internally calls model.from_nautobot() on raw records,
+    # returning pre-constructed model instances.  Return the right types.
+    fam_summary = InterfaceFamilySummary.model_construct(
+        id="fam-001", unit_id="unit-001", family_type="inet"
+    )
+    vrrp_summary = VRRPGroupSummary.model_construct(
+        id="vrrp-001", family_id="fam-001", group_number=1
+    )
 
-    vrrp = MagicMock()
-    vrrp.model_dump.return_value = {"id": "vrrp-001", "group_number": 1}
+    def mock_cms_list(client, endpoint, model, device=None, limit=0, **kwargs):
+        if endpoint == "juniper_interface_families":
+            resp = MagicMock()
+            resp.results = [fam_summary]
+            return resp
+        elif endpoint == "juniper_interface_vrrp_groups":
+            resp = MagicMock()
+            resp.results = [vrrp_summary]
+            return resp
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
 
     with patch("nautobot_mcp.cms.interfaces.list_interface_units", return_value=_mock_list_response(unit)) as mock_units, \
-         patch("nautobot_mcp.cms.interfaces.list_interface_families", return_value=_mock_list_response(fam)) as mock_fams, \
-         patch("nautobot_mcp.cms.interfaces.list_vrrp_groups", return_value=_mock_list_response(vrrp)) as mock_vrrp:
+         patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=mock_cms_list) as mock_cms, \
+         patch.object(client.api.dcim.devices, "get", return_value=MagicMock(id="edge-01")):
         result, warnings = get_interface_detail(client, device="edge-01")
 
     assert isinstance(result, InterfaceDetailResponse)
@@ -273,8 +287,8 @@ def test_interface_detail_default():
     assert warnings == []
 
     mock_units.assert_called_once_with(client, device="edge-01", limit=0)
-    mock_fams.assert_called_once_with(client, unit_id="unit-001", limit=0)
-    mock_vrrp.assert_called_once_with(client, family_id="fam-001", limit=0)
+    # Bulk family prefetch + bulk VRRP prefetch = 2 cms_list calls
+    assert mock_cms.call_count == 2
 
 
 def test_interface_detail_with_arp():
@@ -287,16 +301,29 @@ def test_interface_detail_with_arp():
     unit.id = "unit-002"
     unit.model_dump.return_value = {"id": "unit-002", "interface_name": "ge-0/0/1"}
 
+    unit_obj = MagicMock()
+    unit_obj.id = "unit-002"
     fam = MagicMock()
     fam.id = "fam-002"
+    fam.interface_unit = unit_obj  # from_nautobot reads record.interface_unit.id
     fam.model_dump.return_value = {"id": "fam-002", "family_type": "inet"}
 
     arp_entry = MagicMock()
     arp_entry.model_dump.return_value = {"id": "arp-001", "mac_address": "aa:bb:cc:dd:ee:ff", "ip_address": "10.0.0.1/24"}
 
+    def mock_cms_list(client, endpoint, model, device=None, limit=0, **kwargs):
+        if endpoint == "juniper_interface_families":
+            resp = MagicMock()
+            resp.results = [fam]
+            return resp
+        elif endpoint == "juniper_interface_vrrp_groups":
+            resp = MagicMock()
+            resp.results = []
+            return resp
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
     with patch("nautobot_mcp.cms.interfaces.list_interface_units", return_value=_mock_list_response(unit)), \
-         patch("nautobot_mcp.cms.interfaces.list_interface_families", return_value=_mock_list_response(fam)), \
-         patch("nautobot_mcp.cms.interfaces.list_vrrp_groups", return_value=_mock_list_response()), \
+         patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=mock_cms_list), \
          patch("nautobot_mcp.cms.arp.list_arp_entries", return_value=_mock_list_response(arp_entry)):
         result, warnings = get_interface_detail(client, device="edge-02", include_arp=True)
 
@@ -482,7 +509,7 @@ def test_firewall_summary_detail_term_enrichment_failure():
 
 
 def test_interface_detail_vrrp_enrichment_failure():
-    """get_interface_detail(): VRRP failure per family → warning, family still returned."""
+    """get_interface_detail(): Bulk VRRP prefetch failure → graceful degradation, families still returned."""
     from nautobot_mcp.cms.interfaces import get_interface_detail
 
     client = _mock_client()
@@ -492,18 +519,27 @@ def test_interface_detail_vrrp_enrichment_failure():
 
     fam = MagicMock()
     fam.id = "fam-001"
+    fam.unit_id = "unit-001"
     fam.model_dump.return_value = {"id": "fam-001", "family_type": "inet"}
 
+    def mock_cms_list(client, endpoint, model, device=None, limit=0, **kwargs):
+        if endpoint == "juniper_interface_families":
+            resp = MagicMock()
+            resp.results = [fam]
+            return resp
+        elif endpoint == "juniper_interface_vrrp_groups":
+            raise RuntimeError("vrrp unreachable")
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
     with patch("nautobot_mcp.cms.interfaces.list_interface_units", return_value=_mock_list_response(unit)), \
-         patch("nautobot_mcp.cms.interfaces.list_interface_families", return_value=_mock_list_response(fam)), \
-         patch("nautobot_mcp.cms.interfaces.list_vrrp_groups", side_effect=RuntimeError("vrrp unreachable")):
+         patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=mock_cms_list):
         result, warnings = get_interface_detail(client, device="edge-01")
 
     assert result.total_units == 1
     assert result.units[0]["families"][0]["vrrp_groups"] == []
     assert result.units[0]["families"][0]["vrrp_group_count"] == 0
     assert len(warnings) == 1
-    assert "list_vrrp_groups" in warnings[0]["operation"]
+    assert warnings[0]["operation"] == "bulk_vrrp_fetch"
     assert "vrrp unreachable" in warnings[0]["error"]
 
 
@@ -516,8 +552,15 @@ def test_interface_detail_arp_enrichment_failure():
     unit.id = "unit-003"
     unit.model_dump.return_value = {"id": "unit-003", "interface_name": "ge-0/0/2"}
 
+    def mock_cms_list(client, endpoint, model, device=None, limit=0, **kwargs):
+        if endpoint == "juniper_interface_families":
+            return _mock_list_response()  # no families
+        elif endpoint == "juniper_interface_vrrp_groups":
+            return _mock_list_response()  # no VRRP
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
     with patch("nautobot_mcp.cms.interfaces.list_interface_units", return_value=_mock_list_response(unit)), \
-         patch("nautobot_mcp.cms.interfaces.list_interface_families", return_value=_mock_list_response()), \
+         patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=mock_cms_list), \
          patch("nautobot_mcp.cms.arp.list_arp_entries", side_effect=RuntimeError("arp timeout")):
         result, warnings = get_interface_detail(client, device="edge-03", include_arp=True)
 
@@ -536,29 +579,39 @@ def test_interface_detail_arp_enrichment_failure():
 def test_interface_detail_summary_mode_strips_nested_arrays():
     """RSP-01: get_interface_detail(detail=False) returns family_count but no families/vrrp_groups."""
     from nautobot_mcp.cms.interfaces import get_interface_detail
+    from nautobot_mcp.models.cms.interfaces import InterfaceFamilySummary, VRRPGroupSummary
 
     client = _mock_client()
     unit = MagicMock()
     unit.id = "unit-001"
     unit.model_dump.return_value = {"id": "unit-001", "interface_name": "ge-0/0/0"}
 
-    fam = MagicMock()
-    fam.id = "fam-001"
-    fam.model_dump.return_value = {"id": "fam-001", "family_type": "inet"}
+    # cms_list() internally calls model.from_nautobot() on raw records.
+    fam_summary = InterfaceFamilySummary.model_construct(
+        id="fam-001", unit_id="unit-001", family_type="inet"
+    )
+    vrrp_summary = VRRPGroupSummary.model_construct(
+        id="vrrp-001", family_id="fam-001", group_number=1
+    )
 
-    vrrp = MagicMock()
-    vrrp.model_dump.return_value = {"id": "vrrp-001", "group_number": 1}
+    def mock_cms_list(client, endpoint, model, device=None, limit=0, **kwargs):
+        if endpoint == "juniper_interface_families":
+            resp = MagicMock()
+            resp.results = [fam_summary]
+            return resp
+        elif endpoint == "juniper_interface_vrrp_groups":
+            resp = MagicMock()
+            resp.results = [vrrp_summary]
+            return resp
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
 
     with patch(
         "nautobot_mcp.cms.interfaces.list_interface_units",
         return_value=_mock_list_response(unit),
     ) as mock_units, patch(
-        "nautobot_mcp.cms.interfaces.list_interface_families",
-        return_value=_mock_list_response(fam),
-    ) as mock_fams, patch(
-        "nautobot_mcp.cms.interfaces.list_vrrp_groups",
-        return_value=_mock_list_response(vrrp),
-    ) as mock_vrrp:
+        "nautobot_mcp.cms.interfaces.cms_list",
+        side_effect=mock_cms_list,
+    ) as mock_cms, patch.object(client.api.dcim.devices, "get", return_value=MagicMock(id="edge-01")):
         result, warnings = get_interface_detail(client, device="edge-01", detail=False)
 
     assert isinstance(result, InterfaceDetailResponse)
@@ -572,8 +625,8 @@ def test_interface_detail_summary_mode_strips_nested_arrays():
     assert result.units[0]["family_count"] == 1
     assert "vrrp_group_count" in result.units[0], "vrrp_group_count must be present in summary mode"
     assert result.units[0]["vrrp_group_count"] == 1, "vrrp_group_count should reflect actual VRRP count"
-    # VRRP query SHOULD be called (even in summary mode, we query per family for count)
-    mock_vrrp.assert_called()
+    # Bulk family + bulk VRRP prefetch = 2 cms_list calls (no per-family HTTP calls)
+    assert mock_cms.call_count == 2
     assert warnings == []
 
 
@@ -588,6 +641,7 @@ def test_interface_detail_summary_mode_does_not_affect_arp():
 
     fam = MagicMock()
     fam.id = "fam-002"
+    fam.unit_id = "unit-002"
     fam.model_dump.return_value = {"id": "fam-002", "family_type": "inet"}
 
     arp_entry = MagicMock()
@@ -597,15 +651,23 @@ def test_interface_detail_summary_mode_does_not_affect_arp():
         "ip_address": "10.0.0.1/24",
     }
 
+    def mock_cms_list(client, endpoint, model, device=None, limit=0, **kwargs):
+        if endpoint == "juniper_interface_families":
+            resp = MagicMock()
+            resp.results = [fam]
+            return resp
+        elif endpoint == "juniper_interface_vrrp_groups":
+            resp = MagicMock()
+            resp.results = []
+            return resp
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
     with patch(
         "nautobot_mcp.cms.interfaces.list_interface_units",
         return_value=_mock_list_response(unit),
     ), patch(
-        "nautobot_mcp.cms.interfaces.list_interface_families",
-        return_value=_mock_list_response(fam),
-    ), patch(
-        "nautobot_mcp.cms.interfaces.list_vrrp_groups",
-        return_value=_mock_list_response(),
+        "nautobot_mcp.cms.interfaces.cms_list",
+        side_effect=mock_cms_list,
     ), patch(
         "nautobot_mcp.cms.arp.list_arp_entries",
         return_value=_mock_list_response(arp_entry),
@@ -622,29 +684,39 @@ def test_interface_detail_summary_mode_does_not_affect_arp():
 def test_interface_detail_detail_true_unchanged():
     """RSP-01: get_interface_detail(detail=True) behavior is unchanged from default."""
     from nautobot_mcp.cms.interfaces import get_interface_detail
+    from nautobot_mcp.models.cms.interfaces import InterfaceFamilySummary, VRRPGroupSummary
 
     client = _mock_client()
     unit = MagicMock()
     unit.id = "unit-003"
     unit.model_dump.return_value = {"id": "unit-003", "interface_name": "ge-0/0/2"}
 
-    fam = MagicMock()
-    fam.id = "fam-003"
-    fam.model_dump.return_value = {"id": "fam-003", "family_type": "inet6"}
+    # cms_list() internally calls model.from_nautobot() on raw records.
+    fam_summary = InterfaceFamilySummary.model_construct(
+        id="fam-003", unit_id="unit-003", family_type="inet6"
+    )
+    vrrp_summary = VRRPGroupSummary.model_construct(
+        id="vrrp-003", family_id="fam-003", group_number=10
+    )
 
-    vrrp = MagicMock()
-    vrrp.model_dump.return_value = {"id": "vrrp-003", "group_number": 10}
+    def mock_cms_list(client, endpoint, model, device=None, limit=0, **kwargs):
+        if endpoint == "juniper_interface_families":
+            resp = MagicMock()
+            resp.results = [fam_summary]
+            return resp
+        elif endpoint == "juniper_interface_vrrp_groups":
+            resp = MagicMock()
+            resp.results = [vrrp_summary]
+            return resp
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
 
     with patch(
         "nautobot_mcp.cms.interfaces.list_interface_units",
         return_value=_mock_list_response(unit),
     ) as mock_units, patch(
-        "nautobot_mcp.cms.interfaces.list_interface_families",
-        return_value=_mock_list_response(fam),
-    ) as mock_fams, patch(
-        "nautobot_mcp.cms.interfaces.list_vrrp_groups",
-        return_value=_mock_list_response(vrrp),
-    ) as mock_vrrp:
+        "nautobot_mcp.cms.interfaces.cms_list",
+        side_effect=mock_cms_list,
+    ) as mock_cms, patch.object(client.api.dcim.devices, "get", return_value=MagicMock(id="edge-03")):
         result, warnings = get_interface_detail(client, device="edge-03", detail=True)
 
     assert isinstance(result, InterfaceDetailResponse)
@@ -653,7 +725,8 @@ def test_interface_detail_detail_true_unchanged():
     assert len(result.units[0]["families"]) == 1, "families[] must be populated in detail=True"
     assert result.units[0]["families"][0]["vrrp_group_count"] == 1
     assert "vrrp_groups" in result.units[0]["families"][0]
-    mock_vrrp.assert_called()
+    # Bulk family + bulk VRRP prefetch = 2 cms_list calls (no per-family HTTP calls)
+    assert mock_cms.call_count == 2
 
 
 # ---------------------------------------------------------------------------

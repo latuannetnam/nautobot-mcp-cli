@@ -689,7 +689,6 @@ def get_interface_detail(
 
         # Bulk-fetch all families for the device in a single HTTP call,
         # then index by unit_id.  Replaces the per-unit N+1 loop (old L690-692).
-        vrrp_by_family: dict[str, list[VRRPGroupSummary]] = {}
         all_families_resp = cms_list(
             client,
             "juniper_interface_families",
@@ -701,16 +700,32 @@ def get_interface_detail(
         for fam in all_families_resp.results:
             unit_families.setdefault(fam.unit_id, []).append(fam)
 
+        # --- Bulk VRRP prefetch ---
+        # One bulk call for all VRRP groups on the device → family_id → VRRPGroupSummary[]
+        # VRRP is non-critical enrichment: graceful degradation on failure (D-04 / CQP-05)
+        try:
+            all_vrrp_resp = cms_list(
+                client,
+                "juniper_interface_vrrp_groups",
+                VRRPGroupSummary,
+                device=device_id,
+                limit=0,
+            )
+            vrrp_by_family: dict[str, list[VRRPGroupSummary]] = {}
+            for vg in all_vrrp_resp.results:
+                vrrp_by_family.setdefault(vg.family_id, []).append(vg)
+        except Exception as e:
+            collector.add("bulk_vrrp_fetch", str(e))
+            vrrp_by_family = {}
+
         def _get_vrrp_for_family(family_id: str) -> list:
-            if family_id in vrrp_by_family:
-                return vrrp_by_family[family_id]
-            try:
-                vrrp = list_vrrp_groups(client, family_id=family_id, limit=0)
-                vrrp_by_family[family_id] = vrrp.results
-            except Exception as e:
-                collector.add(f"list_vrrp_groups(family={family_id})", str(e))
-                vrrp_by_family[family_id] = []
-            return vrrp_by_family[family_id]
+            """Look up VRRP groups for a family from the prefetched bulk map.
+
+            No HTTP calls — all data comes from the prefetched vrrp_by_family map.
+            Families not in the map (or when map is empty due to prefetch failure)
+            return [] gracefully.
+            """
+            return vrrp_by_family.get(family_id, [])
 
         # Build response per unit
         enriched_units = []
