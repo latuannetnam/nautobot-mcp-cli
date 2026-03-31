@@ -116,7 +116,7 @@
 ### v1.10 CMS N+1 Query Elimination (PLANNING)
 
 - [ ] Phase 35: `interface_detail` N+1 Fix
-  - [ ] Plan 01: Eliminate per-unit family refetch (bulk families → lookup map)
+  - [x] Plan 01: Eliminate per-unit family refetch (bulk families → lookup map) — `598284a`
   - [ ] Plan 02: Eliminate per-family VRRP loop (bulk VRRP → lookup map)
   - [ ] Plan 03: Unit tests for `interface_detail` bulk lookup invariants
 - [ ] Phase 36: `firewall_summary` Detail N+1 Fix
@@ -134,4 +134,4 @@
 ### Next Milestone: v2.0 (TBD)
 
 ---
-*Last updated: 2026-03-31 — v1.10 milestone roadmap defined*
+*Last updated: 2026-03-31 — Phase 35 Plan 01 complete; 63/63 plans total (all milestone plans done)*
