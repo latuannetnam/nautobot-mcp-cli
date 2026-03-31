@@ -129,7 +129,7 @@
   - [x] Plan 03: Unit tests for routing/bgp bulk lookup invariants — `145f2c5`
 - [x] Phase 38: Regression Gate (SHIPPED 2026-03-31)
   - [x] Plan 01: `uat_cms_smoke.py` — all 5 workflows pass within thresholds on HQV-PE1-NEW — 5/5 PASS, exit 0
-  - [x] Plan 02: Full unit test suite — 546/546 unit tests pass; 10 pre-existing UAT fixture errors (scripts/uat_smoke_test.py, requires live server)
+  - [x] Plan 02: Full unit test suite — 546/546 unit tests pass, 0 failed, 0 errored; 10 pre-existing UAT fixture errors (scripts/uat_smoke_test.py, requires live server)
 
 ### Next Milestone: v2.0 (TBD)
 
