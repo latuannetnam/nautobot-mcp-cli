@@ -123,10 +123,10 @@
   - [x] Plan 01: Eliminate per-filter term refetch (bulk terms → lookup map)
   - [x] Plan 02: Eliminate per-term action refetch (bulk actions → lookup map)
   - [x] Plan 03: Unit tests — 8 new tests in `test_cms_firewalls_n1.py` — `683ff5c`
-- [ ] Phase 37: `routing_table` + `bgp_summary` N+1 Fixes
+- [x] Phase 37: `routing_table` + `bgp_summary` N+1 Fixes (COMPLETED 2026-03-31)
   - [x] Plan 01: Remove per-route nexthop fallback loop in `routing_table` — `d93a84a`
   - [x] Plan 02: Document `bgp_summary` triple-guard rationale (CQP-04) — `5d0fb16`
-  - [ ] Plan 03: Unit tests for routing/bgp bulk lookup invariants
+  - [x] Plan 03: Unit tests for routing/bgp bulk lookup invariants — `145f2c5`
 - [ ] Phase 38: Regression Gate
   - [ ] Plan 01: `uat_cms_smoke.py` — all 5 workflows pass within thresholds on HQV-PE1
   - [ ] Plan 02: Full unit test suite passes — no regression
@@ -134,4 +134,4 @@
 ### Next Milestone: v2.0 (TBD)
 
 ---
-*Last updated: 2026-03-31 — Phase 37 Plan 02 SHIPPED (5d0fb16); Phase 37 Plan 03 next; 70/70 plans total*
+*Last updated: 2026-03-31 — Phase 37 COMPLETE (3/3 plans shipped); Phase 38 next; 73/72 plans total*
