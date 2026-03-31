@@ -684,14 +684,22 @@ def get_interface_detail(
         units_resp = list_interface_units(client, device=device, limit=0)
         units = units_resp.results
 
-        # Pre-fetch all families per unit. Keep VRRP lookup cached per-family
-        # to avoid duplicate calls across units while preserving behavior.
-        unit_families: dict[str, list] = {}
-        for unit in units:
-            families = list_interface_families(client, unit_id=unit.id, limit=0)
-            unit_families[unit.id] = families.results
+        # Resolve device_id once for the bulk family prefetch.
+        device_id = resolve_device_id(client, device)
 
-        vrrp_by_family: dict[str, list] = {}
+        # Bulk-fetch all families for the device in a single HTTP call,
+        # then index by unit_id.  Replaces the per-unit N+1 loop (old L690-692).
+        vrrp_by_family: dict[str, list[VRRPGroupSummary]] = {}
+        all_families_resp = cms_list(
+            client,
+            "juniper_interface_families",
+            InterfaceFamilySummary,
+            device=device_id,
+            limit=0,
+        )
+        unit_families: dict[str, list[InterfaceFamilySummary]] = {}
+        for fam in all_families_resp.results:
+            unit_families.setdefault(fam.unit_id, []).append(fam)
 
         def _get_vrrp_for_family(family_id: str) -> list:
             if family_id in vrrp_by_family:
