@@ -303,3 +303,47 @@ Deferred to future release.
 ---
 *Requirements defined: 2026-03-28*
 *Last updated: 2026-03-30 after v1.8 milestone kickoff*
+
+## v1.10 Requirements
+
+### CMS-Query-Performance (CQP)
+
+- [ ] **CQP-01**: `get_interface_detail` makes ≤3 HTTP calls regardless of device unit count (1 bulk families, 1 bulk VRRP, 1 bulk units) — eliminates per-unit family refetch N+1
+- [ ] **CQP-02**: `get_device_firewall_summary` with `detail=True` makes ≤6 HTTP calls regardless of filter/policer count — eliminates per-filter/policer loop N+1
+- [ ] **CQP-03**: `get_device_routing_table` removes per-route nexthop fallback loop; bulk nexthop map is considered complete
+- [ ] **CQP-04**: `get_device_bgp_summary` guards per-neighbor AF/policy fallback behind `len(af_by_nbr) > 0` and `len(policy_by_nbr) > 0` checks
+- [ ] **CQP-05**: All N+1 fixes preserve existing `WarningCollector` partial-failure behavior
+
+### Regression-Gate (RGP)
+
+- [ ] **RGP-01**: `uat_cms_smoke.py` validates all 5 workflows pass within thresholds on HQV-PE1 (all: <60s)
+- [ ] **RGP-02**: All existing unit tests continue to pass — no regression from refactored code paths
+
+## Out of Scope (v1.10)
+
+| Feature | Reason |
+|---------|--------|
+| Global (non-device-scoped) bulk fetches | AF/policy endpoints timeout at >60s globally |
+| Remove all fallback patterns entirely | Tests and real environments differ |
+| asyncio/httpx/aiohttp rewrite | Full async rewrite; codebase committed to sync |
+
+## Traceability (v1.10)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| CQP-01 | Phase 35 | Pending |
+| CQP-02 | Phase 36 | Pending |
+| CQP-03 | Phase 37 | Pending |
+| CQP-04 | Phase 37 | Pending |
+| CQP-05 | Phase 35 | Pending |
+| RGP-01 | Phase 38 | Pending |
+| RGP-02 | Phase 38 | Pending |
+
+**Coverage:**
+- v1.10 requirements: 7 total
+- Mapped to phases: 0 (roadmap pending)
+- Unmapped: 0 ✓
+
+---
+*Last updated: 2026-03-31 after v1.10 milestone kickoff*
+
