@@ -15,7 +15,7 @@
 - ✅ **v1.7 URI Limit & Server Resilience** — Phases 30-32 (shipped 2026-03-29) — [Archive](milestones/v1.7-ROADMAP.md)
 - ✅ **v1.8 CMS Pagination Fix** — Phase 33 (shipped 2026-03-30) — [Archive](milestones/v1.8-ROADMAP.md)
 - ✅ **v1.9 CMS Performance Fix** — Phase 34 (shipped 2026-03-30) — [Archive](milestones/v1.9-ROADMAP.md)
-- 🚧 **v1.10 CMS N+1 Query Elimination** — Phases 35-38 (planning) — [Roadmap](milestones/v1.10-ROADMAP.md)
+- 🚧 **v1.10 CMS N+1 Query Elimination** — Phases 35-38 (Phase 35 shipped, 36-38 planning) — [Roadmap](milestones/v1.10-ROADMAP.md)
 
 ## Phases
 
