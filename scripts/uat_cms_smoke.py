@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""CMS Data Presence Smoke Test — HQV-PE1-NEW (Prod).
+"""CMS Data Presence Smoke Test.
 
-UAT Layer 1: Verify CMS plugin has JunOS data stored for HQV-PE1-NEW.
+UAT Layer 1: Verify CMS plugin has JunOS data stored for a given device.
 Uses `uv run nautobot-mcp --json ...` subprocess calls against the prod profile.
 
 Usage:
-  uv run python scripts/uat_cms_smoke.py
-  NAUTOBOT_URL=https://nautobot.netnam.vn NAUTOBOT_TOKEN=xxx uv run python scripts/uat_cms_smoke.py
+  uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW
+  uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW --profile dev
+  NAUTOBOT_URL=https://nautobot.netnam.vn NAUTOBOT_TOKEN=xxx uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW
 
 Exit codes:
   0 — all workflows passed
@@ -14,11 +15,13 @@ Exit codes:
 """
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 # HTTP call counter — instruments pynautobot Request._make_call
 _http_call_counts: dict[str, int] = {}
@@ -60,7 +63,82 @@ def _get_counts() -> dict[str, int]:
     return snap
 
 PROFILE = "prod"
-DEVICE = "HQV-PE1-NEW"
+DEVICE = "UNSET"  # overwritten by _parse_args() / CLI arg
+
+
+def _build_workflows() -> list[dict]:
+    """Build WORKFLOWS list after DEVICE is set by _parse_args()."""
+    return [
+        {
+            "id": "bgp_summary",
+            "name": "BGP Summary",
+            "cmd": [
+                "uv", "run", "nautobot-mcp", "--json",
+                "cms", "routing", "bgp-summary",
+                "--device", DEVICE,
+            ],
+        },
+        {
+            "id": "routing_table",
+            "name": "Routing Table",
+            "cmd": [
+                "uv", "run", "nautobot-mcp", "--json",
+                "cms", "routing", "routing-table",
+                "--device", DEVICE,
+            ],
+        },
+        {
+            "id": "firewall_summary",
+            "name": "Firewall Summary",
+            "cmd": [
+                "uv", "run", "nautobot-mcp", "--json",
+                "cms", "firewalls", "firewall-summary",
+                "--device", DEVICE,
+            ],
+        },
+        {
+            "id": "interface_detail",
+            "name": "Interface Detail",
+            "cmd": [
+                "uv", "run", "nautobot-mcp", "--json",
+                "cms", "interfaces", "detail",
+                "--device", DEVICE,
+            ],
+        },
+        {
+            "id": "devices_inventory",
+            "name": "Devices Inventory",
+            "cmd": [
+                "uv", "run", "nautobot-mcp", "--json",
+                "devices", "inventory",
+                DEVICE,
+            ],
+        },
+    ]
+
+
+def _parse_args() -> str:
+    parser = argparse.ArgumentParser(
+        description="CMS Data Presence Smoke Test",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW\n"
+            "  uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW --profile dev\n"
+        ),
+    )
+    parser.add_argument("device", help="Device name to test")
+    parser.add_argument(
+        "--profile",
+        default="prod",
+        help="Nautobot profile (default: prod)",
+    )
+    args = parser.parse_args()
+    # Patch globals so sub-functions see DEVICE and PROFILE
+    global DEVICE, PROFILE  # noqa: PLW0603
+    DEVICE = args.device
+    PROFILE = args.profile
+    return args.device
 
 WORKFLOWS = [
     {
@@ -153,6 +231,7 @@ def run_workflow(workflow: dict) -> WorkflowResult:
             capture_output=True,
             text=True,
             timeout=120,
+            cwd=str(Path(__file__).resolve().parent.parent),
         )
         elapsed_ms = round((time.monotonic() - t0) * 1000, 1)
 
@@ -280,13 +359,15 @@ def print_results(results: list[WorkflowResult], total_ms: float) -> None:
 
 
 def main() -> int:
-    print(f"Starting CMS smoke UAT for device '{DEVICE}' on profile '{PROFILE}'...")
-    print(f"Target: prod (https://nautobot.netnam.vn)\n")
+    device = _parse_args()
+    workflows = _build_workflows()
+    print(f"Starting CMS smoke UAT for device '{device}' on profile '{PROFILE}'...")
+    print(f"Target: {PROFILE} (profile)\n")
 
     results: list[WorkflowResult] = []
     t0 = time.monotonic()
 
-    for workflow in WORKFLOWS:
+    for workflow in workflows:
         r = run_workflow(workflow)
         results.append(r)
 
