@@ -8,7 +8,7 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.10 CMS N+1 Query Elimination (Phase 37 complete, Phase 38 next)
+## Current Milestone: v1.10 CMS N+1 Query Elimination (Phases 35-38 complete — SHIPPED 2026-03-31)
 
 **Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only) → v1.6 Query Performance (2026-03-28) → v1.7 URI Limit & Server Resilience (2026-03-29) → v1.8 CMS Pagination Fix (2026-03-30) → v1.9 CMS Performance Fix (2026-03-30) → **v1.10 (planning)**
 
