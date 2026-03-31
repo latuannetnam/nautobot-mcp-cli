@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.10
 milestone_name: CMS N+1 Query Elimination
-status: Phase 37 context gathered; ready to plan
-last_updated: "2026-03-31T08:45:00.000Z"
-last_activity: 2026-03-31
+status: executing
+last_updated: "2026-03-31T09:05:00.000Z"
+last_activity: 2026-03-31 -- Phase 37 Plan 01 SHIPPED (d93a84a)
 progress:
-  total_phases: 30
+  total_phases: 31
   completed_phases: 26
-  total_plans: 63
-  completed_plans: 68
+  total_plans: 69
+  completed_plans: 69
 ---
 
 # Project State: nautobot-mcp-cli
@@ -19,14 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** AI agents can discover, read, write, and orchestrate Nautobot data through 3 tools instead of 165
-**Current focus:** Phase 37 — routing_table + bgp_summary N+1 Fixes
+**Current focus:** Phase 37 — routing-table-bgp-n1-fixes
 
 ## Current Position
 
-Phase: 37
-Plan: Not started
-Status: Phase 37 context gathered; ready to plan
-Last activity: 2026-03-31
+Phase: 37 (routing-table-bgp-n1-fixes) — EXECUTING
+Plan: 2 of 3 (Plan 01 SHIPPED d93a84a — routing N+1 loop removed)
+Status: Executing Phase 37 Plan 02
+Last activity: 2026-03-31 -- Phase 37 Plan 01 SHIPPED (d93a84a)
 
 ## Phase Plan
 
@@ -98,9 +98,11 @@ None.
 - ✅ Phase 36 COMPLETE: Plans 01+02 refactored bulk prefetch; Plan 03 added 8 unit tests in `test_cms_firewalls_n1.py`
 
 **Phase 37 success criteria (routing_table + bgp_summary fixes):**
+
 - `get_device_routing_table()` makes ≤3 HTTP calls: routes list + 2 bulk nexthop fetches (no per-route fallback)
 - Nexthop bulk fetch failure → silent graceful degradation (empty dict); WarningCollector for critical paths
 - Per-route fallback loop removed (L96-120 in `list_static_routes`); test mocks updated to include bulk data
+- ✅ Plan 01 SHIPPED (d93a84a): N+1 loop deleted; inline assignment in bulk block; routing tests updated
 - `get_device_bgp_summary()` existing guards sufficient (no code changes needed for CQP-04)
 - `tests/test_cms_routing_n1.py` added covering both routing and BGP N+1 invariants
 - All Phase 37 tests pass

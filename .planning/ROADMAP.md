@@ -124,7 +124,7 @@
   - [x] Plan 02: Eliminate per-term action refetch (bulk actions → lookup map)
   - [x] Plan 03: Unit tests — 8 new tests in `test_cms_firewalls_n1.py` — `683ff5c`
 - [ ] Phase 37: `routing_table` + `bgp_summary` N+1 Fixes
-  - [ ] Plan 01: Remove per-route nexthop fallback loop in `routing_table`
+  - [x] Plan 01: Remove per-route nexthop fallback loop in `routing_table` — `d93a84a`
   - [ ] Plan 02: Harden `bgp_summary` neighbor AF/policy guards
   - [ ] Plan 03: Unit tests for routing/bgp bulk lookup invariants
 - [ ] Phase 38: Regression Gate
