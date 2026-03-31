@@ -115,10 +115,10 @@
 
 ### v1.10 CMS N+1 Query Elimination (PLANNING)
 
-- [ ] Phase 35: `interface_detail` N+1 Fix
+- [x] Phase 35: `interface_detail` N+1 Fix
   - [x] Plan 01: Eliminate per-unit family refetch (bulk families → lookup map) — `598284a`
   - [x] Plan 02: Eliminate per-family VRRP loop (bulk VRRP → lookup map) — `749c508`
-  - [ ] Plan 03: Unit tests for `interface_detail` bulk lookup invariants
+  - [x] Plan 03: Unit tests — 8 new tests in `test_cms_interfaces_n1.py` — `a4d1611`
 - [ ] Phase 36: `firewall_summary` Detail N+1 Fix
   - [ ] Plan 01: Eliminate per-filter term refetch (bulk terms → lookup map)
   - [ ] Plan 02: Eliminate per-term action refetch (bulk actions → lookup map)
@@ -134,4 +134,4 @@
 ### Next Milestone: v2.0 (TBD)
 
 ---
-*Last updated: 2026-03-31 — Phase 35 Plan 01 complete; 63/63 plans total (all milestone plans done)*
+*Last updated: 2026-03-31 — Phase 35 COMPLETE; Phase 36 next; 66/66 plans total*
