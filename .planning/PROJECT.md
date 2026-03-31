@@ -8,9 +8,9 @@ An MCP server, CLI tool, and agent skills library that enables AI agents to inte
 
 AI agents can discover, read, write, and orchestrate all Nautobot data through 3 tools instead of 165, eliminating context window bloat while preserving full functional coverage — including Juniper CMS model records, file-free drift comparison, and composite workflows for common network automation tasks.
 
-## Current Milestone: v1.9 CMS Performance Fix (SHIPPED 2026-03-30)
+## Current Milestone: v1.10 CMS N+1 Query Elimination (PLANNING)
 
-**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only) → v1.6 Query Performance (2026-03-28) → v1.7 URI Limit & Server Resilience (2026-03-29) → v1.8 CMS Pagination Fix (2026-03-30) → **v1.9 (planning)**
+**Previous milestones:** v1.0 MVP (2026-03-18) → v1.1 Agent-Native (2026-03-20) → v1.2 Juniper CMS (2026-03-21) → v1.3 API Bridge (2026-03-25) → v1.4 Operational Robustness (2026-03-26) → v1.5 Agent Performance & Quality (2026-03-28 — scope only) → v1.6 Query Performance (2026-03-28) → v1.7 URI Limit & Server Resilience (2026-03-29) → v1.8 CMS Pagination Fix (2026-03-30) → v1.9 CMS Performance Fix (2026-03-30) → **v1.10 (planning)**
 
 ## Requirements
 
@@ -52,7 +52,7 @@ AI agents can discover, read, write, and orchestrate all Nautobot data through 3
 ### Active
 
 - [ ] v1.5 requirements: ENV-01..ENV-05 (Contract & Envelope), BAT-01..BAT-05 (Batch), PRT-01..PRT-06 (Projection), SEC-01..SEC-06 (Security), KPI-01..KPI-04 (KPI Benchmarks) — all planned for v1.5 but not built; deferred to future milestone
-- [ ] v1.8 CMS Pagination Fix: Fix N+1 pynautobot pagination in CMS composite functions; smart page-size override for slow endpoints; prevent regression via UAT — shipped v1.8 Phase 33
+- [ ] v1.10 CMS N+1 Query Elimination: Fix N+1 patterns in CMS composite workflows; all 5 smoke test workflows pass within thresholds on HQV-PE1
 
 ### Validated (v1.6 — Query Performance)
 
@@ -185,7 +185,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after v1.9 CMS Performance Fix shipped*
+*Last updated: 2026-03-31 after v1.10 milestone started*
 
 ### Validated (v1.9 — CMS Performance Fix)
 
