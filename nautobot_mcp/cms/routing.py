@@ -652,6 +652,15 @@ def get_device_bgp_summary(
         # Without this guard, both endpoints cause 60s+ timeouts even at limit=1
         # (unindexed global scans on the Nautobot CMS plugin). HQV-PE1-NEW has
         # 0 BGP groups so these fetches serve no purpose in the default path.
+        #
+        # CQP-04: Per-neighbor AF/policy fallback is gated by a triple guard:
+        #   (a) bulk returned no results for this neighbor   [not fam_list / not pol_list]
+        #   (b) the bulk fetch itself did not error           [not *_bulk_failed]
+        #   (c) the bulk results contain usable neighbor_id keys [af_keyed_usable / pol_keyed_usable]
+        # When all three hold AND bulk IS keyed, the fallback fires (per-neighbor fetch).
+        # When af_keyed_usable is False (bulk has no matching neighbor_id keys),
+        # the fallback is suppressed — avoids per-neighbor calls on unkeyed test data.
+        # This matches Phase 35 VRRP graceful-degradation guard pattern.
         af_by_nbr: dict = {}
         pol_by_nbr: dict = {}
         all_afs_results: list = []
@@ -705,6 +714,7 @@ def get_device_bgp_summary(
                         pol_list = all_pols_results
 
                     # Fallback per-neighbor only when bulk side produced no usable data and didn't fail.
+                    # Triple guard: (a) no bulk data for this neighbor, (b) no bulk failure, (c) keyed usable
                     if not fam_list and not af_bulk_failed and af_keyed_usable:
                         try:
                             fam_resp = list_bgp_address_families(client, neighbor_id=nbr.id, limit=0)
@@ -712,6 +722,7 @@ def get_device_bgp_summary(
                         except Exception as e:
                             collector.add("list_bgp_address_families", str(e))
                             fam_list = []
+                    # Triple guard: (a) no bulk data for this neighbor, (b) no bulk failure, (c) keyed usable
                     if not pol_list and not pol_bulk_failed and pol_keyed_usable:
                         try:
                             pol_resp = list_bgp_policy_associations(client, neighbor_id=nbr.id, limit=0)
