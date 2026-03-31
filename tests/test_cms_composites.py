@@ -363,23 +363,36 @@ def test_firewall_summary_default():
 
 
 def test_firewall_summary_detail():
-    """get_device_firewall_summary(detail=True): filters include inlined terms."""
+    """get_device_firewall_summary(detail=True): filters include inlined terms via bulk prefetch."""
     from nautobot_mcp.cms.firewalls import get_device_firewall_summary
+    from nautobot_mcp.cms.firewalls import cms_list
 
     client = _mock_client()
     fw_filter = _mock_fw_filter()
     policer = _mock_fw_policer()
 
     term = MagicMock()
+    term.filter_id = "flt-001"
     term.model_dump.return_value = {"id": "term-001", "name": "accept-mgmt", "match_count": 1, "action_count": 1}
 
     pa_action = MagicMock()
+    pa_action.policer_id = "pol-001"
     pa_action.model_dump.return_value = {"id": "pa-001", "action_type": "policer"}
+
+    # Plan 01 bulk prefetch: detail=True calls cms_list(..., device=device_id) directly
+    mock_terms_resp = _mock_list_response(term)
+    mock_actions_resp = _mock_list_response(pa_action)
+
+    def cms_list_side_effect(client_, endpoint, model, **kwargs):
+        if endpoint == "juniper_firewall_terms":
+            return mock_terms_resp
+        if endpoint == "juniper_firewall_policer_actions":
+            return mock_actions_resp
+        raise RuntimeError(f"unexpected endpoint: {endpoint}")
 
     with patch("nautobot_mcp.cms.firewalls.list_firewall_filters", return_value=_mock_list_response(fw_filter)), \
          patch("nautobot_mcp.cms.firewalls.list_firewall_policers", return_value=_mock_list_response(policer)), \
-         patch("nautobot_mcp.cms.firewalls.list_firewall_terms", return_value=_mock_list_response(term)) as mock_terms, \
-         patch("nautobot_mcp.cms.firewalls.list_firewall_policer_actions", return_value=_mock_list_response(pa_action)) as mock_actions:
+         patch("nautobot_mcp.cms.firewalls.cms_list", side_effect=cms_list_side_effect):
         result, warnings = get_device_firewall_summary(client, device="fw-01", detail=True)
 
     assert result.total_filters == 1
@@ -388,8 +401,6 @@ def test_firewall_summary_detail():
     assert result.filters[0]["terms"][0]["name"] == "accept-mgmt"
     assert "actions" in result.policers[0]
     assert warnings == []
-    mock_terms.assert_called_once_with(client, filter_id="flt-001", limit=0)
-    mock_actions.assert_called_once_with(client, policer_id="pol-001", limit=0)
 
 
 # ---------------------------------------------------------------------------
@@ -486,17 +497,28 @@ def test_firewall_summary_both_fail_raises():
 def test_firewall_summary_detail_term_enrichment_failure():
     """get_device_firewall_summary(detail=True): term enrichment failure → warning, filter still returned."""
     from nautobot_mcp.cms.firewalls import get_device_firewall_summary
+    from nautobot_mcp.cms.firewalls import cms_list
 
     client = _mock_client()
     fw_filter = _mock_fw_filter()
     policer = _mock_fw_policer()
     pa_action = MagicMock()
+    pa_action.policer_id = "pol-001"
     pa_action.model_dump.return_value = {"id": "pa-001"}
+
+    mock_actions_resp = _mock_list_response(pa_action)
+
+    def cms_list_side_effect(client_, endpoint, model, **kwargs):
+        # Terms fail with RuntimeError → captured by WarningCollector
+        if endpoint == "juniper_firewall_terms":
+            raise RuntimeError("term timeout")
+        if endpoint == "juniper_firewall_policer_actions":
+            return mock_actions_resp
+        raise RuntimeError(f"unexpected endpoint: {endpoint}")
 
     with patch("nautobot_mcp.cms.firewalls.list_firewall_filters", return_value=_mock_list_response(fw_filter)), \
          patch("nautobot_mcp.cms.firewalls.list_firewall_policers", return_value=_mock_list_response(policer)), \
-         patch("nautobot_mcp.cms.firewalls.list_firewall_terms", side_effect=RuntimeError("term timeout")), \
-         patch("nautobot_mcp.cms.firewalls.list_firewall_policer_actions", return_value=_mock_list_response(pa_action)):
+         patch("nautobot_mcp.cms.firewalls.cms_list", side_effect=cms_list_side_effect):
         result, warnings = get_device_firewall_summary(client, device="fw-01", detail=True)
 
     assert result.total_filters == 1
@@ -505,7 +527,7 @@ def test_firewall_summary_detail_term_enrichment_failure():
     # policer actions succeeded
     assert len(result.policers[0]["actions"]) == 1
     assert len(warnings) == 1
-    assert "list_firewall_terms" in warnings[0]["operation"]
+    assert warnings[0]["operation"] == "bulk_terms_fetch"
 
 
 def test_interface_detail_vrrp_enrichment_failure():
