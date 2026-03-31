@@ -19,7 +19,7 @@
 ### Regression-Gate (RGP)
 
 - [x] **RGP-01**: `uat_cms_smoke.py` validates all 5 workflows pass within thresholds on HQV-PE1 (all: <60s)
-- [ ] **RGP-02**: All existing unit tests continue to pass — no regression from refactored code paths
+- [x] **RGP-02**: All existing unit tests continue to pass — no regression from refactored code paths
 
 ## Out of Scope (v1.10)
 
@@ -39,7 +39,7 @@
 | CQP-04 | Phase 37 | Done |
 | CQP-05 | Phase 35 | Done |
 | RGP-01 | Phase 38 | Done |
-| RGP-02 | Phase 38 | Pending |
+| RGP-02 | Phase 38 | Done |
 
 **Coverage:**
 - v1.10 requirements: 7 total — Phases 35-38 (roadmap defined)
