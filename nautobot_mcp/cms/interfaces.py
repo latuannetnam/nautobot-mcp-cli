@@ -65,24 +65,31 @@ def list_interface_units(
                         limit=limit, offset=offset, device=device_id)
 
         if units.results:
-            # Batch-fetch all families for all units on this device to compute family_count
+            # Batch-fetch families in chunks using interface_unit IDs.
+            # juniper_interface_families does NOT support the `device` filter (400 error).
+            # We extract unit IDs from the already-fetched units list and make ceil(N/50)
+            # bulk calls — bounded by unit count, not N×1 per-unit loops.
+            unit_ids = [u.id for u in units.results]
+            family_count_by_unit: dict[str, int] = {}
+            _FAMILY_CHUNK_SIZE = 50  # unit IDs per family-bulk call
             try:
-                all_families = cms_list(
-                    client,
-                    "juniper_interface_families",
-                    InterfaceFamilySummary,
-                    limit=0,
-                    device=device_id,
-                )
-                # Build lookup: unit_id → family_count
-                family_count_by_unit: dict[str, int] = {}
-                for fam in all_families.results:
-                    family_count_by_unit[fam.unit_id] = family_count_by_unit.get(fam.unit_id, 0) + 1
-
+                for i in range(0, len(unit_ids), _FAMILY_CHUNK_SIZE):
+                    chunk = unit_ids[i:i + _FAMILY_CHUNK_SIZE]
+                    chunk_resp = cms_list(
+                        client,
+                        "juniper_interface_families",
+                        InterfaceFamilySummary,
+                        limit=0,
+                        interface_unit=chunk,  # comma-separated UUID list → N/50 calls
+                    )
+                    for fam in chunk_resp.results:
+                        family_count_by_unit[fam.unit_id] = (
+                            family_count_by_unit.get(fam.unit_id, 0) + 1
+                        )
                 for unit in units.results:
                     unit.family_count = family_count_by_unit.get(unit.id, 0)
             except Exception:
-                # If batch fetch fails, leave family_count as 0
+                # If chunked prefetch fails, leave family_count as 0 (graceful degradation)
                 pass
 
         return ListResponse(count=len(units.results), results=units.results)

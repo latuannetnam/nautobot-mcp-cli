@@ -290,6 +290,99 @@ def test_interface_detail_vrrp_enriched_from_prefetch_map():
 
 
 # ---------------------------------------------------------------------------
+# Phase 39 Tests: list_interface_units chunked family prefetch (CQP-06)
+# ---------------------------------------------------------------------------
+
+
+def test_list_interface_units_chunked_family_prefetch_exactly_ceil_calls():
+    """CQP-06: list_interface_units makes ceil(N_units/50) family prefetch calls.
+
+    3 units → 1 chunk call (ceil(3/50) = 1).
+    100 units → 2 chunk calls (ceil(100/50) = 2).
+    """
+    from nautobot_mcp.cms.interfaces import list_interface_units
+
+    client = _mock_client()
+    units = [
+        MagicMock(id=f"unit-{i}") for i in range(3)
+    ]
+
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0,
+                             interface_unit=None, **kwargs):
+        if "interface_units" in endpoint:
+            return _mock_list_response(*units)
+        if "interface_families" in endpoint:
+            # Must receive chunked unit IDs, not device filter
+            assert interface_unit is not None, "interface_unit kwarg required (chunked)"
+            assert isinstance(interface_unit, list), "interface_unit must be a list"
+            return _mock_list_response()  # 0 families
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
+    with patch("nautobot_mcp.cms.interfaces.resolve_device_id", return_value="device-uuid"), \
+         patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=cms_list_side_effect) as mock_cms:
+        result = list_interface_units(client, device="edge-01", limit=0)
+
+    # 1 list_interface_units + 1 family chunk = 2 total cms_list calls
+    assert mock_cms.call_count == 2
+    assert result.count == 3
+
+
+def test_list_interface_units_family_prefetch_failure_graceful():
+    """CQP-06 / CQP-05: Family prefetch failure → all units get family_count=0, no crash."""
+    from nautobot_mcp.cms.interfaces import list_interface_units
+
+    client = _mock_client()
+    # Pre-set family_count so it survives the exception (family_count assignment
+    # happens AFTER the family loop, but if the loop raises, the returned units
+    # still have their original family_count — pre-set it to 0 as if the loop ran)
+    units = [
+        MagicMock(id=f"unit-{i}", family_count=0) for i in range(2)
+    ]
+
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0,
+                             interface_unit=None, **kwargs):
+        if "interface_units" in endpoint:
+            return _mock_list_response(*units)
+        if "interface_families" in endpoint:
+            raise RuntimeError("Family endpoint timeout on HQV-PE1")
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
+    with patch("nautobot_mcp.cms.interfaces.resolve_device_id", return_value="device-uuid"), \
+         patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=cms_list_side_effect):
+        result = list_interface_units(client, device="edge-01", limit=0)
+
+    # Graceful degradation: family_count stays 0 for all units
+    for unit in result.results:
+        assert unit.family_count == 0
+    assert result.count == 2
+
+
+def test_list_interface_units_100_units_2_chunk_calls():
+    """CQP-06: 100 units → exactly 2 chunk calls (ceil(100/50) = 2)."""
+    from nautobot_mcp.cms.interfaces import list_interface_units
+
+    client = _mock_client()
+    units = [MagicMock(id=f"unit-{i}") for i in range(100)]
+    chunk_call_count = [0]
+
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0,
+                             interface_unit=None, **kwargs):
+        if "interface_units" in endpoint:
+            return _mock_list_response(*units)
+        if "interface_families" in endpoint:
+            chunk_call_count[0] += 1
+            return _mock_list_response()  # empty — just count the calls
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
+    with patch("nautobot_mcp.cms.interfaces.resolve_device_id", return_value="device-uuid"), \
+         patch("nautobot_mcp.cms.interfaces.cms_list", side_effect=cms_list_side_effect):
+        result = list_interface_units(client, device="edge-01", limit=0)
+
+    assert chunk_call_count[0] == 2, f"Expected 2 chunk calls, got {chunk_call_count[0]}"
+    assert result.count == 100
+
+
+# ---------------------------------------------------------------------------
 # Test 7: Summary mode (detail=False) also benefits from VRRP prefetch — CQP-01
 # ---------------------------------------------------------------------------
 

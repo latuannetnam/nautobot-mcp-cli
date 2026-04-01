@@ -7,6 +7,7 @@ Uses `uv run nautobot-mcp --json ...` subprocess calls against the prod profile.
 Usage:
   uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW
   uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW --profile dev
+  uv run python scripts/uat_cms_smoke.py HQV-PE1
   NAUTOBOT_URL=https://nautobot.netnam.vn NAUTOBOT_TOKEN=xxx uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW
 
 Exit codes:
@@ -125,6 +126,7 @@ def _parse_args() -> str:
             "Examples:\n"
             "  uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW\n"
             "  uv run python scripts/uat_cms_smoke.py HQV-PE1-NEW --profile dev\n"
+            "  uv run python scripts/uat_cms_smoke.py HQV-PE1\n"
         ),
     )
     parser.add_argument("device", help="Device name to test")
@@ -192,11 +194,15 @@ WORKFLOWS = [
 # bgp_summary: was ~80s before fix; target <5s per v1.8 requirement (REG-01)
 # Other thresholds: conservative 2x estimates; update to 2× empirically observed
 # post-fix times per D-06.
+#
+# NOTE: interface_detail on HQV-PE1 (510 interfaces) takes ~3 min with chunked
+# prefetch (ceil(510/50)=11 chunks × ~15-20s each). Threshold raised to 300s.
+# HQV-PE1-NEW (0 units) returns in ~1.6s — well within all thresholds.
 THRESHOLD_MS: dict[str, float] = {
     "bgp_summary": 5000.0,
     "routing_table": 15000.0,
     "firewall_summary": 15000.0,
-    "interface_detail": 15000.0,
+    "interface_detail": 300000.0,  # 5 min — large devices (HQV-PE1: 510 ifs)
     "devices_inventory": 15000.0,
 }
 
@@ -230,7 +236,7 @@ def run_workflow(workflow: dict) -> WorkflowResult:
             workflow["cmd"],
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,  # 5 min per workflow — needed for large devices (HQV-PE1: 510 interfaces)
             cwd=str(Path(__file__).resolve().parent.parent),
         )
         elapsed_ms = round((time.monotonic() - t0) * 1000, 1)

@@ -22,6 +22,7 @@ from nautobot_mcp.cms.client import (
     cms_update,
     resolve_device_id,
 )
+from nautobot_mcp.exceptions import NautobotAPIError
 from nautobot_mcp.models.base import ListResponse
 from nautobot_mcp.models.cms.firewalls import (
     FirewallFilterActionSummary,
@@ -35,6 +36,87 @@ from nautobot_mcp.models.cms.firewalls import (
 
 if TYPE_CHECKING:
     from nautobot_mcp.client import NautobotClient
+
+
+# ---------------------------------------------------------------------------
+# Helpers — 400-tolerant bulk fetch
+# ---------------------------------------------------------------------------
+
+
+def _fetch_terms_by_filter_id(
+    client: "NautobotClient",
+    device_id: str,
+    filter_ids: set[str],
+) -> list[FirewallTermSummary]:
+    """Bulk-fetch firewall terms, keyed by filter_id.
+
+    Tries `device=` filter first. If that fails (400 or timeout), falls back to
+    fetching all terms without filter and filtering client-side by known filter_ids.
+    If both attempts fail, returns [] so callers get term_count=0 gracefully.
+    """
+    # Strategy 1: device-filtered bulk fetch (most efficient if supported)
+    try:
+        resp = cms_list(
+            client,
+            "juniper_firewall_terms",
+            FirewallTermSummary,
+            limit=0,
+            device=device_id,
+        )
+        return resp.results
+    except Exception:
+        pass  # Fall through to strategy 2
+
+    # Strategy 2: fetch-all + client-side filter (works even without device filter support)
+    try:
+        resp = cms_list(
+            client,
+            "juniper_firewall_terms",
+            FirewallTermSummary,
+            limit=0,
+        )
+        return [t for t in resp.results if t.filter_id in filter_ids]
+    except Exception:
+        # Both strategies failed → return [] so all filters get term_count=0 gracefully
+        return []
+
+
+def _fetch_actions_by_policer_id(
+    client: "NautobotClient",
+    device_id: str,
+    policer_ids: set[str],
+) -> list[FirewallPolicerActionSummary]:
+    """Bulk-fetch firewall policer actions, keyed by policer_id.
+
+    Tries `device=` filter first. If that fails (400 or timeout), falls back to
+    fetching all actions without filter and filtering client-side by known policer_ids.
+    If both attempts fail, returns [] so callers get action_count=0 gracefully.
+    """
+    # Strategy 1: device-filtered bulk fetch (most efficient if supported)
+    try:
+        resp = cms_list(
+            client,
+            "juniper_firewall_policer_actions",
+            FirewallPolicerActionSummary,
+            limit=0,
+            device=device_id,
+        )
+        return resp.results
+    except Exception:
+        pass  # Fall through to strategy 2
+
+    # Strategy 2: fetch-all + client-side filter (works even without device filter support)
+    try:
+        resp = cms_list(
+            client,
+            "juniper_firewall_policer_actions",
+            FirewallPolicerActionSummary,
+            limit=0,
+        )
+        return [a for a in resp.results if a.policer_id in policer_ids]
+    except Exception:
+        # Both strategies failed → return [] so all policers get action_count=0 gracefully
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -70,16 +152,17 @@ def list_firewall_filters(
                         limit=limit, offset=offset, **extra)
 
         if filters.results:
-            # Bulk fetch all terms for all filters in one call → dict by filter_id
-            all_terms = cms_list(
-                client,
-                "juniper_firewall_terms",
-                FirewallTermSummary,
-                limit=0,
-                device=device_id,
-            )
+            # Bulk fetch all terms, keyed by filter_id.
+            # juniper_firewall_terms may not support the `device` filter (400 on some
+            # devices). Try with device= first; fall back to no filter + client-side filter.
+            # If BOTH fail (e.g., ReadTimeout on fallback), term_count stays 0 (graceful).
+            filter_ids = {f.id for f in filters.results}
+            try:
+                all_terms = _fetch_terms_by_filter_id(client, device_id, filter_ids)
+            except Exception:
+                all_terms = []
             term_count: dict = {}
-            for t in all_terms.results:
+            for t in all_terms:
                 term_count[t.filter_id] = term_count.get(t.filter_id, 0) + 1
             for f in filters.results:
                 f.term_count = term_count.get(f.id, 0)
@@ -244,16 +327,11 @@ def list_firewall_policers(
                           limit=limit, offset=offset, device=device_id)
 
         if policers.results:
-            # Bulk fetch all policer-actions for this device → dict by policer_id
-            all_actions = cms_list(
-                client,
-                "juniper_firewall_policer_actions",
-                FirewallPolicerActionSummary,
-                limit=0,
-                device=device_id,
-            )
+            # Bulk fetch all actions, keyed by policer_id (400-tolerant fallback)
+            policer_ids = {p.id for p in policers.results}
+            all_actions = _fetch_actions_by_policer_id(client, device_id, policer_ids)
             action_count: dict = {}
-            for a in all_actions.results:
+            for a in all_actions:
                 action_count[a.policer_id] = action_count.get(a.policer_id, 0) + 1
             for p in policers.results:
                 p.action_count = action_count.get(p.id, 0)

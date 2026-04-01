@@ -130,8 +130,8 @@
 - [x] Phase 38: Regression Gate (SHIPPED 2026-03-31)
   - [x] Plan 01: `uat_cms_smoke.py` — all 5 workflows pass within thresholds on HQV-PE1-NEW — 5/5 PASS, exit 0
   - [x] Plan 02: Full unit test suite — 546/546 unit tests pass, 0 failed, 0 errored; 10 pre-existing UAT fixture errors (scripts/uat_smoke_test.py, requires live server)
-
-### Next Milestone: v2.0 (TBD)
+- [ ] Phase 39: N+1 Fix Completion (PLANNING)
+  - Plans: TBD
 
 ---
-*Last updated: 2026-03-31 — v1.10 COMPLETE (Phases 35-38 shipped); 75/75 plans total*
+*Last updated: 2026-04-01 — Phase 39 added; v1.10 N+1 fix completion*

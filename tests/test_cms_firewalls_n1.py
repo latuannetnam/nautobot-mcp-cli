@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from nautobot_mcp.exceptions import NautobotAPIError
 from nautobot_mcp.models.base import ListResponse
 from nautobot_mcp.models.cms.composites import FirewallSummaryResponse
 
@@ -515,3 +516,129 @@ def test_firewall_summary_detail_false_unaffected():
 
     # No cms_list calls in detail=False mode
     mock_cms.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Phase 39 Tests: list_firewall_filters/policers 400-tolerant fallback (CQP-07)
+# ---------------------------------------------------------------------------
+
+
+def _mock_term(filter_id, idx=0):
+    t = MagicMock()
+    t.filter_id = filter_id if isinstance(filter_id, str) else f"filter-{filter_id}"
+    t.id = f"term-{idx}"
+    return t
+
+
+def _mock_action(policer_id, idx=0):
+    a = MagicMock()
+    a.policer_id = policer_id if isinstance(policer_id, str) else f"policer-{policer_id}"
+    a.id = f"action-{idx}"
+    return a
+
+
+def test_list_firewall_filters_400_tolerant_with_device_filter():
+    """CQP-07: list_firewall_filters tries device= first, falls back on 400.
+
+    When the device= filter works, no fallback is needed and all terms are returned.
+    """
+    from nautobot_mcp.cms.firewalls import list_firewall_filters
+
+    client = _mock_client()
+    filters = [_mock_filter("fw-1", term_count=3), _mock_filter("fw-2", term_count=1)]
+
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+        if "firewall_filters" in endpoint:
+            return _mock_list_response(*filters)
+        if "firewall_terms" in endpoint:
+            # device= works — return terms without fallback
+            return _mock_list_response(
+                _mock_term("fw-1", 0), _mock_term("fw-1", 1), _mock_term("fw-1", 2),
+                _mock_term("fw-2", 0),
+            )
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
+    with patch("nautobot_mcp.cms.firewalls.resolve_device_id", return_value="device-uuid"), \
+         patch("nautobot_mcp.cms.firewalls.cms_list", side_effect=cms_list_side_effect):
+        result = list_firewall_filters(client, device="edge-01", limit=0)
+
+    assert result.count == 2
+    fw_ids = {f.id for f in result.results}
+    assert fw_ids == {"fw-1", "fw-2"}
+    term_counts = {f.id: f.term_count for f in result.results}
+    assert term_counts["fw-1"] == 3
+    assert term_counts["fw-2"] == 1
+
+
+def test_list_firewall_filters_400_fallback_to_client_side_filter():
+    """CQP-07: list_firewall_filters falls back to no-filter + client-side filter on 400.
+
+    When the device= filter returns 400, the function retries without device= and
+    filters results client-side to only terms belonging to known filter IDs.
+    """
+    from nautobot_mcp.cms.firewalls import list_firewall_filters
+
+    client = _mock_client()
+    filters = [_mock_filter("fw-1", term_count=2)]
+
+    call_order = []
+
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+        if "firewall_filters" in endpoint:
+            return _mock_list_response(*filters)
+        if "firewall_terms" in endpoint:
+            call_order.append(endpoint)
+            if "firewall_terms" in endpoint and device is not None:
+                # First attempt with device= → raise 400
+                raise NautobotAPIError(
+                    message="400 Bad Request: {'device': ['Unknown filter field']}",
+                )
+            # Second attempt without device= → success, but return extra terms
+            # from other filters (client-side filter must exclude them)
+            return _mock_list_response(
+                _mock_term("fw-1", 0), _mock_term("fw-1", 1),  # fw-1 terms
+                _mock_term("fw-other", 0), _mock_term("fw-other", 1),  # other filter — filtered out
+            )
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
+    with patch("nautobot_mcp.cms.firewalls.resolve_device_id", return_value="device-uuid"), \
+         patch("nautobot_mcp.cms.firewalls.cms_list", side_effect=cms_list_side_effect):
+        result = list_firewall_filters(client, device="edge-01", limit=0)
+
+    assert result.count == 1
+    assert result.results[0].term_count == 2  # only fw-1's terms, fw-other excluded
+    assert call_order.count("juniper_firewall_terms") == 2  # one with device=, one fallback
+
+
+def test_list_firewall_policers_400_fallback():
+    """CQP-07: list_firewall_policers falls back to no-filter + client-side filter on 400."""
+    from nautobot_mcp.cms.firewalls import list_firewall_policers
+
+    client = _mock_client()
+    policers = [_mock_policer("pol-1", action_count=1)]
+
+    call_order = []
+
+    def cms_list_side_effect(client, endpoint, model, device=None, limit=0, **kwargs):
+        if "firewall_policers" in endpoint:
+            return _mock_list_response(*policers)
+        if "firewall_policer_actions" in endpoint:
+            call_order.append(endpoint)
+            if device is not None:
+                raise NautobotAPIError(
+                    message="400 Bad Request: {'device': ['Unknown filter field']}",
+                )
+            # Fallback: return actions for pol-1 and pol-other
+            return _mock_list_response(
+                _mock_action("pol-1", 0),
+                _mock_action("pol-other", 0),
+            )
+        raise ValueError(f"Unexpected endpoint: {endpoint}")
+
+    with patch("nautobot_mcp.cms.firewalls.resolve_device_id", return_value="device-uuid"), \
+         patch("nautobot_mcp.cms.firewalls.cms_list", side_effect=cms_list_side_effect):
+        result = list_firewall_policers(client, device="edge-01", limit=0)
+
+    assert result.count == 1
+    assert result.results[0].action_count == 1  # only pol-1's actions
+    assert call_order.count("juniper_firewall_policer_actions") == 2  # device= attempt + fallback
